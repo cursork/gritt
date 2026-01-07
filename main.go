@@ -4,8 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"gritt/ride"
 )
 
@@ -19,12 +19,9 @@ func main() {
 		log.Fatal(err)
 	}
 	defer client.Close()
-	fmt.Println("Connected!")
 
-	// Test with 1+1
-	output, err := client.Execute("1+1")
-	if err != nil {
+	p := tea.NewProgram(initialModel(client), tea.WithAltScreen())
+	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("1+1 = %s", strings.Join(output, ""))
 }

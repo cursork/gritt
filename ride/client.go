@@ -79,6 +79,18 @@ func (c *Client) Close() error {
 	return c.conn.Close()
 }
 
+// Send sends a command to the interpreter.
+func (c *Client) Send(cmd string, args map[string]any) error {
+	return Send(c.conn, cmd, args)
+}
+
+// Recv receives a single message from the interpreter.
+// Returns (message, raw, error). For JSON messages, message is non-nil.
+// For handshake messages, raw is the string.
+func (c *Client) Recv() (*Message, string, error) {
+	return Recv(c.conn)
+}
+
 // Execute runs APL code and returns the output.
 // Skips input echo (type 14) and waits for SetPromptType.
 func (c *Client) Execute(code string) ([]string, error) {
