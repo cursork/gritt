@@ -40,6 +40,11 @@ func recvRaw(r io.Reader) (string, error) {
 		return "", fmt.Errorf("read length: %w", err)
 	}
 
+	// Sanity check - messages shouldn't be huge
+	if length < 8 || length > 10*1024*1024 {
+		return "", fmt.Errorf("invalid length: %d", length)
+	}
+
 	buf := make([]byte, length-4)
 	if _, err := io.ReadFull(r, buf); err != nil {
 		return "", fmt.Errorf("read payload: %w", err)

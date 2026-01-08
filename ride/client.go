@@ -1,14 +1,20 @@
 package ride
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"net"
+	"sync"
 	"time"
 )
 
 // Client is a RIDE protocol client connected to Dyalog APL.
 type Client struct {
-	conn net.Conn
+	conn   net.Conn
+	reader *bufio.Reader
+	writer io.Writer
+	mu     sync.Mutex // Protects reads
 }
 
 // Connect connects to a Dyalog interpreter in SERVE mode and performs handshake.
@@ -18,7 +24,11 @@ func Connect(addr string) (*Client, error) {
 		return nil, fmt.Errorf("dial: %w", err)
 	}
 
-	c := &Client{conn: conn}
+	c := &Client{
+		conn:   conn,
+		reader: bufio.NewReader(conn),
+		writer: conn,
+	}
 	if err := c.handshake(); err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("handshake: %w", err)
@@ -31,38 +41,38 @@ func Connect(addr string) (*Client, error) {
 // In SERVE mode, Dyalog sends first.
 func (c *Client) handshake() error {
 	// Receive SupportedProtocols from Dyalog
-	if _, raw, err := Recv(c.conn); err != nil {
+	if _, raw, err := Recv(c.reader); err != nil {
 		return fmt.Errorf("recv SupportedProtocols: %w", err)
 	} else if raw != "SupportedProtocols=2" {
 		return fmt.Errorf("unexpected: %q", raw)
 	}
 
 	// Send our handshake
-	if err := sendRaw(c.conn, "SupportedProtocols=2"); err != nil {
+	if err := sendRaw(c.writer, "SupportedProtocols=2"); err != nil {
 		return err
 	}
-	if err := sendRaw(c.conn, "UsingProtocol=2"); err != nil {
+	if err := sendRaw(c.writer, "UsingProtocol=2"); err != nil {
 		return err
 	}
 
 	// Receive UsingProtocol
-	if _, raw, err := Recv(c.conn); err != nil {
+	if _, raw, err := Recv(c.reader); err != nil {
 		return fmt.Errorf("recv UsingProtocol: %w", err)
 	} else if raw != "UsingProtocol=2" {
 		return fmt.Errorf("unexpected: %q", raw)
 	}
 
 	// Send Identify and Connect
-	if err := Send(c.conn, "Identify", map[string]any{"apiVersion": 1, "identity": 1}); err != nil {
+	if err := Send(c.writer, "Identify", map[string]any{"apiVersion": 1, "identity": 1}); err != nil {
 		return err
 	}
-	if err := Send(c.conn, "Connect", map[string]any{"remoteId": 2}); err != nil {
+	if err := Send(c.writer, "Connect", map[string]any{"remoteId": 2}); err != nil {
 		return err
 	}
 
 	// Wait for SetPromptType with type > 0 (interpreter ready)
 	for {
-		msg, _, err := Recv(c.conn)
+		msg, _, err := Recv(c.reader)
 		if err != nil {
 			return fmt.Errorf("waiting for ready: %w", err)
 		}
@@ -81,26 +91,28 @@ func (c *Client) Close() error {
 
 // Send sends a command to the interpreter.
 func (c *Client) Send(cmd string, args map[string]any) error {
-	return Send(c.conn, cmd, args)
+	return Send(c.writer, cmd, args)
 }
 
 // Recv receives a single message from the interpreter.
 // Returns (message, raw, error). For JSON messages, message is non-nil.
 // For handshake messages, raw is the string.
 func (c *Client) Recv() (*Message, string, error) {
-	return Recv(c.conn)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return Recv(c.reader)
 }
 
 // Execute runs APL code and returns the output.
 // Skips input echo (type 14) and waits for SetPromptType.
 func (c *Client) Execute(code string) ([]string, error) {
-	if err := Send(c.conn, "Execute", map[string]any{"text": code + "\n", "trace": 0}); err != nil {
+	if err := Send(c.writer, "Execute", map[string]any{"text": code + "\n", "trace": 0}); err != nil {
 		return nil, err
 	}
 
 	var outputs []string
 	for {
-		msg, _, err := Recv(c.conn)
+		msg, _, err := c.Recv()
 		if err != nil {
 			return outputs, err
 		}

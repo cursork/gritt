@@ -1,248 +1,571 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"gritt/ride"
 )
 
-// model is the bubbletea model for the gritt TUI.
-type model struct {
-	client  *ride.Client
-	output  []string // Session output lines
-	input   string   // Current input line
-	cursor  int      // Cursor position in input
-	history []string // Input history
-	histIdx int      // Current position in history (-1 = current input)
-	width   int
-	height  int
-	ready   bool // Interpreter ready for input
-	err     error
+// Cursor style - inverted colors
+var cursorStyle = lipgloss.NewStyle().
+	Background(lipgloss.Color("255")).
+	Foreground(lipgloss.Color("0"))
+
+const aplIndent = "      " // 6 spaces - APL convention
+
+// Line is a single line in the session.
+type Line struct {
+	Text     string
+	Original string
+	Edited   bool // True if this line has been modified
 }
 
-// rideMsg is received when the RIDE client gets a message.
-type rideMsg struct {
-	msg *ride.Message
+// Model holds all state for the TUI.
+type Model struct {
+	client *ride.Client
+	msgs   <-chan rideEvent
+
+	// Session state
+	lines     []Line
+	cursorRow int
+	cursorCol int
+	ready     bool // Interpreter ready for input
+
+	// Debug panel
+	debugLog  []string
+	showDebug bool
+
+	// Terminal dimensions
+	width  int
+	height int
+
 	err error
 }
 
-// initialModel creates a new model with the given client.
-func initialModel(client *ride.Client) model {
-	return model{
-		client:  client,
-		output:  []string{},
-		history: []string{},
-		histIdx: -1,
-		ready:   true,
+// rideEvent wraps messages from the RIDE reader goroutine.
+type rideEvent struct {
+	msg *ride.Message
+	raw string
+	err error
+}
+
+// NewModel creates a Model connected to the given RIDE client.
+func NewModel(client *ride.Client) Model {
+	ch := make(chan rideEvent)
+	go func() {
+		for {
+			msg, raw, err := client.Recv()
+			ch <- rideEvent{msg: msg, raw: raw, err: err}
+			if err != nil {
+				close(ch)
+				return
+			}
+		}
+	}()
+
+	m := Model{
+		client: client,
+		msgs:   ch,
+		ready:  true, // Handshake already completed
+		lines:  []Line{{Text: aplIndent}},
+	}
+	m.cursorCol = len(aplIndent)
+	m.log("Connected, ready for input")
+	return m
+}
+
+func (m *Model) log(format string, args ...any) {
+	line := fmt.Sprintf(format, args...)
+	m.debugLog = append(m.debugLog, line)
+	if len(m.debugLog) > 500 {
+		m.debugLog = m.debugLog[len(m.debugLog)-500:]
 	}
 }
 
-// waitForRide returns a command that waits for the next RIDE message.
-func waitForRide(client *ride.Client) tea.Cmd {
+// waitForRide waits for the next RIDE message.
+func waitForRide(ch <-chan rideEvent) tea.Cmd {
 	return func() tea.Msg {
-		msg, _, err := client.Recv()
-		return rideMsg{msg: msg, err: err}
+		return <-ch
 	}
 }
 
-func (m model) Init() tea.Cmd {
-	return waitForRide(m.client)
+func (m Model) Init() tea.Cmd {
+	return waitForRide(m.msgs)
 }
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		return m.handleKey(msg)
-
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 		return m, nil
 
-	case rideMsg:
-		if msg.err != nil {
-			m.err = msg.err
-			return m, tea.Quit
-		}
-		return m.handleRide(msg.msg)
-	}
+	case tea.KeyMsg:
+		return m.handleKey(msg)
 
+	case tea.MouseMsg:
+		return m.handleMouse(msg)
+
+	case rideEvent:
+		return m.handleRide(msg)
+	}
 	return m, nil
 }
 
-func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyCtrlC:
 		return m, tea.Quit
 
+	case tea.KeyF12:
+		m.showDebug = !m.showDebug
+		return m, nil
+
 	case tea.KeyEnter:
-		if !m.ready || m.input == "" {
-			return m, nil
-		}
-		// Save to history
-		m.history = append(m.history, m.input)
-		m.histIdx = -1
-		// Echo input to output (with prompt)
-		m.output = append(m.output, "      "+m.input)
-		// Send to interpreter
-		code := m.input
-		m.input = ""
-		m.cursor = 0
-		m.ready = false
-		err := m.client.Send("Execute", map[string]any{"text": code + "\n", "trace": 0})
-		if err != nil {
-			m.err = err
-			return m, tea.Quit
-		}
-		return m, waitForRide(m.client)
+		return m.execute()
 
 	case tea.KeyBackspace:
-		if m.cursor > 0 {
-			m.input = m.input[:m.cursor-1] + m.input[m.cursor:]
-			m.cursor--
-		}
+		m.deleteCharBack()
 		return m, nil
 
 	case tea.KeyDelete:
-		if m.cursor < len(m.input) {
-			m.input = m.input[:m.cursor] + m.input[m.cursor+1:]
-		}
+		m.deleteCharForward()
 		return m, nil
 
 	case tea.KeyLeft:
-		if m.cursor > 0 {
-			m.cursor--
+		if m.cursorCol > 0 {
+			m.cursorCol--
 		}
 		return m, nil
 
 	case tea.KeyRight:
-		if m.cursor < len(m.input) {
-			m.cursor++
+		if m.cursorCol < len(m.currentLineRunes()) {
+			m.cursorCol++
+		}
+		return m, nil
+
+	case tea.KeyUp:
+		if m.cursorRow > 0 {
+			m.cursorRow--
+			m.clampCol()
+		}
+		return m, nil
+
+	case tea.KeyDown:
+		if m.cursorRow < len(m.lines)-1 {
+			m.cursorRow++
+			m.clampCol()
 		}
 		return m, nil
 
 	case tea.KeyHome:
-		m.cursor = 0
+		m.cursorCol = 0
 		return m, nil
 
 	case tea.KeyEnd:
-		m.cursor = len(m.input)
+		m.cursorCol = len(m.currentLineRunes())
 		return m, nil
 
-	case tea.KeyUp:
-		if len(m.history) == 0 {
-			return m, nil
+	case tea.KeyPgUp:
+		pageSize := m.height - 4
+		if pageSize < 1 {
+			pageSize = 10
 		}
-		if m.histIdx == -1 {
-			m.histIdx = len(m.history) - 1
-		} else if m.histIdx > 0 {
-			m.histIdx--
+		m.cursorRow -= pageSize
+		if m.cursorRow < 0 {
+			m.cursorRow = 0
 		}
-		m.input = m.history[m.histIdx]
-		m.cursor = len(m.input)
+		m.clampCol()
 		return m, nil
 
-	case tea.KeyDown:
-		if m.histIdx == -1 {
-			return m, nil
+	case tea.KeyPgDown:
+		pageSize := m.height - 4
+		if pageSize < 1 {
+			pageSize = 10
 		}
-		if m.histIdx < len(m.history)-1 {
-			m.histIdx++
-			m.input = m.history[m.histIdx]
-		} else {
-			m.histIdx = -1
-			m.input = ""
+		m.cursorRow += pageSize
+		if m.cursorRow >= len(m.lines) {
+			m.cursorRow = len(m.lines) - 1
 		}
-		m.cursor = len(m.input)
+		m.clampCol()
+		return m, nil
+
+	case tea.KeySpace:
+		m.insertChar(' ')
 		return m, nil
 
 	default:
-		// Insert character
-		if msg.Type == tea.KeyRunes {
+		if len(msg.Runes) > 0 {
 			for _, r := range msg.Runes {
-				m.input = m.input[:m.cursor] + string(r) + m.input[m.cursor:]
-				m.cursor++
+				m.insertChar(r)
 			}
 		}
 		return m, nil
 	}
 }
 
-func (m model) handleRide(msg *ride.Message) (tea.Model, tea.Cmd) {
-	if msg == nil {
-		return m, waitForRide(m.client)
+func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.MouseWheelUp:
+		m.cursorRow -= 3
+		if m.cursorRow < 0 {
+			m.cursorRow = 0
+		}
+		m.clampCol()
+	case tea.MouseWheelDown:
+		m.cursorRow += 3
+		if m.cursorRow >= len(m.lines) {
+			m.cursorRow = len(m.lines) - 1
+		}
+		m.clampCol()
+	}
+	return m, nil
+}
+
+func (m *Model) currentLine() string {
+	if m.cursorRow >= 0 && m.cursorRow < len(m.lines) {
+		return m.lines[m.cursorRow].Text
+	}
+	return ""
+}
+
+func (m *Model) currentLineRunes() []rune {
+	return []rune(m.currentLine())
+}
+
+func (m *Model) setCurrentLine(text string) {
+	if m.cursorRow < 0 || m.cursorRow >= len(m.lines) {
+		return
+	}
+	// Mark as edited on first modification
+	if !m.lines[m.cursorRow].Edited {
+		m.lines[m.cursorRow].Original = m.lines[m.cursorRow].Text
+		m.lines[m.cursorRow].Edited = true
+	}
+	m.lines[m.cursorRow].Text = text
+}
+
+func (m *Model) insertChar(r rune) {
+	runes := m.currentLineRunes()
+	newRunes := make([]rune, 0, len(runes)+1)
+	newRunes = append(newRunes, runes[:m.cursorCol]...)
+	newRunes = append(newRunes, r)
+	newRunes = append(newRunes, runes[m.cursorCol:]...)
+	m.setCurrentLine(string(newRunes))
+	m.cursorCol++
+}
+
+func (m *Model) deleteCharBack() {
+	if m.cursorCol > 0 {
+		runes := m.currentLineRunes()
+		newRunes := make([]rune, 0, len(runes)-1)
+		newRunes = append(newRunes, runes[:m.cursorCol-1]...)
+		newRunes = append(newRunes, runes[m.cursorCol:]...)
+		m.setCurrentLine(string(newRunes))
+		m.cursorCol--
+	}
+}
+
+func (m *Model) deleteCharForward() {
+	runes := m.currentLineRunes()
+	if m.cursorCol < len(runes) {
+		newRunes := make([]rune, 0, len(runes)-1)
+		newRunes = append(newRunes, runes[:m.cursorCol]...)
+		newRunes = append(newRunes, runes[m.cursorCol+1:]...)
+		m.setCurrentLine(string(newRunes))
+	}
+}
+
+func (m *Model) clampCol() {
+	lineLen := len(m.currentLineRunes())
+	if m.cursorCol > lineLen {
+		m.cursorCol = lineLen
+	}
+}
+
+func (m Model) execute() (tea.Model, tea.Cmd) {
+	if !m.ready {
+		m.log("Execute blocked: not ready")
+		return m, nil
+	}
+
+	editedText := m.currentLine()
+	code := strings.TrimSpace(editedText)
+	isInputLine := m.cursorRow == len(m.lines)-1
+
+	// Empty line - just add a new input line for spacing
+	if code == "" {
+		if isInputLine {
+			// Keep current line, add new input line
+			m.lines = append(m.lines, Line{Text: aplIndent})
+			m.cursorRow = len(m.lines) - 1
+			m.cursorCol = len(aplIndent)
+		}
+		// If on history line with no edits, do nothing
+		return m, nil
+	}
+
+	if isInputLine {
+		// On the input line - keep it as typed
+		m.lines[m.cursorRow].Text = editedText
+		m.lines[m.cursorRow].Edited = false
+		m.lines[m.cursorRow].Original = ""
+	} else {
+		// On a history line - restore it and replace the input line (last line)
+		if m.lines[m.cursorRow].Edited {
+			m.lines[m.cursorRow].Text = m.lines[m.cursorRow].Original
+			m.lines[m.cursorRow].Edited = false
+			m.lines[m.cursorRow].Original = ""
+		}
+		// Replace the last line (input line) with new input
+		lastIdx := len(m.lines) - 1
+		m.lines[lastIdx].Text = editedText
+		m.lines[lastIdx].Edited = false
+		m.lines[lastIdx].Original = ""
+		m.cursorRow = lastIdx
+	}
+	m.cursorCol = len([]rune(editedText))
+
+	m.ready = false
+	m.log("→ Execute %q", code)
+
+	// Send to interpreter
+	if err := m.client.Send("Execute", map[string]any{"text": code + "\n", "trace": 0}); err != nil {
+		m.err = err
+		return m, tea.Quit
+	}
+
+	return m, nil
+}
+
+func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
+	if ev.err != nil {
+		m.err = ev.err
+		return m, tea.Quit
+	}
+
+	if ev.msg == nil {
+		if ev.raw != "" {
+			m.log("← raw: %s", ev.raw)
+		}
+		return m, waitForRide(m.msgs)
+	}
+
+	msg := ev.msg
+
+	// Log full message for debugging
+	if argsJSON, err := json.Marshal(msg.Args); err == nil {
+		m.log("← %s %s", msg.Command, string(argsJSON))
+	} else {
+		m.log("← %s %v", msg.Command, msg.Args)
 	}
 
 	switch msg.Command {
 	case "AppendSessionOutput":
-		// type 14 is input echo - skip it
-		if t, ok := msg.Args["type"].(float64); ok && t == 14 {
-			return m, waitForRide(m.client)
+		// Skip input echo (type 14)
+		if t, ok := msg.Args["type"].(float64); ok && int(t) == 14 {
+			m.log("  (skipped: input echo)")
+			return m, waitForRide(m.msgs)
 		}
 		if result, ok := msg.Args["result"].(string); ok {
-			// Split into lines, removing trailing newline
 			result = strings.TrimSuffix(result, "\n")
-			lines := strings.Split(result, "\n")
-			m.output = append(m.output, lines...)
+			for _, line := range strings.Split(result, "\n") {
+				m.lines = append(m.lines, Line{Text: line})
+			}
+			m.cursorRow = len(m.lines) - 1
+			m.cursorCol = 0
 		}
 
 	case "SetPromptType":
-		if t, ok := msg.Args["type"].(float64); ok && t > 0 {
-			m.ready = true
+		if t, ok := msg.Args["type"].(float64); ok {
+			wasReady := m.ready
+			m.ready = t > 0
+			m.log("  ready: %v → %v", wasReady, m.ready)
+			if m.ready {
+				// Add new input line with APL indent
+				m.lines = append(m.lines, Line{Text: aplIndent})
+				m.cursorRow = len(m.lines) - 1
+				m.cursorCol = len(aplIndent)
+			}
 		}
 	}
 
-	return m, waitForRide(m.client)
+	return m, waitForRide(m.msgs)
 }
 
-func (m model) View() string {
+func (m Model) View() string {
 	if m.err != nil {
-		return fmt.Sprintf("Error: %v\n", m.err)
+		return fmt.Sprintf("Error: %v\nPress any key to exit.\n", m.err)
 	}
 
-	var b strings.Builder
-
-	// Calculate available height for output (leave 2 lines for input + status)
-	outputHeight := m.height - 2
-	if outputHeight < 1 {
-		outputHeight = 10
+	w, h := m.width, m.height
+	if w < 20 {
+		w = 80
+	}
+	if h < 5 {
+		h = 24
 	}
 
-	// Show last N lines of output
+	if m.showDebug {
+		return m.viewWithDebug(w, h)
+	}
+	return m.viewSession(w, h)
+}
+
+func (m Model) viewSession(w, h int) string {
+	contentW := w - 2
+	contentH := h - 2
+
+	content := m.renderSession(contentW, contentH)
+	return m.renderBox("gritt", content, contentW, contentH, "63")
+}
+
+func (m Model) viewWithDebug(w, h int) string {
+	sessionW := w/2 - 2
+	debugW := w - w/2 - 2
+	contentH := h - 2
+
+	sessionContent := m.renderSession(sessionW, contentH)
+	debugContent := m.renderDebug(debugW, contentH)
+
+	left := m.renderBox("gritt", sessionContent, sessionW, contentH, "63")
+	right := m.renderBox("debug", debugContent, debugW, contentH, "240")
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
+}
+
+func (m Model) renderBox(title, content string, w, h int, color string) string {
+	borderColor := lipgloss.Color(color)
+
+	// Build box manually with title in top border
+	topBorder := "╭─ " + title + " " + strings.Repeat("─", w-len(title)-3) + "╮"
+	bottomBorder := "╰" + strings.Repeat("─", w) + "╯"
+
+	// Style the borders
+	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
+	titleStyle := lipgloss.NewStyle().Foreground(borderColor).Bold(true)
+
+	// Build top border with styled title
+	topBorder = borderStyle.Render("╭─ ") + titleStyle.Render(title) + borderStyle.Render(" "+strings.Repeat("─", w-len(title)-3)+"╮")
+
+	// Split content into lines and pad to height
+	contentLines := strings.Split(content, "\n")
+	for len(contentLines) < h {
+		contentLines = append(contentLines, "")
+	}
+
+	// Build the box
+	var sb strings.Builder
+	sb.WriteString(topBorder)
+	sb.WriteString("\n")
+
+	for i := 0; i < h; i++ {
+		line := ""
+		if i < len(contentLines) {
+			line = contentLines[i]
+		}
+		sb.WriteString(borderStyle.Render("│"))
+		sb.WriteString(line)
+		sb.WriteString(borderStyle.Render("│"))
+		sb.WriteString("\n")
+	}
+
+	sb.WriteString(borderStyle.Render(bottomBorder))
+
+	return sb.String()
+}
+
+func (m Model) renderSession(w, h int) string {
+	// Calculate viewport - follow cursor
 	startLine := 0
-	if len(m.output) > outputHeight {
-		startLine = len(m.output) - outputHeight
-	}
-	for i := startLine; i < len(m.output); i++ {
-		b.WriteString(m.output[i])
-		b.WriteString("\n")
+	if m.cursorRow >= h {
+		startLine = m.cursorRow - h + 1
 	}
 
-	// Pad with empty lines if needed
-	for i := len(m.output); i < outputHeight; i++ {
-		b.WriteString("\n")
+	lines := make([]string, h)
+	for i := 0; i < h; i++ {
+		srcIdx := startLine + i
+		if srcIdx >= len(m.lines) {
+			lines[i] = strings.Repeat(" ", w)
+			continue
+		}
+
+		lineData := m.lines[srcIdx]
+		text := lineData.Text
+		runes := []rune(text)
+
+		// Truncate if too wide (leave room for cursor)
+		maxLen := w - 1
+		if len(runes) > maxLen {
+			runes = runes[:maxLen]
+		}
+
+		// Render with cursor if this is the current line
+		if srcIdx == m.cursorRow {
+			col := m.cursorCol
+			if col > len(runes) {
+				col = len(runes)
+			}
+
+			var rendered string
+			var visualLen int
+			if col < len(runes) {
+				// Cursor on a character - visual length unchanged
+				rendered = string(runes[:col]) + cursorStyle.Render(string(runes[col])) + string(runes[col+1:])
+				visualLen = len(runes)
+			} else {
+				// Cursor at end - adds a space
+				rendered = string(runes) + cursorStyle.Render(" ")
+				visualLen = len(runes) + 1
+			}
+			// Pad to width
+			if visualLen < w {
+				rendered += strings.Repeat(" ", w-visualLen)
+			}
+			lines[i] = rendered
+		} else {
+			// Pad to width
+			line := string(runes)
+			if len(runes) < w {
+				line += strings.Repeat(" ", w-len(runes))
+			}
+			lines[i] = line
+		}
 	}
 
-	// Input line with prompt
-	prompt := "      "
-	if !m.ready {
-		prompt = "  ... "
-	}
-	b.WriteString(prompt)
+	return strings.Join(lines, "\n")
+}
 
-	// Show input with cursor
-	if m.cursor < len(m.input) {
-		b.WriteString(m.input[:m.cursor])
-		b.WriteString("\033[7m") // Reverse video for cursor
-		b.WriteString(string(m.input[m.cursor]))
-		b.WriteString("\033[0m")
-		b.WriteString(m.input[m.cursor+1:])
-	} else {
-		b.WriteString(m.input)
-		b.WriteString("\033[7m \033[0m") // Cursor at end
+func (m Model) renderDebug(w, h int) string {
+	// Show last h lines, scrolled to bottom
+	startLine := 0
+	if len(m.debugLog) > h {
+		startLine = len(m.debugLog) - h
 	}
 
-	return b.String()
+	lines := make([]string, h)
+	for i := 0; i < h; i++ {
+		srcIdx := startLine + i
+		if srcIdx >= len(m.debugLog) {
+			lines[i] = strings.Repeat(" ", w)
+			continue
+		}
+		line := m.debugLog[srcIdx]
+		runes := []rune(line)
+		if len(runes) > w {
+			runes = runes[:w-1]
+			line = string(runes) + "…"
+		}
+		// Pad to width
+		if len(runes) < w {
+			line += strings.Repeat(" ", w-len(runes))
+		}
+		lines[i] = line
+	}
+
+	return strings.Join(lines, "\n")
 }

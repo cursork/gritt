@@ -20,7 +20,7 @@ func main() {
 	}
 	defer client.Close()
 
-	p := tea.NewProgram(initialModel(client), tea.WithAltScreen())
+	p := tea.NewProgram(NewModel(client), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
 	}
