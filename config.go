@@ -36,38 +36,12 @@ type KeyMapConfig struct {
 	Delete    []string `json:"delete"`
 }
 
-// DefaultConfig returns the default configuration
-func DefaultConfig() Config {
-	return Config{
-		Keys: KeyMapConfig{
-			Leader:      []string{"ctrl+]"},
-			Execute:     []string{"enter"},
-			ToggleDebug: []string{"d"},      // After leader: C-] d
-			CyclePane:   []string{"tab"},
-			ClosePane:   []string{"esc"},
-			Quit:        []string{"q"},      // After leader: C-] q
-			ShowKeys:    []string{"?"},      // After leader: C-] ?
-
-			Up:    []string{"up"},
-			Down:  []string{"down"},
-			Left:  []string{"left"},
-			Right: []string{"right"},
-			Home:  []string{"home"},
-			End:   []string{"end"},
-			PgUp:  []string{"pgup"},
-			PgDn:  []string{"pgdown"},
-
-			Backspace: []string{"backspace"},
-			Delete:    []string{"delete"},
-		},
-	}
-}
-
-// LoadConfig loads configuration from file or returns defaults
+// LoadConfig loads configuration from first found config file
 func LoadConfig() Config {
 	paths := []string{
 		"config.json",
 		filepath.Join(os.Getenv("HOME"), ".config", "gritt", "config.json"),
+		"config.default.json",
 	}
 
 	for _, path := range paths {
@@ -76,7 +50,7 @@ func LoadConfig() Config {
 		}
 	}
 
-	return DefaultConfig()
+	panic("no config file found (need config.json or config.default.json)")
 }
 
 func loadConfigFile(path string) (Config, error) {
@@ -90,66 +64,7 @@ func loadConfigFile(path string) (Config, error) {
 		return Config{}, err
 	}
 
-	// Merge with defaults for any missing values
-	return mergeWithDefaults(cfg), nil
-}
-
-func mergeWithDefaults(cfg Config) Config {
-	def := DefaultConfig()
-
-	if len(cfg.Keys.Leader) == 0 {
-		cfg.Keys.Leader = def.Keys.Leader
-	}
-	if len(cfg.Keys.Execute) == 0 {
-		cfg.Keys.Execute = def.Keys.Execute
-	}
-	if len(cfg.Keys.ToggleDebug) == 0 {
-		cfg.Keys.ToggleDebug = def.Keys.ToggleDebug
-	}
-	if len(cfg.Keys.CyclePane) == 0 {
-		cfg.Keys.CyclePane = def.Keys.CyclePane
-	}
-	if len(cfg.Keys.ClosePane) == 0 {
-		cfg.Keys.ClosePane = def.Keys.ClosePane
-	}
-	if len(cfg.Keys.Quit) == 0 {
-		cfg.Keys.Quit = def.Keys.Quit
-	}
-	if len(cfg.Keys.ShowKeys) == 0 {
-		cfg.Keys.ShowKeys = def.Keys.ShowKeys
-	}
-	if len(cfg.Keys.Up) == 0 {
-		cfg.Keys.Up = def.Keys.Up
-	}
-	if len(cfg.Keys.Down) == 0 {
-		cfg.Keys.Down = def.Keys.Down
-	}
-	if len(cfg.Keys.Left) == 0 {
-		cfg.Keys.Left = def.Keys.Left
-	}
-	if len(cfg.Keys.Right) == 0 {
-		cfg.Keys.Right = def.Keys.Right
-	}
-	if len(cfg.Keys.Home) == 0 {
-		cfg.Keys.Home = def.Keys.Home
-	}
-	if len(cfg.Keys.End) == 0 {
-		cfg.Keys.End = def.Keys.End
-	}
-	if len(cfg.Keys.PgUp) == 0 {
-		cfg.Keys.PgUp = def.Keys.PgUp
-	}
-	if len(cfg.Keys.PgDn) == 0 {
-		cfg.Keys.PgDn = def.Keys.PgDn
-	}
-	if len(cfg.Keys.Backspace) == 0 {
-		cfg.Keys.Backspace = def.Keys.Backspace
-	}
-	if len(cfg.Keys.Delete) == 0 {
-		cfg.Keys.Delete = def.Keys.Delete
-	}
-
-	return cfg
+	return cfg, nil
 }
 
 // ToKeyMap converts config to KeyMap

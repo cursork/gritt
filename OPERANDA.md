@@ -79,8 +79,11 @@ Leader key: `Ctrl+]` (configurable)
 
 ## Next Session
 
-1. Continue with prerequisites:
-   - Ctrl+C confirmation / clipboard
-   - Connection resilience
-   - ⍝« command syntax
-2. Then: Phase 3 Editors
+Phase 3: Editors
+- Handle OpenWindow/UpdateWindow messages from Dyalog
+- Editor pane using floating pane system
+- Text editing for functions/operators
+- SaveChanges message
+- CloseWindow handling
+
+Reference: ~/dev/dyctl and ~/dev/ride for protocol details

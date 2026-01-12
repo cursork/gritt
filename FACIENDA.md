@@ -1,12 +1,11 @@
 # FACIENDA - Things to be done
 
-## Prerequisites (before Phase 3)
-- [x] Key mappings config - config.json works, leader key system (C-] prefix)
-- [~] Ctrl+C handling - hint shows, quit behind C-] q with y/n confirm (clipboard support still TODO)
+## Future Enhancements
 - [ ] Connection resilience: on unexpected Dyalog death, keep gritt alive with session buffer intact, show disconnected state, allow reconnect (`)off` intentional shutdown should still exit cleanly)
 - [ ] ⍝« command syntax (log save, etc.)
+- [ ] Clipboard support (Ctrl+C copy, Ctrl+V paste)
 
-## Phase 3: Editors
+## Phase 3: Editors (next)
 - [ ] Handle OpenWindow/UpdateWindow messages
 - [ ] Editor pane (floating, using pane system)
 - [ ] Text editing for functions/operators
@@ -102,4 +101,13 @@ RIDE handles multiline poorly. Research needed on:
 - [x] cellbuf for pane compositing (replaces custom grid)
 - [x] Go test framework (uitest/) - wraps tmux, HTML reports
 - [x] Config loading from config.json
-- [x] Key mappings pane (F1) - but duplicates ? help, needs fix
+- [x] Key mappings pane (C-] ?)
+
+### Phase 2e: Leader Key & Polish
+- [x] Leader key system (Ctrl+]) - keeps all keys free for APL
+- [x] Quit behind C-] q with y/n confirmation dialog
+- [x] Ctrl+C shows vim-style "Type C-] q to quit" hint
+- [x] Dyalog orange (#ff6600) for all UI borders
+- [x] ANSI-aware cellbuf compositor for styled panes
+- [x] Input routing fix - focused panes consume all keys
+- [x] Test reports with ANSI colors and clickable test→snapshot links

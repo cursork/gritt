@@ -1,12 +1,12 @@
 {
   "keys": {
+    "leader": ["ctrl+]"],
     "execute": ["enter"],
-    "toggle_debug": ["f12"],
+    "toggle_debug": ["d"],
     "cycle_pane": ["tab"],
     "close_pane": ["esc"],
-    "quit": ["ctrl+c"],
-    "help": ["?"],
-    "show_keys": ["ctrl+?"],
+    "quit": ["q"],
+    "show_keys": ["?"],
 
     "up": ["up"],
     "down": ["down"],
