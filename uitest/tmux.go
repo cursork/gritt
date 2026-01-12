@@ -60,6 +60,12 @@ func (s *Session) SendLine(text string) error {
 	return s.SendKeys("Enter")
 }
 
+// SendText sends literal text (for typing in editors)
+func (s *Session) SendText(text string) error {
+	// Use -l flag for literal text (no key name interpretation)
+	return exec.Command("tmux", "send-keys", "-t", s.Name, "-l", text).Run()
+}
+
 // Capture returns the current pane content (with ANSI escape codes)
 func (s *Session) Capture() (string, error) {
 	out, err := exec.Command("tmux", "capture-pane", "-t", s.Name, "-p", "-e").Output()

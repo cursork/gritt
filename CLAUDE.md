@@ -117,6 +117,17 @@ Or use the multiplexer from dyctl:
 
 Then connect gritt to port 4502.
 
+## Debugging
+
+Run with protocol logging:
+```bash
+./gritt -log debug.log
+```
+
+This logs all RIDE messages and TUI state changes with timestamps. Essential for diagnosing protocol timing issues.
+
+See `adnotata/0003-debugging-protocol.md` for details.
+
 ## Dependencies
 
 **Minimal dependencies outside the critical path.** Always ask before adding a new dependency.

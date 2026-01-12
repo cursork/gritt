@@ -3,17 +3,31 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"image/color"
+	"io"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/lipgloss/v2"
 	"gritt/ride"
 )
 
-// DyalogOrange - brand color for UI elements
-const DyalogOrange = "208"
+// DyalogOrange returns the brand color adapted to terminal capabilities
+// RGB (242, 167, 79) = #F2A74F
+var DyalogOrange color.Color
+
+func initColors(profile colorprofile.Profile) {
+	complete := lipgloss.Complete(profile)
+	DyalogOrange = complete(
+		lipgloss.Color("3"),       // ANSI: yellow
+		lipgloss.Color("215"),     // ANSI256: #ffaf5f
+		lipgloss.Color("#F2A74F"), // TrueColor: exact RGB
+	)
+}
 
 // Cursor style - inverted colors
 var cursorStyle = lipgloss.NewStyle().
@@ -35,17 +49,26 @@ type Model struct {
 	msgs   <-chan rideEvent
 
 	// Session state
-	lines     []Line
-	cursorRow int
-	cursorCol int
-	ready     bool // Interpreter ready for input
+	lines       []Line
+	cursorRow   int
+	cursorCol   int
+	ready       bool   // Interpreter ready for input
+	lastExecute string // Last text we sent via Execute (to skip our own echo)
 
-	// Debug log (shared with debug pane)
-	debugLog []string
+	// Debug log (shared with debug pane, survives Model copies)
+	debugLog *LogBuffer
+	logFile  io.Writer // Optional file for logging (shared across copies)
 
 	// Floating panes
 	panes     *PaneManager
 	debugPane *DebugPane // Keep reference to update log
+
+	// Editor windows tracked by token
+	editors map[int]*EditorWindow
+
+	// Tracer state (for debugger windows)
+	tracerStack   []int // Tokens in stack order: bottom to top
+	tracerCurrent int   // Currently displayed tracer token (0 = none)
 
 	// Help
 	help help.Model
@@ -71,7 +94,9 @@ type rideEvent struct {
 }
 
 // NewModel creates a Model connected to the given RIDE client.
-func NewModel(client *ride.Client) Model {
+// Optional logFile will receive timestamped log entries.
+func NewModel(client *ride.Client, logFile io.Writer, profile colorprofile.Profile) Model {
+	initColors(profile)
 	ch := make(chan rideEvent)
 	go func() {
 		for {
@@ -86,13 +111,16 @@ func NewModel(client *ride.Client) Model {
 
 	cfg := LoadConfig()
 	m := Model{
-		client: client,
-		msgs:   ch,
-		ready:  true, // Handshake already completed
-		lines:  []Line{{Text: aplIndent}},
-		panes:  NewPaneManager(80, 24), // Will be updated on WindowSizeMsg
-		help:   help.New(),
-		keys:   cfg.ToKeyMap(),
+		client:   client,
+		msgs:     ch,
+		ready:    true, // Handshake already completed
+		lines:    []Line{{Text: aplIndent}},
+		debugLog: &LogBuffer{}, // Shared buffer survives Model copies
+		logFile:  logFile,
+		panes:    NewPaneManager(80, 24), // Will be updated on WindowSizeMsg
+		editors:  make(map[int]*EditorWindow),
+		help:     help.New(),
+		keys:     cfg.ToKeyMap(),
 	}
 	m.cursorCol = len(aplIndent)
 	m.log("Connected, ready for input")
@@ -101,9 +129,14 @@ func NewModel(client *ride.Client) Model {
 
 func (m *Model) log(format string, args ...any) {
 	line := fmt.Sprintf(format, args...)
-	m.debugLog = append(m.debugLog, line)
-	if len(m.debugLog) > 500 {
-		m.debugLog = m.debugLog[len(m.debugLog)-500:]
+	m.debugLog.Lines = append(m.debugLog.Lines, line)
+	if len(m.debugLog.Lines) > 500 {
+		m.debugLog.Lines = m.debugLog.Lines[len(m.debugLog.Lines)-500:]
+	}
+	// Also write to log file if set
+	if m.logFile != nil {
+		ts := time.Now().Format("15:04:05.000")
+		fmt.Fprintf(m.logFile, "[%s] %s\n", ts, line)
 	}
 }
 
@@ -155,6 +188,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.ToggleDebug):
 			m.toggleDebugPane()
 			return m, nil
+		case key.Matches(msg, m.keys.ToggleStack):
+			m.toggleStackPane()
+			return m, nil
 		case key.Matches(msg, m.keys.ShowKeys):
 			m.toggleKeysPane()
 			return m, nil
@@ -192,7 +228,19 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.ClosePane):
 		if fp := m.panes.FocusedPane(); fp != nil {
-			m.panes.Remove(fp.ID)
+			if fp.ID == "tracer" {
+				// Close current tracer - pops the stack
+				if m.tracerCurrent != 0 {
+					m.closeEditor(m.tracerCurrent)
+				}
+			} else if strings.HasPrefix(fp.ID, "editor:") {
+				// Regular editor pane
+				var token int
+				fmt.Sscanf(fp.ID, "editor:%d", &token)
+				m.closeEditor(token)
+			} else {
+				m.panes.Remove(fp.ID)
+			}
 		}
 		return m, nil
 	}
@@ -252,7 +300,7 @@ func (m *Model) toggleDebugPane() {
 			paneX = 0
 		}
 
-		m.debugPane = NewDebugPane(&m.debugLog)
+		m.debugPane = NewDebugPane(m.debugLog)
 		pane := NewPane("debug", m.debugPane, paneX, 1, paneW, paneH)
 		m.panes.Add(pane)
 		m.panes.Focus("debug")
@@ -521,15 +569,206 @@ func (m Model) execute() (tea.Model, tea.Cmd) {
 	m.cursorCol = len([]rune(editedText))
 
 	m.ready = false
-	m.log("→ Execute %q", code)
+	m.lastExecute = editedText + "\n" // Track what we sent to skip our own echo
+	m.log("→ Execute %q", editedText)
 
 	// Send to interpreter
-	if err := m.client.Send("Execute", map[string]any{"text": code + "\n", "trace": 0}); err != nil {
+	if err := m.client.Send("Execute", map[string]any{"text": m.lastExecute, "trace": 0}); err != nil {
 		m.err = err
 		return m, tea.Quit
 	}
 
 	return m, nil
+}
+
+func (m *Model) saveEditor(token int) {
+	w, exists := m.editors[token]
+	if !exists {
+		return
+	}
+
+	// Build text array
+	text := make([]any, len(w.Text))
+	for i, line := range w.Text {
+		text[i] = line
+	}
+
+	// Build stop array (breakpoints)
+	stop := make([]any, len(w.Stop))
+	for i, s := range w.Stop {
+		stop[i] = s
+	}
+
+	// Build monitor array
+	monitor := make([]any, len(w.Monitor))
+	for i, s := range w.Monitor {
+		monitor[i] = s
+	}
+
+	// Build trace array
+	trace := make([]any, len(w.Trace))
+	for i, s := range w.Trace {
+		trace[i] = s
+	}
+
+	m.log("→ SaveChanges win=%d", token)
+
+	if err := m.client.Send("SaveChanges", map[string]any{
+		"win":     token,
+		"text":    text,
+		"stop":    stop,
+		"monitor": monitor,
+		"trace":   trace,
+	}); err != nil {
+		m.log("  SaveChanges error: %v", err)
+	}
+}
+
+func (m *Model) closeEditor(token int) {
+	w, exists := m.editors[token]
+	if !exists {
+		return
+	}
+
+	// If modified, save first and wait for ReplySaveChanges before closing
+	if w.Modified {
+		w.PendingClose = true
+		m.saveEditor(token)
+		m.log("  (waiting for ReplySaveChanges before CloseWindow)")
+		return
+	}
+
+	// Not modified - close immediately
+	m.sendCloseWindow(token)
+}
+
+func (m *Model) sendCloseWindow(token int) {
+	m.log("→ CloseWindow win=%d", token)
+
+	if err := m.client.Send("CloseWindow", map[string]any{
+		"win": token,
+	}); err != nil {
+		m.log("  CloseWindow error: %v", err)
+	}
+	// Don't remove pane yet - wait for CloseWindow from Dyalog
+}
+
+// Tracer stack management
+
+func (m *Model) isInTracerStack(token int) bool {
+	for _, t := range m.tracerStack {
+		if t == token {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *Model) removeFromTracerStack(token int) {
+	// Remove token from stack
+	for i, t := range m.tracerStack {
+		if t == token {
+			m.tracerStack = append(m.tracerStack[:i], m.tracerStack[i+1:]...)
+			break
+		}
+	}
+
+	// If we removed the current tracer, switch to new top of stack
+	if m.tracerCurrent == token {
+		if len(m.tracerStack) > 0 {
+			// Show the new top of stack
+			m.showTracer(m.tracerStack[len(m.tracerStack)-1])
+		} else {
+			// Stack empty - hide tracer pane
+			m.tracerCurrent = 0
+			m.panes.Remove("tracer")
+		}
+	}
+}
+
+func (m *Model) showTracer(token int) {
+	m.tracerCurrent = token
+
+	w, exists := m.editors[token]
+	if !exists {
+		return
+	}
+
+	// Check if tracer pane exists
+	if pane := m.panes.Get("tracer"); pane != nil {
+		// Update existing pane's window
+		if ep, ok := pane.Content.(*EditorPane); ok {
+			ep.SetWindow(w)
+		}
+	} else {
+		// Create tracer pane
+		editorPane := NewEditorPane(w,
+			func() { m.saveEditor(m.tracerCurrent) },
+			func() { m.closeEditor(m.tracerCurrent) },
+		)
+
+		// Position: center of screen
+		paneW := min(m.width-4, 60)
+		paneH := min(m.height-6, 20)
+		if paneW < 30 {
+			paneW = 30
+		}
+		if paneH < 10 {
+			paneH = 10
+		}
+		paneX := (m.width - paneW) / 2
+		paneY := (m.height - paneH) / 2
+
+		pane := NewPane("tracer", editorPane, paneX, paneY, paneW, paneH)
+		m.panes.Add(pane)
+		m.panes.Focus("tracer")
+	}
+}
+
+func (m *Model) getStackFrames() []StackFrame {
+	frames := make([]StackFrame, 0, len(m.tracerStack))
+	for _, token := range m.tracerStack {
+		if w, exists := m.editors[token]; exists {
+			code := ""
+			if w.CurrentRow >= 0 && w.CurrentRow < len(w.Text) {
+				code = strings.TrimSpace(w.Text[w.CurrentRow])
+			}
+			frames = append(frames, StackFrame{
+				Token:   token,
+				Name:    w.Name,
+				Line:    w.CurrentRow,
+				Code:    code,
+				Current: token == m.tracerCurrent,
+			})
+		}
+	}
+	return frames
+}
+
+func (m *Model) toggleStackPane() {
+	if m.panes.Get("stack") != nil {
+		m.panes.Remove("stack")
+		return
+	}
+
+	// Create stack pane
+	stackPane := NewStackPane(
+		func() []StackFrame { return m.getStackFrames() },
+		func(token int) { m.showTracer(token) },
+	)
+
+	// Position: right side of screen
+	paneW := 30
+	paneH := min(m.height-4, 15)
+	if paneH < 5 {
+		paneH = 5
+	}
+	paneX := m.width - paneW - 2
+	paneY := 2
+
+	pane := NewPane("stack", stackPane, paneX, paneY, paneW, paneH)
+	m.panes.Add(pane)
+	m.panes.Focus("stack")
 }
 
 func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
@@ -556,10 +795,15 @@ func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
 
 	switch msg.Command {
 	case "AppendSessionOutput":
-		// Skip input echo (type 14)
+		// Skip input echo (type 14) only if it matches what we sent
 		if t, ok := msg.Args["type"].(float64); ok && int(t) == 14 {
-			m.log("  (skipped: input echo)")
-			return m, waitForRide(m.msgs)
+			if result, ok := msg.Args["result"].(string); ok && result == m.lastExecute {
+				m.log("  (skipped: our input echo)")
+				m.lastExecute = "" // Clear after matching
+				return m, waitForRide(m.msgs)
+			}
+			// Input from elsewhere - display it
+			m.log("  (external input)")
 		}
 		if result, ok := msg.Args["result"].(string); ok {
 			result = strings.TrimSuffix(result, "\n")
@@ -581,6 +825,127 @@ func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
 				m.cursorRow = len(m.lines) - 1
 				m.cursorCol = len(aplIndent)
 			}
+		}
+
+	case "OpenWindow":
+		w := NewEditorWindow(msg.Args)
+		m.editors[w.Token] = w
+
+		if w.Debugger {
+			// Tracer window - add to stack, show single tracer pane
+			m.tracerStack = append(m.tracerStack, w.Token)
+			m.showTracer(w.Token)
+			m.log("  opened tracer: %s (token=%d, stack depth=%d)", w.Name, w.Token, len(m.tracerStack))
+		} else {
+			// Regular editor - create pane as before
+			token := w.Token
+			editorPane := NewEditorPane(w,
+				func() { m.saveEditor(token) },
+				func() { m.closeEditor(token) },
+			)
+
+			// Position: center of screen
+			paneW := min(m.width-4, 60)
+			paneH := min(m.height-6, 20)
+			if paneW < 30 {
+				paneW = 30
+			}
+			if paneH < 10 {
+				paneH = 10
+			}
+			paneX := (m.width - paneW) / 2
+			paneY := (m.height - paneH) / 2
+
+			paneID := fmt.Sprintf("editor:%d", w.Token)
+			pane := NewPane(paneID, editorPane, paneX, paneY, paneW, paneH)
+			m.panes.Add(pane)
+			m.panes.Focus(paneID)
+			m.log("  opened editor: %s (token=%d)", w.Name, w.Token)
+		}
+
+	case "UpdateWindow":
+		token := int(msg.Args["token"].(float64))
+		if w, exists := m.editors[token]; exists {
+			w.Update(msg.Args)
+			m.log("  updated: %s (token=%d)", w.Name, token)
+		}
+
+	case "CloseWindow":
+		win := int(msg.Args["win"].(float64))
+
+		// Check if this is a tracer window
+		if m.isInTracerStack(win) {
+			m.removeFromTracerStack(win)
+			m.log("  closed tracer: token=%d (stack depth=%d)", win, len(m.tracerStack))
+		} else {
+			// Regular editor
+			paneID := fmt.Sprintf("editor:%d", win)
+			m.panes.Remove(paneID)
+			m.log("  closed editor: token=%d", win)
+		}
+		delete(m.editors, win)
+
+	case "ReplySaveChanges":
+		win := int(msg.Args["win"].(float64))
+		errCode := 0
+		if e, ok := msg.Args["err"].(float64); ok {
+			errCode = int(e)
+		}
+
+		if errCode == 0 {
+			m.log("  save succeeded: token=%d", win)
+			if w, exists := m.editors[win]; exists {
+				w.Modified = false
+				// If close was pending, send CloseWindow now
+				if w.PendingClose {
+					w.PendingClose = false
+					m.sendCloseWindow(win)
+				}
+			}
+		} else {
+			m.log("  save FAILED: token=%d, err=%d", win, errCode)
+			// Clear pending close on failure
+			if w, exists := m.editors[win]; exists {
+				w.PendingClose = false
+			}
+		}
+
+	case "SetHighlightLine":
+		win := int(msg.Args["win"].(float64))
+		line := int(msg.Args["line"].(float64))
+
+		// Store highlight in the window itself
+		if w, exists := m.editors[win]; exists {
+			w.CurrentRow = line
+		}
+
+		// Update pane if this is the current tracer or a regular editor
+		if m.isInTracerStack(win) {
+			// If this is the current tracer, update the tracer pane
+			if win == m.tracerCurrent {
+				if pane := m.panes.Get("tracer"); pane != nil {
+					if ep, ok := pane.Content.(*EditorPane); ok {
+						ep.SetHighlightLine(line)
+					}
+				}
+			}
+		} else {
+			// Regular editor pane
+			paneID := fmt.Sprintf("editor:%d", win)
+			if pane := m.panes.Get(paneID); pane != nil {
+				if ep, ok := pane.Content.(*EditorPane); ok {
+					ep.SetHighlightLine(line)
+				}
+			}
+		}
+		m.log("  highlight: token=%d, line=%d", win, line)
+
+	case "WindowTypeChanged":
+		win := int(msg.Args["win"].(float64))
+		tracer := int(msg.Args["tracer"].(float64))
+		if w, exists := m.editors[win]; exists {
+			w.Debugger = tracer != 0
+			m.log("  window type changed: token=%d, tracer=%v", win, w.Debugger)
 		}
 	}
 
@@ -622,10 +987,10 @@ func (m Model) View() string {
 		confirmStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true)
 		helpView = confirmStyle.Render("Quit? (y/n)")
 	} else if m.showQuitHint {
-		hintStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(DyalogOrange))
+		hintStyle := lipgloss.NewStyle().Foreground(DyalogOrange)
 		helpView = hintStyle.Render("Type C-] q to quit")
 	} else if m.leaderActive {
-		leaderStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(DyalogOrange)).Bold(true)
+		leaderStyle := lipgloss.NewStyle().Foreground(DyalogOrange).Bold(true)
 		helpView = leaderStyle.Render("C-] ...")
 	} else {
 		helpView = m.help.View(m.keys)
@@ -642,9 +1007,7 @@ func (m Model) viewSession(w, h int) string {
 	return m.renderBox("gritt", content, contentW, contentH, DyalogOrange)
 }
 
-func (m Model) renderBox(title, content string, w, h int, color string) string {
-	borderColor := lipgloss.Color(color)
-
+func (m Model) renderBox(title, content string, w, h int, borderColor color.Color) string {
 	// Build box manually with title in top border
 	topBorder := "╭─ " + title + " " + strings.Repeat("─", w-len(title)-3) + "╮"
 	bottomBorder := "╰" + strings.Repeat("─", w) + "╯"

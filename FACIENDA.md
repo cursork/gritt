@@ -5,16 +5,19 @@
 - [ ] ⍝« command syntax (log save, etc.)
 - [ ] Clipboard support (Ctrl+C copy, Ctrl+V paste)
 
-## Phase 3: Editors (next)
-- [ ] Handle OpenWindow/UpdateWindow messages
-- [ ] Editor pane (floating, using pane system)
-- [ ] Text editing for functions/operators
-- [ ] SaveChanges message
-- [ ] CloseWindow handling
+## Phase 3: Editors - DONE
+- [x] Handle OpenWindow/UpdateWindow messages
+- [x] Editor pane (floating, using pane system)
+- [x] Text editing for functions/operators
+- [x] SaveChanges message
+- [x] CloseWindow handling
+- [x] Tracer window support (debugger:1, SetHighlightLine, WindowTypeChanged)
 
-## Phase 4: Tracer
-- [ ] Debug UI with stack display
-- [ ] Step into/over/out
+## Phase 4: Tracer (in progress)
+- [x] Stack trace pane (C-] s toggle, click to switch frames)
+- [x] Single tracer pane (not multiple overlapping windows like JS RIDE)
+- [x] Escape pops stack frame
+- [ ] Step into/over/out commands
 - [ ] Breakpoints
 - [ ] Variable inspection
 
@@ -56,12 +59,13 @@ RIDE handles multiline poorly. Research needed on:
 
 **Implemented:**
 - Execute (→), AppendSessionOutput (←), SetPromptType (←)
+- OpenWindow, UpdateWindow, CloseWindow, SaveChanges, ReplySaveChanges (editors)
+- SetHighlightLine, WindowTypeChanged (tracer)
 
 **Not yet implemented:**
-- OpenWindow, UpdateWindow, CloseWindow, SaveChanges (editors)
 - OptionsDialog, StringDialog, Reply* (dialogs)
 - HadError (error handling)
-- Trace-related messages (tracer)
+- Step/trace control messages
 
 ---
 
@@ -107,7 +111,23 @@ RIDE handles multiline poorly. Research needed on:
 - [x] Leader key system (Ctrl+]) - keeps all keys free for APL
 - [x] Quit behind C-] q with y/n confirmation dialog
 - [x] Ctrl+C shows vim-style "Type C-] q to quit" hint
-- [x] Dyalog orange (#ff6600) for all UI borders
+- [x] Dyalog orange (#F2A74F) for all UI borders
 - [x] ANSI-aware cellbuf compositor for styled panes
 - [x] Input routing fix - focused panes consume all keys
 - [x] Test reports with ANSI colors and clickable test→snapshot links
+- [x] Config from config.default.json (no hardcoded Go defaults)
+- [x] Debug pane real-time updates (LogBuffer survives Model copies)
+
+### Phase 2f: Session Fixes
+- [x] Input indentation preserved when sending to Dyalog (6-space APL indent)
+- [x] External input display (only skip our own echo, show input from Dyalog terminal)
+
+### Phase 4a: Tracer Stack & Debugging Infrastructure
+- [x] Tracer stack management (single pane, not multiple overlapping windows)
+- [x] Stack pane (C-] s toggle, shows all suspended frames)
+- [x] Click/Enter in stack pane switches tracer view
+- [x] Escape pops stack frame (sends CloseWindow)
+- [x] CloseWindow timing fix (wait for ReplySaveChanges before closing)
+- [x] Protocol logging (-log flag for RIDE messages and TUI actions)
+- [x] Adaptive color detection (ANSI/ANSI256/TrueColor, exact #F2A74F when supported)
+- [x] 28 passing tests including X→Y→Z nested tracer scenario

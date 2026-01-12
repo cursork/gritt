@@ -3,6 +3,7 @@
     "leader": ["ctrl+]"],
     "execute": ["enter"],
     "toggle_debug": ["d"],
+    "toggle_stack": ["s"],
     "cycle_pane": ["tab"],
     "close_pane": ["esc"],
     "quit": ["q"],

@@ -10,6 +10,7 @@ type KeyMap struct {
 	// Actions (some require leader prefix)
 	Execute     key.Binding
 	ToggleDebug key.Binding // After leader
+	ToggleStack key.Binding // After leader
 	CyclePane   key.Binding
 	ClosePane   key.Binding
 	Quit        key.Binding
@@ -32,7 +33,7 @@ type KeyMap struct {
 
 // ShortHelp returns keybindings for the short help view
 func (k KeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Execute, k.ToggleDebug, k.ShowKeys, k.Quit}
+	return []key.Binding{k.Execute, k.ToggleDebug, k.ToggleStack, k.ShowKeys, k.Quit}
 }
 
 // FullHelp returns keybindings for the full help view

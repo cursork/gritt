@@ -7,22 +7,23 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// DebugPane displays the debug log using a viewport
-type DebugPane struct {
-	viewport viewport.Model
-	log      *[]string // Pointer to Model's debugLog
-	lastLen  int       // Track log length for auto-scroll
+// LogBuffer is a shared buffer that survives Model copies
+type LogBuffer struct {
+	Lines []string
 }
 
-// NewDebugPane creates a debug pane backed by the given log slice
-func NewDebugPane(log *[]string) *DebugPane {
+// DebugPane displays the debug log using a viewport
+type DebugPane struct {
+	viewport    viewport.Model
+	log         *LogBuffer
+	lastContent string // Track content to detect changes
+}
+
+// NewDebugPane creates a debug pane backed by the given log buffer
+func NewDebugPane(log *LogBuffer) *DebugPane {
 	vp := viewport.New(0, 0)
 	vp.MouseWheelEnabled = true
-	return &DebugPane{
-		viewport: vp,
-		log:      log,
-		lastLen:  0,
-	}
+	return &DebugPane{viewport: vp, log: log}
 }
 
 func (d *DebugPane) Title() string {
@@ -34,14 +35,19 @@ func (d *DebugPane) Render(w, h int) string {
 	d.viewport.Width = w
 	d.viewport.Height = h
 
-	// Update content
-	content := strings.Join(*d.log, "\n")
-	d.viewport.SetContent(content)
+	// Build and set content every time
+	content := strings.Join(d.log.Lines, "\n")
 
-	// Auto-scroll to bottom if new content was added
-	if len(*d.log) > d.lastLen {
+	// Check if content changed for auto-scroll decision
+	contentChanged := content != d.lastContent
+	wasAtBottom := d.viewport.AtBottom()
+
+	d.viewport.SetContent(content)
+	d.lastContent = content
+
+	// Auto-scroll if content changed and we were at bottom (or content fits)
+	if contentChanged && (wasAtBottom || d.viewport.TotalLineCount() <= h) {
 		d.viewport.GotoBottom()
-		d.lastLen = len(*d.log)
 	}
 
 	return d.viewport.View()

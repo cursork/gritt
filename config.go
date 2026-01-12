@@ -18,6 +18,7 @@ type KeyMapConfig struct {
 	Leader      []string `json:"leader"`
 	Execute     []string `json:"execute"`
 	ToggleDebug []string `json:"toggle_debug"`
+	ToggleStack []string `json:"toggle_stack"`
 	CyclePane   []string `json:"cycle_pane"`
 	ClosePane   []string `json:"close_pane"`
 	Quit        []string `json:"quit"`
@@ -81,6 +82,10 @@ func (c *Config) ToKeyMap() KeyMap {
 		ToggleDebug: key.NewBinding(
 			key.WithKeys(c.Keys.ToggleDebug...),
 			key.WithHelp(c.Keys.Leader[0]+" "+c.Keys.ToggleDebug[0], "debug"),
+		),
+		ToggleStack: key.NewBinding(
+			key.WithKeys(c.Keys.ToggleStack...),
+			key.WithHelp(c.Keys.Leader[0]+" "+c.Keys.ToggleStack[0], "stack"),
 		),
 		CyclePane: key.NewBinding(
 			key.WithKeys(c.Keys.CyclePane...),

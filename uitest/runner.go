@@ -70,6 +70,13 @@ func (r *Runner) SendLine(text string) {
 	}
 }
 
+// SendText sends literal text (for typing in editors)
+func (r *Runner) SendText(text string) {
+	if err := r.Session.SendText(text); err != nil {
+		r.T.Fatalf("Failed to send text: %v", err)
+	}
+}
+
 // WaitFor waits for a pattern to appear
 func (r *Runner) WaitFor(pattern string, timeout time.Duration) bool {
 	err := r.Session.WaitFor(pattern, timeout)
@@ -88,6 +95,19 @@ func (r *Runner) Contains(pattern string) bool {
 		return false
 	}
 	return found
+}
+
+// WaitForNoFocusedPane waits until no pane has double-border focus indicator
+func (r *Runner) WaitForNoFocusedPane(timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if !r.Contains("╔") {
+			return true
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	r.T.Logf("Timeout waiting for focused pane to close")
+	return false
 }
 
 // Sleep pauses execution

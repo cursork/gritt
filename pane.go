@@ -245,8 +245,8 @@ func (p *Pane) Render() string {
 	}
 
 	// Style borders with Dyalog orange
-	borderStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(DyalogOrange))
-	titleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(DyalogOrange)).Bold(true)
+	borderStyle := lipgloss.NewStyle().Foreground(DyalogOrange)
+	titleStyle := lipgloss.NewStyle().Foreground(DyalogOrange).Bold(true)
 
 	contentW := p.Width - 2
 	contentH := p.Height - 2
@@ -290,12 +290,12 @@ func (p *Pane) Render() string {
 		if i < len(contentLines) {
 			line = contentLines[i]
 		}
-		lineRunes := []rune(line)
-		if len(lineRunes) < contentW {
-			line = line + strings.Repeat(" ", contentW-len(lineRunes))
-		} else if len(lineRunes) > contentW {
-			line = string(lineRunes[:contentW])
+		// Use lipgloss.Width for ANSI-aware width calculation
+		lineW := lipgloss.Width(line)
+		if lineW < contentW {
+			line = line + strings.Repeat(" ", contentW-lineW)
 		}
+		// Note: truncation with ANSI codes is complex, skip for now
 		lines = append(lines, borderStyle.Render(v)+line+borderStyle.Render(v))
 	}
 

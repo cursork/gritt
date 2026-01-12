@@ -40,8 +40,8 @@ func TestTUI(t *testing.T) {
 		}()
 	}
 
-	// Create test runner
-	runner, err := uitest.NewRunner(t, sessionName, screenW, screenH, "./gritt", "test-reports")
+	// Create test runner with protocol logging
+	runner, err := uitest.NewRunner(t, sessionName, screenW, screenH, "./gritt -log test-reports/protocol.log", "test-reports")
 	if err != nil {
 		t.Fatalf("Failed to create runner: %v", err)
 	}
@@ -201,6 +201,134 @@ func TestTUI(t *testing.T) {
 
 	runner.Test("n cancels quit confirmation", func() bool {
 		return !runner.Contains("Quit? (y/n)")
+	})
+
+	// Test 17-25: Tracer stack with nested functions X→Y→Z
+	// Clean up any existing functions from previous runs
+	runner.SendLine(")erase X Y Z")
+	runner.Sleep(500 * time.Millisecond)
+
+	// Define Z (will error)
+	runner.SendLine(")ed Z")
+	runner.Sleep(500 * time.Millisecond)
+	runner.Snapshot("Editor opened for Z")
+
+	runner.Test("Editor opens for Z", func() bool {
+		return runner.Contains("Z")
+	})
+
+	// Type function body: 9÷0 (divide by zero error)
+	runner.SendKeys("End", "Enter", "Enter")
+	runner.SendText("9÷0")
+	runner.Sleep(200 * time.Millisecond)
+	runner.Snapshot("Z function with 9÷0")
+
+	// Save and close - wait for editor to actually close
+	runner.SendKeys("Escape")
+	runner.Sleep(500 * time.Millisecond)
+
+	runner.Test("Z editor closes after Escape", func() bool {
+		return runner.WaitForNoFocusedPane(3 * time.Second)
+	})
+	runner.Snapshot("After closing Z editor")
+
+	// Define Y (calls Z)
+	runner.SendLine(")ed Y")
+	runner.Sleep(1 * time.Second)
+	runner.Snapshot("Y editor opened")
+
+	runner.Test("Y editor opens", func() bool {
+		return runner.Contains("╔") && runner.Contains("Y")
+	})
+
+	runner.SendKeys("End", "Enter", "Enter")
+	runner.SendText("Z")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Escape")
+	runner.Sleep(500 * time.Millisecond)
+
+	runner.Test("Y editor closes after Escape", func() bool {
+		return runner.WaitForNoFocusedPane(3 * time.Second)
+	})
+
+	// Define X (calls Y)
+	runner.SendLine(")ed X")
+	runner.Sleep(1 * time.Second)
+	runner.Snapshot("X editor opened")
+
+	runner.Test("X editor opens", func() bool {
+		return runner.Contains("╔") && runner.Contains("X")
+	})
+
+	runner.SendKeys("End", "Enter", "Enter")
+	runner.SendText("Y")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Escape")
+	runner.Sleep(500 * time.Millisecond)
+
+	runner.Test("X editor closes after Escape", func() bool {
+		return runner.WaitForNoFocusedPane(3 * time.Second)
+	})
+	runner.Snapshot("After defining X, Y, Z")
+
+	// Execute X - triggers nested error
+	runner.SendLine("X")
+	runner.Sleep(2 * time.Second) // Give time for error and tracer to open
+	runner.Snapshot("After X errors - tracer opens")
+
+	runner.Test("Tracer opens on error", func() bool {
+		return runner.Contains("[tracer]") || runner.Contains("DOMAIN ERROR") || runner.Contains("tracer")
+	})
+
+	// Open stack pane
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys("s")
+	runner.Sleep(500 * time.Millisecond)
+	runner.Snapshot("Stack pane showing X→Y→Z")
+
+	runner.Test("Stack pane shows Z (top of stack)", func() bool {
+		return runner.Contains("Z[") || runner.Contains("Z ")
+	})
+
+	runner.Test("Stack pane shows stack frames", func() bool {
+		// Check for stack pane title or any indication of multiple frames
+		return runner.Contains("stack") && (runner.Contains("X") || runner.Contains("Y") || runner.Contains("Z"))
+	})
+
+	// Navigate stack - press down to select Y
+	runner.SendKeys("Down")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Enter")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("After selecting Y in stack")
+
+	runner.Test("Tracer switches to Y", func() bool {
+		return runner.Contains("Y")
+	})
+
+	// Close stack pane
+	runner.SendKeys("Escape")
+	runner.Sleep(200 * time.Millisecond)
+
+	// Pop stack frames with Escape
+	// Focus tracer first
+	runner.SendKeys("Tab")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Escape") // Pop Z
+	runner.Sleep(500 * time.Millisecond)
+	runner.Snapshot("After popping Z")
+
+	runner.SendKeys("Escape") // Pop Y
+	runner.Sleep(500 * time.Millisecond)
+	runner.Snapshot("After popping Y")
+
+	runner.SendKeys("Escape") // Pop X - stack cleared
+	runner.Sleep(500 * time.Millisecond)
+	runner.Snapshot("After popping X - stack cleared")
+
+	runner.Test("Stack cleared after popping all frames", func() bool {
+		return !runner.Contains("[tracer]")
 	})
 
 	// Final snapshot

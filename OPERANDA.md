@@ -2,52 +2,50 @@
 
 ## Active Work
 
-Key mappings config implemented. Leader key system (`Ctrl+]`) for gritt commands.
+Tracer stack experience implemented. Protocol logging available for debugging.
 
-### What's New This Session
+### What's Done
 
-- **Leader key system**: `Ctrl+]` prefix for gritt commands (configurable)
-- **Go test framework**: `uitest/` package wraps tmux, generates HTML reports
-- **Config loading**: `config.go` loads from `config.json` or `~/.config/gritt/config.json`
-- **Key mappings pane**: `C-] ?` shows floating pane with all bindings
-- **Bubbles integration**: viewport in debug pane, help.Model at bottom, key.Binding for all keys
-- **cellbuf compositor**: proper pane compositing with styles
+- **Tracer stack**: Single tracer pane (not multiple overlapping windows), stack pane for navigation
+- **Stack pane**: `C-] s` toggles, shows all suspended frames, click/Enter to switch
+- **Protocol logging**: `-log <file>` flag logs all RIDE messages and TUI actions
+- **Adaptive colors**: Detects terminal capabilities (ANSI, ANSI256, TrueColor), uses exact #F2A74F when supported
+- **CloseWindow timing fix**: Wait for `ReplySaveChanges` before sending `CloseWindow`
+- **28 passing tests**: Including full X→Y→Z tracer scenario
 
-### Issues Fixed
+### Key Files Changed
 
-- Implemented leader key (`Ctrl+]`) for gritt commands - keeps all keys free for APL
-- Removed `?` direct binding (it's roll/deal in APL)
-- Removed F1/F2 direct bindings (F1 is for APL docs)
-- Commands now behind leader: `C-] ?` for keys, `C-] d` for debug, `C-] q` for quit
-- Ctrl+C shows vim-style "Type C-] q to quit" hint
-- Quit confirmation dialog (y/n)
-- Dyalog orange (#ff6600) for all UI borders
-- Fixed cellbuf compositor to handle ANSI-styled pane content
-- Fixed input routing - focused panes consume all keys
-- Fixed tmux session sizing (resize-window after creation)
-- Test reports now show ANSI colors, clickable test→snapshot links
+| File | Changes |
+|------|---------|
+| `tui.go` | Tracer stack state, adaptive color init, CloseWindow timing fix |
+| `editor.go` | Added `PendingClose` flag |
+| `stack_pane.go` | New - stack list pane |
+| `ride/logger.go` | New - protocol logging |
+| `main.go` | `-log` flag, color profile detection |
 
 ### Project Structure
 
 ```
 gritt/
-├── main.go           # Entry point
-├── tui.go            # bubbletea TUI - Model, Update, View
-├── pane.go           # Floating pane system, cellbuf compositor
-├── debug_pane.go     # Debug log pane (uses viewport)
-├── keys_pane.go      # Key mappings pane (uses viewport)
-├── keys.go           # KeyMap definitions
-├── config.go         # Config loading from JSON
-├── config.json.example
-├── tui_test.go       # Go TUI tests (12 tests)
-├── uitest/           # Test framework
-│   ├── tmux.go       # tmux wrapper
-│   ├── report.go     # HTML report generator
-│   └── runner.go     # Test runner helpers
+├── main.go              # Entry point, color profile detection
+├── tui.go               # bubbletea TUI - Model, Update, View
+├── pane.go              # Floating pane system, cellbuf compositor
+├── editor.go            # EditorWindow struct
+├── editor_pane.go       # Editor/tracer pane content
+├── stack_pane.go        # Stack frame list pane
+├── debug_pane.go        # Debug log pane
+├── keys_pane.go         # Key mappings pane
+├── keys.go              # KeyMap struct definition
+├── config.go            # Config loading from JSON files
+├── config.default.json  # Default key bindings
+├── tui_test.go          # TUI tests (28 tests)
+├── uitest/              # Test framework (tmux, HTML reports)
 ├── ride/
-│   ├── protocol.go   # Wire format
-│   └── client.go     # Connection, handshake
-└── test-reports/     # Generated HTML test reports
+│   ├── protocol.go      # Wire format
+│   ├── client.go        # Connection, handshake
+│   └── logger.go        # Protocol logging
+├── test-reports/        # Generated HTML test reports
+└── adnotata/            # Design notes and exploration
 ```
 
 ### Testing
@@ -56,9 +54,12 @@ gritt/
 # Run TUI tests (starts Dyalog automatically if needed)
 go test -v -run TestTUI
 
+# With protocol logging
+./gritt -log debug.log
+
 # Manual testing
 RIDE_INIT=SERVE:*:4502 dyalog +s -q
-go run .
+./gritt
 ```
 
 ### Key Bindings (current)
@@ -70,20 +71,19 @@ Leader key: `Ctrl+]` (configurable)
 | Enter | Execute line |
 | C-] ? | Show key mappings pane |
 | C-] d | Toggle debug pane |
+| C-] s | Toggle stack pane (in tracer) |
 | C-] q | Quit |
 | Tab | Cycle focus between panes |
-| Esc | Close focused pane |
-| Ctrl+C | Shows "Type C-] q to quit" (vim style)
+| Esc | Close focused pane / pop tracer frame |
+| Ctrl+C | Shows "Type C-] q to quit" (vim style) |
 
 ---
 
 ## Next Session
 
-Phase 3: Editors
-- Handle OpenWindow/UpdateWindow messages from Dyalog
-- Editor pane using floating pane system
-- Text editing for functions/operators
-- SaveChanges message
-- CloseWindow handling
+Phase 4 continuation: Tracer operations
+- Step into/over/out commands
+- Breakpoint toggling
+- Variable inspection
 
-Reference: ~/dev/dyctl and ~/dev/ride for protocol details
+Reference: `adnotata/0003-debugging-protocol.md` for protocol debugging approach

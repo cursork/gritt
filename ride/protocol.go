@@ -30,6 +30,7 @@ func sendRaw(w io.Writer, payload string) error {
 	if _, err := w.Write(data); err != nil {
 		return fmt.Errorf("write payload: %w", err)
 	}
+	logRaw("→", payload)
 	return nil
 }
 
@@ -52,8 +53,9 @@ func recvRaw(r io.Reader) (string, error) {
 
 	s := string(buf)
 	if strings.HasPrefix(s, rideHeader) {
-		return s[4:], nil
+		s = s[4:]
 	}
+	logRecv(s)
 	return s, nil
 }
 
