@@ -48,6 +48,9 @@ type Model struct {
 	help help.Model
 	keys KeyMap
 
+	// Leader key state
+	leaderActive bool
+
 	// Terminal dimensions
 	width  int
 	height int
@@ -76,6 +79,7 @@ func NewModel(client *ride.Client) Model {
 		}
 	}()
 
+	cfg := LoadConfig()
 	m := Model{
 		client: client,
 		msgs:   ch,
@@ -83,7 +87,7 @@ func NewModel(client *ride.Client) Model {
 		lines:  []Line{{Text: aplIndent}},
 		panes:  NewPaneManager(80, 24), // Will be updated on WindowSizeMsg
 		help:   help.New(),
-		keys:   DefaultKeyMap,
+		keys:   cfg.ToKeyMap(),
 	}
 	m.cursorCol = len(aplIndent)
 	m.log("Connected, ready for input")
@@ -130,14 +134,31 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Handle leader key sequences
+	if m.leaderActive {
+		m.leaderActive = false // Reset on any key
+		switch {
+		case key.Matches(msg, m.keys.ToggleDebug):
+			m.toggleDebugPane()
+			return m, nil
+		case key.Matches(msg, m.keys.ShowKeys):
+			m.toggleKeysPane()
+			return m, nil
+		}
+		// Unknown leader sequence - ignore
+		return m, nil
+	}
+
+	// Check for leader key
+	if key.Matches(msg, m.keys.Leader) {
+		m.leaderActive = true
+		return m, nil
+	}
+
 	// Global shortcuts (always work regardless of focus)
 	switch {
 	case key.Matches(msg, m.keys.Quit):
 		return m, tea.Quit
-
-	case key.Matches(msg, m.keys.ToggleDebug):
-		m.toggleDebugPane()
-		return m, nil
 
 	case key.Matches(msg, m.keys.CyclePane):
 		if m.panes.HasPanes() {
@@ -150,10 +171,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.panes.Remove(fp.ID)
 		}
 		return m, nil
-
-	case key.Matches(msg, m.keys.Help):
-		m.help.ShowAll = !m.help.ShowAll
-		return m, nil
 	}
 
 	// Route to focused pane first
@@ -165,6 +182,29 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Session key handling
 	return m.handleSessionKey(msg)
+}
+
+func (m *Model) toggleKeysPane() {
+	if m.panes.Get("keys") != nil {
+		m.panes.Remove("keys")
+	} else {
+		// Center the pane
+		paneW := 40
+		paneH := 25
+		paneX := (m.width - paneW) / 2
+		paneY := (m.height - paneH) / 2
+		if paneX < 0 {
+			paneX = 0
+		}
+		if paneY < 0 {
+			paneY = 0
+		}
+
+		keysPane := NewKeysPane(m.keys)
+		pane := NewPane("keys", keysPane, paneX, paneY, paneW, paneH)
+		m.panes.Add(pane)
+		m.panes.Focus("keys")
+	}
 }
 
 func (m *Model) toggleDebugPane() {

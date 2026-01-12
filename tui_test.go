@@ -58,12 +58,14 @@ func TestTUI(t *testing.T) {
 		return runner.Contains("gritt")
 	})
 
-	// Test 2: F12 toggles debug pane
-	runner.SendKeys("F12")
+	// Test 2: C-] d toggles debug pane
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys("d")
 	runner.Sleep(300 * time.Millisecond)
-	runner.Snapshot("After F12 (debug pane open)")
+	runner.Snapshot("After C-] d (debug pane open)")
 
-	runner.Test("F12 opens debug pane", func() bool {
+	runner.Test("C-] d opens debug pane", func() bool {
 		return runner.Contains("debug")
 	})
 
@@ -81,11 +83,13 @@ func TestTUI(t *testing.T) {
 		return !runner.Contains("╔")
 	})
 
-	// Test 5: F12 reopens
-	runner.SendKeys("F12")
+	// Test 5: C-] d reopens
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys("d")
 	runner.Sleep(300 * time.Millisecond)
 
-	runner.Test("F12 reopens debug pane", func() bool {
+	runner.Test("C-] d reopens debug pane", func() bool {
 		return runner.Contains("debug")
 	})
 
@@ -128,12 +132,39 @@ func TestTUI(t *testing.T) {
 	})
 
 	// Test 9: Debug pane shows protocol
-	runner.SendKeys("F12")
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys("d")
 	runner.Sleep(300 * time.Millisecond)
 	runner.Snapshot("Debug pane with protocol log")
 
 	runner.Test("Debug pane shows Execute messages", func() bool {
 		return runner.Contains("Execute")
+	})
+
+	runner.SendKeys("Escape")
+	runner.Sleep(200 * time.Millisecond)
+
+	// Test 10: C-] ? shows key mappings pane
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys("?")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("After C-] ? (key mappings pane)")
+
+	runner.Test("C-] ? opens key mappings pane", func() bool {
+		return runner.Contains("key mappings")
+	})
+
+	runner.Test("Key mappings shows Actions section", func() bool {
+		return runner.Contains("Actions")
+	})
+
+	runner.SendKeys("Escape")
+	runner.Sleep(200 * time.Millisecond)
+
+	runner.Test("Esc closes key mappings pane", func() bool {
+		return !runner.Contains("key mappings")
 	})
 
 	// Final snapshot

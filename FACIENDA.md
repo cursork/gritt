@@ -1,7 +1,7 @@
 # FACIENDA - Things to be done
 
 ## Prerequisites (before Phase 3)
-- [ ] Key mappings config (config.json, Ctrl+? to show)
+- [~] Key mappings config - PARTIAL: config.json works, F1 shows keys, but duplicates ? help
 - [ ] Ctrl+C confirmation / clipboard support
 - [ ] Connection resilience (preserve session on disconnect)
 - [ ] ⍝« command syntax (log save, etc.)
@@ -93,3 +93,13 @@ RIDE handles multiline poorly. Research needed on:
 - [x] Mouse: click to focus, drag to move, drag edges to resize
 - [x] Keyboard: Tab to cycle focus, Esc to close pane
 - [x] Debug pane migrated to floating pane (scrollable)
+
+### Phase 2d: Bubbles Integration & Testing
+- [x] Upgraded to lipgloss v2, added bubbles
+- [x] viewport.Model for debug pane scrolling
+- [x] help.Model for keybindings display at bottom
+- [x] key.Binding for all keybindings
+- [x] cellbuf for pane compositing (replaces custom grid)
+- [x] Go test framework (uitest/) - wraps tmux, HTML reports
+- [x] Config loading from config.json
+- [x] Key mappings pane (F1) - but duplicates ? help, needs fix
