@@ -1,8 +1,14 @@
 # FACIENDA - Things to be done
 
+## Prerequisites (before Phase 3)
+- [ ] Key mappings config (config.json, Ctrl+? to show)
+- [ ] Ctrl+C confirmation / clipboard support
+- [ ] Connection resilience (preserve session on disconnect)
+- [ ] ⍝« command syntax (log save, etc.)
+
 ## Phase 3: Editors
 - [ ] Handle OpenWindow/UpdateWindow messages
-- [ ] Split view or overlay for editor pane
+- [ ] Editor pane (floating, using pane system)
 - [ ] Text editing for functions/operators
 - [ ] SaveChanges message
 - [ ] CloseWindow handling
@@ -79,3 +85,11 @@ RIDE handles multiline poorly. Research needed on:
 - [x] Navigation: arrows, Home/End, PgUp/PgDn, mouse scroll
 - [x] Debug pane with protocol messages (F12)
 - [x] Empty line insertion for spacing
+
+### Phase 2c: Floating Panes
+- [x] Floating pane system (pane.go)
+- [x] Cell-based compositor for rendering panes over session
+- [x] Focus management with visual indicator (double border)
+- [x] Mouse: click to focus, drag to move, drag edges to resize
+- [x] Keyboard: Tab to cycle focus, Esc to close pane
+- [x] Debug pane migrated to floating pane (scrollable)

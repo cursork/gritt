@@ -35,9 +35,12 @@ type Model struct {
 	cursorCol int
 	ready     bool // Interpreter ready for input
 
-	// Debug panel
-	debugLog  []string
-	showDebug bool
+	// Debug log (shared with debug pane)
+	debugLog []string
+
+	// Floating panes
+	panes     *PaneManager
+	debugPane *DebugPane // Keep reference to update log
 
 	// Terminal dimensions
 	width  int
@@ -72,6 +75,7 @@ func NewModel(client *ride.Client) Model {
 		msgs:   ch,
 		ready:  true, // Handshake already completed
 		lines:  []Line{{Text: aplIndent}},
+		panes:  NewPaneManager(80, 24), // Will be updated on WindowSizeMsg
 	}
 	m.cursorCol = len(aplIndent)
 	m.log("Connected, ready for input")
@@ -102,6 +106,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.panes.UpdateSize(msg.Width, msg.Height)
 		return m, nil
 
 	case tea.KeyMsg:
@@ -117,14 +122,65 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Global shortcuts (always work regardless of focus)
 	switch msg.Type {
 	case tea.KeyCtrlC:
 		return m, tea.Quit
 
 	case tea.KeyF12:
-		m.showDebug = !m.showDebug
+		m.toggleDebugPane()
 		return m, nil
 
+	case tea.KeyTab:
+		if m.panes.HasPanes() {
+			m.panes.FocusNext()
+		}
+		return m, nil
+
+	case tea.KeyEsc:
+		// Close focused pane (if any)
+		if fp := m.panes.FocusedPane(); fp != nil {
+			m.panes.Remove(fp.ID)
+		}
+		return m, nil
+	}
+
+	// Route to focused pane first
+	if fp := m.panes.FocusedPane(); fp != nil && fp.Content != nil {
+		if fp.Content.HandleKey(msg) {
+			return m, nil // Key consumed by pane
+		}
+	}
+
+	// Session key handling
+	return m.handleSessionKey(msg)
+}
+
+func (m *Model) toggleDebugPane() {
+	if m.panes.Get("debug") != nil {
+		m.panes.Remove("debug")
+		m.debugPane = nil
+	} else {
+		// Create debug pane on the right side
+		paneW := 50
+		paneH := m.height - 4
+		if paneH < 10 {
+			paneH = 10
+		}
+		paneX := m.width - paneW - 2
+		if paneX < 0 {
+			paneX = 0
+		}
+
+		m.debugPane = NewDebugPane(&m.debugLog)
+		pane := NewPane("debug", m.debugPane, paneX, 1, paneW, paneH)
+		m.panes.Add(pane)
+		m.panes.Focus("debug")
+	}
+}
+
+func (m Model) handleSessionKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
 	case tea.KeyEnter:
 		return m.execute()
 
@@ -209,20 +265,74 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	switch msg.Type {
-	case tea.MouseWheelUp:
-		m.cursorRow -= 3
-		if m.cursorRow < 0 {
-			m.cursorRow = 0
+	// Check if any pane is being dragged
+	for _, id := range m.panes.zOrder {
+		pane := m.panes.panes[id]
+		if pane != nil && pane.dragging {
+			switch msg.Type {
+			case tea.MouseMotion:
+				pane.UpdateDrag(msg.X, msg.Y, m.panes.screenW, m.panes.screenH)
+				return m, nil
+			case tea.MouseRelease:
+				pane.StopDrag()
+				return m, nil
+			}
 		}
-		m.clampCol()
-	case tea.MouseWheelDown:
-		m.cursorRow += 3
-		if m.cursorRow >= len(m.lines) {
-			m.cursorRow = len(m.lines) - 1
-		}
-		m.clampCol()
 	}
+
+	// Hit test for pane interactions
+	pane := m.panes.PaneAt(msg.X, msg.Y)
+
+	switch msg.Type {
+	case tea.MouseLeft:
+		if pane != nil {
+			zone := pane.HitZone(msg.X, msg.Y)
+			switch zone {
+			case ZoneTitleBar:
+				m.panes.Focus(pane.ID)
+				pane.StartDrag(DragMove, msg.X, msg.Y)
+			case ZoneEdgeN, ZoneEdgeS, ZoneEdgeE, ZoneEdgeW,
+				ZoneCornerNE, ZoneCornerNW, ZoneCornerSE, ZoneCornerSW:
+				m.panes.Focus(pane.ID)
+				pane.StartDrag(zoneToDragMode(zone), msg.X, msg.Y)
+			case ZoneContent:
+				m.panes.Focus(pane.ID)
+				// Pass click to pane content (relative coords)
+				if pane.Content != nil {
+					pane.Content.HandleMouse(msg.X-pane.X-1, msg.Y-pane.Y-1, msg)
+				}
+			}
+		} else {
+			// Click on session - unfocus panes
+			if fp := m.panes.FocusedPane(); fp != nil {
+				fp.Focused = false
+				m.panes.focusedID = ""
+			}
+		}
+		return m, nil
+
+	case tea.MouseWheelUp, tea.MouseWheelDown:
+		if pane != nil && pane.Content != nil {
+			// Pass scroll to pane
+			pane.Content.HandleMouse(msg.X-pane.X-1, msg.Y-pane.Y-1, msg)
+		} else {
+			// Scroll session
+			if msg.Type == tea.MouseWheelUp {
+				m.cursorRow -= 3
+				if m.cursorRow < 0 {
+					m.cursorRow = 0
+				}
+			} else {
+				m.cursorRow += 3
+				if m.cursorRow >= len(m.lines) {
+					m.cursorRow = len(m.lines) - 1
+				}
+			}
+			m.clampCol()
+		}
+		return m, nil
+	}
+
 	return m, nil
 }
 
@@ -410,10 +520,14 @@ func (m Model) View() string {
 		h = 24
 	}
 
-	if m.showDebug {
-		return m.viewWithDebug(w, h)
+	// Render base session
+	base := m.viewSession(w, h)
+
+	// Composite floating panes over session
+	if m.panes.HasPanes() {
+		return m.panes.Render(base)
 	}
-	return m.viewSession(w, h)
+	return base
 }
 
 func (m Model) viewSession(w, h int) string {
@@ -422,20 +536,6 @@ func (m Model) viewSession(w, h int) string {
 
 	content := m.renderSession(contentW, contentH)
 	return m.renderBox("gritt", content, contentW, contentH, "63")
-}
-
-func (m Model) viewWithDebug(w, h int) string {
-	sessionW := w/2 - 2
-	debugW := w - w/2 - 2
-	contentH := h - 2
-
-	sessionContent := m.renderSession(sessionW, contentH)
-	debugContent := m.renderDebug(debugW, contentH)
-
-	left := m.renderBox("gritt", sessionContent, sessionW, contentH, "63")
-	right := m.renderBox("debug", debugContent, debugW, contentH, "240")
-
-	return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 }
 
 func (m Model) renderBox(title, content string, w, h int, color string) string {
@@ -540,32 +640,3 @@ func (m Model) renderSession(w, h int) string {
 	return strings.Join(lines, "\n")
 }
 
-func (m Model) renderDebug(w, h int) string {
-	// Show last h lines, scrolled to bottom
-	startLine := 0
-	if len(m.debugLog) > h {
-		startLine = len(m.debugLog) - h
-	}
-
-	lines := make([]string, h)
-	for i := 0; i < h; i++ {
-		srcIdx := startLine + i
-		if srcIdx >= len(m.debugLog) {
-			lines[i] = strings.Repeat(" ", w)
-			continue
-		}
-		line := m.debugLog[srcIdx]
-		runes := []rune(line)
-		if len(runes) > w {
-			runes = runes[:w-1]
-			line = string(runes) + "…"
-		}
-		// Pad to width
-		if len(runes) < w {
-			line += strings.Repeat(" ", w-len(runes))
-		}
-		lines[i] = line
-	}
-
-	return strings.Join(lines, "\n")
-}

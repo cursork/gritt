@@ -2,7 +2,15 @@
 
 ## Active Work
 
-Phase 2b complete. Solid foundation for a terminal APL IDE.
+Floating pane system implemented. Ready for testing.
+
+### What's New
+
+- **Floating panes**: All panes are now floating, resizable, moveable
+- **Cell-based compositor**: Panes render over session content
+- **Focus management**: Tab cycles focus, visual indicator (double border when focused)
+- **Mouse support**: Click to focus, drag title to move, drag edges to resize
+- **Debug pane migrated**: F12 creates a floating debug pane (scrollable with keys/mouse)
 
 ### What Works
 
@@ -10,23 +18,22 @@ Phase 2b complete. Solid foundation for a terminal APL IDE.
 - **Session UI**: Full editable session buffer with APL 6-space indent convention
 - **Navigation**: Arrow keys, Home/End, PgUp/PgDn, mouse wheel scrolling
 - **Edit any line**: Navigate to previous input, edit, execute - original restored, edited version appended
-- **UTF-8/APL**: Proper rune-based cursor and editing (⎕, ⍳, etc. work correctly)
-- **Empty lines**: Press Enter on empty input to add spacing
-- **Debug pane**: F12 toggles protocol message log on right side
-- **Clean layout**: Manual box rendering with titled borders
+- **UTF-8/APL**: Proper rune-based cursor and editing
+- **Floating panes**: Moveable, resizable, focus-aware
+- **Debug pane**: F12 toggles, scrollable, moveable
 
 ### Project Structure
 
 ```
 gritt/
-├── main.go           # Entry point, tea.NewProgram with mouse support
-├── tui.go            # bubbletea TUI - Model, Update, View, rendering
+├── main.go           # Entry point
+├── tui.go            # bubbletea TUI - Model, Update, View
+├── pane.go           # Floating pane system (Pane, PaneManager, compositor)
+├── debug_pane.go     # Debug log pane implementation
 ├── ride/
-│   ├── protocol.go   # Wire format (length + "RIDE" + JSON)
-│   └── client.go     # Connection, handshake, Send/Recv
+│   ├── protocol.go   # Wire format
+│   └── client.go     # Connection, handshake
 ```
-
-Note: `session.go` was removed - line tracking now integrated into tui.go's `Line` struct.
 
 ### Testing
 
@@ -43,25 +50,33 @@ go run .
 | Key | Action |
 |-----|--------|
 | Enter | Execute line (or add blank line if empty) |
-| Arrow keys | Navigate cursor |
+| Arrow keys | Navigate cursor / scroll debug pane when focused |
 | Home/End | Start/end of line |
 | PgUp/PgDn | Scroll by page |
 | Mouse wheel | Scroll by 3 lines |
 | F12 | Toggle debug pane |
+| Tab | Cycle focus between panes |
+| Esc | Close focused pane |
 | Ctrl+C | Quit |
 
----
+### Mouse Actions
 
-## Previous Issues (Resolved)
-
-- **Race condition**: Multiple waitForRide goroutines racing on socket reads. Fixed with single reader goroutine + channel.
-- **Message framing corruption**: Added buffered reader + mutex.
-- **Layout bugs**: Raw ANSI cursor codes broke box width calculations. Fixed by using lipgloss styles.
-- **UTF-8 corruption**: Byte-based string slicing corrupted multi-byte APL chars. Fixed with rune-based editing.
-- **Blank line duplication**: Edit-execute logic was appending instead of replacing input line. Fixed.
+| Action | Effect |
+|--------|--------|
+| Click on pane | Focus pane |
+| Click on session | Unfocus panes |
+| Drag title bar | Move pane |
+| Drag edges/corners | Resize pane |
+| Scroll wheel | Scroll focused pane or session |
 
 ---
 
 ## Next Up
 
-Phase 3: Editor windows (OpenWindow/UpdateWindow/SaveChanges)
+Prerequisites from `deliberanda/editor-prerequisites.md`:
+1. Key mappings config (config.json)
+2. Ctrl+C confirmation / clipboard support
+3. Connection resilience
+4. ⍝« command syntax
+
+Then: Editor windows (Phase 3)
