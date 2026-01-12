@@ -45,7 +45,7 @@ func DefaultConfig() Config {
 			ToggleDebug: []string{"d"},      // After leader: C-] d
 			CyclePane:   []string{"tab"},
 			ClosePane:   []string{"esc"},
-			Quit:        []string{"ctrl+c"},
+			Quit:        []string{"q"},      // After leader: C-] q
 			ShowKeys:    []string{"?"},      // After leader: C-] ?
 
 			Up:    []string{"up"},
@@ -177,7 +177,7 @@ func (c *Config) ToKeyMap() KeyMap {
 		),
 		Quit: key.NewBinding(
 			key.WithKeys(c.Keys.Quit...),
-			key.WithHelp(c.Keys.Quit[0], "quit"),
+			key.WithHelp(c.Keys.Leader[0]+" "+c.Keys.Quit[0], "quit"),
 		),
 		ShowKeys: key.NewBinding(
 			key.WithKeys(c.Keys.ShowKeys...),

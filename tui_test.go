@@ -167,9 +167,43 @@ func TestTUI(t *testing.T) {
 		return !runner.Contains("key mappings")
 	})
 
-	// Final snapshot
+	// Test 13: Ctrl+C shows quit hint
+	runner.SendKeys("C-c")
+	runner.Sleep(200 * time.Millisecond)
+	runner.Snapshot("After Ctrl+C (quit hint)")
+
+	runner.Test("Ctrl+C shows quit hint", func() bool {
+		return runner.Contains("C-] q to quit")
+	})
+
+	// Test 14: Any key clears the hint
 	runner.SendKeys("Escape")
 	runner.Sleep(200 * time.Millisecond)
+
+	runner.Test("Key clears quit hint", func() bool {
+		return !runner.Contains("C-] q to quit")
+	})
+
+	// Test 15: C-] q shows quit confirmation
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys("q")
+	runner.Sleep(200 * time.Millisecond)
+	runner.Snapshot("After C-] q (quit confirmation)")
+
+	runner.Test("C-] q shows quit confirmation", func() bool {
+		return runner.Contains("Quit? (y/n)")
+	})
+
+	// Test 16: n cancels quit
+	runner.SendKeys("n")
+	runner.Sleep(200 * time.Millisecond)
+
+	runner.Test("n cancels quit confirmation", func() bool {
+		return !runner.Contains("Quit? (y/n)")
+	})
+
+	// Final snapshot
 	runner.Snapshot("Final state")
 
 	// Generate report

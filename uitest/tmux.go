@@ -23,7 +23,7 @@ func NewSession(name string, width, height int, cmd string) (*Session, error) {
 	// Kill any existing session with this name
 	exec.Command("tmux", "kill-session", "-t", name).Run()
 
-	// Create new session
+	// Create new session (tmux may ignore -x/-y and inherit outer terminal size)
 	args := []string{
 		"new-session", "-d",
 		"-s", name,
@@ -34,6 +34,9 @@ func NewSession(name string, width, height int, cmd string) (*Session, error) {
 	if err := exec.Command("tmux", args...).Run(); err != nil {
 		return nil, fmt.Errorf("failed to create tmux session: %w", err)
 	}
+
+	// Force resize to ensure correct dimensions (sends SIGWINCH to app)
+	exec.Command("tmux", "resize-window", "-t", name, "-x", fmt.Sprintf("%d", width), "-y", fmt.Sprintf("%d", height)).Run()
 
 	return s, nil
 }
@@ -57,9 +60,9 @@ func (s *Session) SendLine(text string) error {
 	return s.SendKeys("Enter")
 }
 
-// Capture returns the current pane content
+// Capture returns the current pane content (with ANSI escape codes)
 func (s *Session) Capture() (string, error) {
-	out, err := exec.Command("tmux", "capture-pane", "-t", s.Name, "-p").Output()
+	out, err := exec.Command("tmux", "capture-pane", "-t", s.Name, "-p", "-e").Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to capture pane: %w", err)
 	}

@@ -63,9 +63,10 @@ Leader key: `Ctrl+]` (configurable)
 | Enter | Execute line |
 | C-] ? | Show key mappings pane |
 | C-] d | Toggle debug pane |
+| C-] q | Quit |
 | Tab | Cycle focus between panes |
 | Esc | Close focused pane |
-| Ctrl+C | Quit |
+| Ctrl+C | Shows "Type C-] q to quit" (vim style)
 
 ---
 

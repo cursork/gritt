@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/charmbracelet/x/cellbuf"
 )
 
@@ -243,6 +244,10 @@ func (p *Pane) Render() string {
 		h, v = "─", "│"
 	}
 
+	// Style borders with Dyalog orange
+	borderStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(DyalogOrange))
+	titleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(DyalogOrange)).Bold(true)
+
 	contentW := p.Width - 2
 	contentH := p.Height - 2
 	if contentW < 1 {
@@ -276,7 +281,7 @@ func (p *Pane) Render() string {
 		}
 		padding = 0
 	}
-	topBar := tl + " " + title + " " + strings.Repeat(h, padding) + tr
+	topBar := borderStyle.Render(tl+" ") + titleStyle.Render(title) + borderStyle.Render(" "+strings.Repeat(h, padding)+tr)
 	lines = append(lines, topBar)
 
 	// Content lines
@@ -291,11 +296,11 @@ func (p *Pane) Render() string {
 		} else if len(lineRunes) > contentW {
 			line = string(lineRunes[:contentW])
 		}
-		lines = append(lines, v+line+v)
+		lines = append(lines, borderStyle.Render(v)+line+borderStyle.Render(v))
 	}
 
 	// Bottom border
-	lines = append(lines, bl+strings.Repeat(h, contentW)+br)
+	lines = append(lines, borderStyle.Render(bl+strings.Repeat(h, contentW)+br))
 
 	return strings.Join(lines, "\n")
 }
@@ -476,22 +481,26 @@ func (pm *PaneManager) Render(base string) string {
 			continue
 		}
 
-		// Create a buffer for the pane content
+		// Render pane to a temporary buffer (handles ANSI codes properly)
 		paneStr := pane.Render()
-		paneLines := strings.Split(paneStr, "\n")
+		paneBuf := cellbuf.NewBuffer(pane.Width, pane.Height)
+		cellbuf.SetContent(paneBuf, paneStr)
 
-		// Copy pane content to main buffer at pane position
-		for dy, line := range paneLines {
+		// Copy cells from pane buffer to main buffer at pane position
+		for dy := 0; dy < pane.Height; dy++ {
 			y := pane.Y + dy
 			if y < 0 || y >= baseH {
 				continue
 			}
-			x := pane.X
-			for _, r := range line {
-				if x >= 0 && x < baseW {
-					buf.SetCell(x, y, cellbuf.NewCell(r))
+			for dx := 0; dx < pane.Width; dx++ {
+				x := pane.X + dx
+				if x < 0 || x >= baseW {
+					continue
 				}
-				x++
+				cell := paneBuf.Cell(dx, dy)
+				if cell != nil {
+					buf.SetCell(x, y, cell)
+				}
 			}
 		}
 	}

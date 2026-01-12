@@ -1,9 +1,9 @@
 # FACIENDA - Things to be done
 
 ## Prerequisites (before Phase 3)
-- [~] Key mappings config - PARTIAL: config.json works, F1 shows keys, but duplicates ? help
+- [x] Key mappings config - config.json works, leader key system (C-] prefix)
 - [ ] Ctrl+C confirmation / clipboard support
-- [ ] Connection resilience (preserve session on disconnect)
+- [ ] Connection resilience: on unexpected Dyalog death, keep gritt alive with session buffer intact, show disconnected state, allow reconnect (`)off` intentional shutdown should still exit cleanly)
 - [ ] ⍝« command syntax (log save, etc.)
 
 ## Phase 3: Editors

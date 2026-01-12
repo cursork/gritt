@@ -12,6 +12,9 @@ import (
 	"gritt/ride"
 )
 
+// DyalogOrange - brand color for UI elements
+const DyalogOrange = "208"
+
 // Cursor style - inverted colors
 var cursorStyle = lipgloss.NewStyle().
 	Background(lipgloss.Color("255")).
@@ -50,6 +53,8 @@ type Model struct {
 
 	// Leader key state
 	leaderActive bool
+	showQuitHint bool
+	confirmQuit  bool
 
 	// Terminal dimensions
 	width  int
@@ -134,6 +139,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Handle quit confirmation
+	if m.confirmQuit {
+		m.confirmQuit = false
+		if msg.String() == "y" || msg.String() == "Y" {
+			return m, tea.Quit
+		}
+		return m, nil
+	}
+
 	// Handle leader key sequences
 	if m.leaderActive {
 		m.leaderActive = false // Reset on any key
@@ -143,6 +157,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case key.Matches(msg, m.keys.ShowKeys):
 			m.toggleKeysPane()
+			return m, nil
+		case key.Matches(msg, m.keys.Quit):
+			m.confirmQuit = true
 			return m, nil
 		}
 		// Unknown leader sequence - ignore
@@ -155,10 +172,17 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Clear quit hint on any key
+	m.showQuitHint = false
+
+	// Ctrl+C shows quit hint (vim style)
+	if msg.Type == tea.KeyCtrlC {
+		m.showQuitHint = true
+		return m, nil
+	}
+
 	// Global shortcuts (always work regardless of focus)
 	switch {
-	case key.Matches(msg, m.keys.Quit):
-		return m, tea.Quit
 
 	case key.Matches(msg, m.keys.CyclePane):
 		if m.panes.HasPanes() {
@@ -173,14 +197,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Route to focused pane first
+	// Route to focused pane - pane gets ALL keys when focused
 	if fp := m.panes.FocusedPane(); fp != nil && fp.Content != nil {
-		if fp.Content.HandleKey(msg) {
-			return m, nil // Key consumed by pane
-		}
+		fp.Content.HandleKey(msg)
+		return m, nil // Focused pane consumes all input
 	}
 
-	// Session key handling
+	// Session key handling (only when no pane is focused)
 	return m.handleSessionKey(msg)
 }
 
@@ -594,7 +617,19 @@ func (m Model) View() string {
 
 	// Add help at bottom
 	m.help.Width = w
-	helpView := m.help.View(m.keys)
+	var helpView string
+	if m.confirmQuit {
+		confirmStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true)
+		helpView = confirmStyle.Render("Quit? (y/n)")
+	} else if m.showQuitHint {
+		hintStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(DyalogOrange))
+		helpView = hintStyle.Render("Type C-] q to quit")
+	} else if m.leaderActive {
+		leaderStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(DyalogOrange)).Bold(true)
+		helpView = leaderStyle.Render("C-] ...")
+	} else {
+		helpView = m.help.View(m.keys)
+	}
 
 	return base + "\n" + helpView
 }
@@ -604,7 +639,7 @@ func (m Model) viewSession(w, h int) string {
 	contentH := h - 2
 
 	content := m.renderSession(contentW, contentH)
-	return m.renderBox("gritt", content, contentW, contentH, "63")
+	return m.renderBox("gritt", content, contentW, contentH, DyalogOrange)
 }
 
 func (m Model) renderBox(title, content string, w, h int, color string) string {

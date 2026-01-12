@@ -5,6 +5,8 @@ import (
 	"html"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -64,6 +66,62 @@ func (r *Report) Failed() int {
 	return len(r.Tests) - r.Passed()
 }
 
+// ansiToHTML converts ANSI escape codes to HTML spans
+func ansiToHTML(s string) string {
+	// First escape HTML special chars (but not in a way that breaks our processing)
+	s = html.EscapeString(s)
+
+	// 256-color foreground: \x1b[38;5;Nm
+	re256 := regexp.MustCompile(`\x1b\[38;5;(\d+)m`)
+	s = re256.ReplaceAllStringFunc(s, func(match string) string {
+		matches := re256.FindStringSubmatch(match)
+		if len(matches) < 2 {
+			return ""
+		}
+		colorNum, _ := strconv.Atoi(matches[1])
+		hexColor := ansi256ToHex(colorNum)
+		return fmt.Sprintf(`<span style="color:%s">`, hexColor)
+	})
+
+	// Bold: \x1b[1m
+	s = strings.ReplaceAll(s, "\x1b[1m", `<span style="font-weight:bold">`)
+
+	// Reset: \x1b[0m or \x1b[m
+	s = strings.ReplaceAll(s, "\x1b[0m", `</span>`)
+	s = strings.ReplaceAll(s, "\x1b[m", `</span>`)
+
+	// Remove any remaining ANSI codes
+	reAny := regexp.MustCompile(`\x1b\[[0-9;]*m`)
+	s = reAny.ReplaceAllString(s, "")
+
+	return s
+}
+
+// ansi256ToHex converts 256-color ANSI code to hex
+func ansi256ToHex(n int) string {
+	// Standard colors 0-15
+	standard := []string{
+		"#000000", "#800000", "#008000", "#808000", "#000080", "#800080", "#008080", "#c0c0c0",
+		"#808080", "#ff0000", "#00ff00", "#ffff00", "#0000ff", "#ff00ff", "#00ffff", "#ffffff",
+	}
+	if n < 16 {
+		return standard[n]
+	}
+
+	// 216 color cube (16-231)
+	if n < 232 {
+		n -= 16
+		r := (n / 36) * 51
+		g := ((n / 6) % 6) * 51
+		b := (n % 6) * 51
+		return fmt.Sprintf("#%02x%02x%02x", r, g, b)
+	}
+
+	// Grayscale (232-255)
+	gray := (n-232)*10 + 8
+	return fmt.Sprintf("#%02x%02x%02x", gray, gray, gray)
+}
+
 // Generate writes the HTML report to disk
 func (r *Report) Generate() (string, error) {
 	if err := os.MkdirAll(r.OutputDir, 0755); err != nil {
@@ -85,7 +143,7 @@ func (r *Report) Generate() (string, error) {
 <h3>%s</h3>
 <pre>%s</pre>
 </div>
-`, html.EscapeString(snap.Label), html.EscapeString(snap.Content)))
+`, html.EscapeString(snap.Label), ansiToHTML(snap.Content)))
 	}
 
 	for _, t := range r.Tests {
