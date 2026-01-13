@@ -11,17 +11,29 @@ Pronounced like "grit" (G from Go + German "Ritt" = ride).
 - Link integration for source-controlled APL projects
 - Tracer with stack navigation (single pane, not overlapping windows)
 
-## Requirements
+## Installation
 
-- Go 1.21+
-- Dyalog APL with RIDE enabled
-- tmux (for running tests)
+### Download
 
-## Build
+Grab a binary from [Releases](https://github.com/cursork/gritt/releases):
+
+- `gritt-darwin-arm64` - macOS Apple Silicon
+- `gritt-darwin-amd64` - macOS Intel
+- `gritt-linux-arm64` - Linux ARM64
+- `gritt-linux-amd64` - Linux x86_64
+
+### Build from source
+
+Requires Go 1.21+:
 
 ```bash
 go build -o gritt .
 ```
+
+## Requirements
+
+- Dyalog APL with RIDE enabled
+- tmux (for running tests)
 
 ## Usage
 
