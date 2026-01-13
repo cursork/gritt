@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"log"
@@ -14,10 +15,9 @@ import (
 func main() {
 	addr := flag.String("addr", "localhost:4502", "Dyalog RIDE address")
 	logFile := flag.String("log", "", "Log protocol messages to file")
+	expr := flag.String("e", "", "Execute expression and exit")
+	stdin := flag.Bool("stdin", false, "Read expressions from stdin")
 	flag.Parse()
-
-	// Detect terminal color capabilities
-	colorProfile := colorprofile.Detect(os.Stdout, os.Environ())
 
 	// Set up logging if requested
 	var logWriter *os.File
@@ -28,9 +28,40 @@ func main() {
 			log.Fatalf("Failed to open log file: %v", err)
 		}
 		defer logWriter.Close()
-		ride.Logger = logWriter // Protocol messages
-		fmt.Printf("Logging to %s\n", *logFile)
+		ride.Logger = logWriter
 	}
+
+	// Non-interactive mode
+	if *expr != "" && *stdin {
+		log.Fatal("-e and -stdin are mutually exclusive")
+	}
+	if *expr != "" {
+		client, err := ride.Connect(*addr)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer client.Close()
+		runExpr(client, *expr)
+		return
+	}
+	if *stdin {
+		client, err := ride.Connect(*addr)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer client.Close()
+		scanner := bufio.NewScanner(os.Stdin)
+		for scanner.Scan() {
+			runExpr(client, scanner.Text())
+		}
+		if err := scanner.Err(); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
+	// Interactive TUI mode
+	colorProfile := colorprofile.Detect(os.Stdout, os.Environ())
 
 	fmt.Printf("Connecting to %s...\n", *addr)
 	client, err := ride.Connect(*addr)
@@ -42,5 +73,39 @@ func main() {
 	p := tea.NewProgram(NewModel(client, logWriter, colorProfile), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
+	}
+}
+
+// runExpr executes an expression and prints the result
+func runExpr(client *ride.Client, expr string) {
+	// Send execute
+	if err := client.Send("Execute", map[string]any{
+		"text":  expr + "\n",
+		"trace": 0,
+	}); err != nil {
+		log.Fatalf("Execute failed: %v", err)
+	}
+
+	// Read until we get SetPromptType with type:1 (ready)
+	for {
+		msg, _, err := client.Recv()
+		if err != nil {
+			log.Fatalf("Recv failed: %v", err)
+		}
+
+		switch msg.Command {
+		case "AppendSessionOutput":
+			// type:14 is input echo, skip it
+			if t, ok := msg.Args["type"].(float64); ok && t == 14 {
+				continue
+			}
+			if result, ok := msg.Args["result"].(string); ok {
+				fmt.Print(result)
+			}
+		case "SetPromptType":
+			if t, ok := msg.Args["type"].(float64); ok && t == 1 {
+				return // Ready for next input
+			}
+		}
 	}
 }
