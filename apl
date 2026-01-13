@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Run APL expression via gritt with ephemeral Dyalog instance
 
 PORT=$((10000 + RANDOM % 50000))
