@@ -100,3 +100,6 @@ Requires Dyalog and tmux. Tests run in a tmux session and generate HTML reports 
 
 Logs all RIDE protocol messages and TUI state changes.
 
+## License
+
+MIT

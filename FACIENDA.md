@@ -1,5 +1,10 @@
 # FACIENDA - Things to be done
 
+## Priority: Pane Interactivity
+- [ ] Mouse control: click to focus, drag to move, drag edges to resize (partially broken)
+- [ ] Keyboard pane control: move/resize focused pane
+- [ ] Multiple interactive panes: all N panes should be interactive, not just focused one
+
 ## Future Enhancements
 - [ ] Protocol audit: evaluate all unsupported RIDE messages, prioritize by importance
 - [ ] Connection resilience: on unexpected Dyalog death, keep gritt alive with session buffer intact, show disconnected state, allow reconnect (`)off` intentional shutdown should still exit cleanly)
@@ -94,7 +99,7 @@ RIDE handles multiline poorly. Research needed on:
 - [x] Floating pane system (pane.go)
 - [x] Cell-based compositor for rendering panes over session
 - [x] Focus management with visual indicator (double border)
-- [x] Mouse: click to focus, drag to move, drag edges to resize
+- [ ] Mouse: click to focus, drag to move, drag edges to resize (partial - needs fix)
 - [x] Keyboard: Tab to cycle focus, Esc to close pane
 - [x] Debug pane migrated to floating pane (scrollable)
 
