@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>gritt test report - 20260113-101803</title>
+    <style>
+        body {
+            font-family: 'SF Mono', 'Menlo', 'Monaco', 'Cascadia Code', 'Consolas', 'DejaVu Sans Mono', -apple-system, monospace;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #eee;
+        }
+        h1 { color: #00d9ff; }
+        h2 { color: #888; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        h3 { color: #aaa; margin: 10px 0 5px 0; }
+        .summary {
+            background: #252540;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .summary.pass { border-left: 4px solid #00ff88; }
+        .summary.fail { border-left: 4px solid #ff4444; }
+        .stats { display: flex; gap: 30px; margin-top: 15px; }
+        .stat { text-align: center; }
+        .stat-value { font-size: 2em; font-weight: bold; }
+        .stat-label { color: #888; font-size: 0.9em; }
+        .stat-value.pass { color: #00ff88; }
+        .stat-value.fail { color: #ff4444; }
+        .result {
+            padding: 8px 15px;
+            margin: 5px 0;
+            border-radius: 4px;
+        }
+        .result.pass { background: #1a3d2a; }
+        .result.pass a { color: #00ff88; text-decoration: none; }
+        .result.fail { background: #3d1a1a; }
+        .result.fail a { color: #ff4444; text-decoration: none; }
+        .result a:hover { text-decoration: underline; }
+        .results-list { margin-bottom: 30px; }
+        .snapshot {
+            margin: 20px 0;
+            background: #252540;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .snapshot h3 {
+            background: #1a1a2e;
+            margin: 0;
+            padding: 10px 15px;
+        }
+        .snapshot pre {
+            margin: 0;
+            padding: 15px;
+            overflow-x: auto;
+            font-size: 14px;
+            line-height: 1.2;
+            background: #0a0a15;
+            color: #00d9ff;
+            font-family: 'SF Mono', 'Menlo', 'Monaco', 'Cascadia Code', 'Consolas', 'DejaVu Sans Mono', monospace;
+        }
+        .timestamp { color: #666; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <h1>gritt test report</h1>
+    <p class="timestamp">20260113-101803</p>
+
+    <div class="summary pass">
+        <strong>All tests passed</strong>
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-value">27</div>
+                <div class="stat-label">Total</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value pass">27</div>
+                <div class="stat-label">Passed</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value fail">0</div>
+                <div class="stat-label">Failed</div>
+            </div>
+        </div>
+    </div>
+
+    <h2>Tests</h2>
+    <div class="results-list">
+    <div class="result pass"><a href="#snap-0">✓ Initial render shows title</a></div>
+<div class="result pass"><a href="#snap-1">✓ C-] d opens debug pane</a></div>
+<div class="result pass"><a href="#snap-1">✓ Focused pane has double border</a></div>
+<div class="result pass"><a href="#snap-2">✓ Esc closes debug pane</a></div>
+<div class="result pass"><a href="#snap-2">✓ C-] d reopens debug pane</a></div>
+<div class="result pass"><a href="#snap-3">✓ Execute 1+1 returns 2</a></div>
+<div class="result pass"><a href="#snap-4">✓ Execute ⍳5 returns sequence</a></div>
+<div class="result pass"><a href="#snap-6">✓ Edit and re-execute works</a></div>
+<div class="result pass"><a href="#snap-7">✓ Debug pane shows Execute messages</a></div>
+<div class="result pass"><a href="#snap-8">✓ C-] ? opens key mappings pane</a></div>
+<div class="result pass"><a href="#snap-8">✓ Key mappings shows Actions section</a></div>
+<div class="result pass"><a href="#snap-8">✓ Esc closes key mappings pane</a></div>
+<div class="result pass"><a href="#snap-9">✓ Ctrl+C shows quit hint</a></div>
+<div class="result pass"><a href="#snap-9">✓ Key clears quit hint</a></div>
+<div class="result pass"><a href="#snap-10">✓ C-] q shows quit confirmation</a></div>
+<div class="result pass"><a href="#snap-10">✓ n cancels quit confirmation</a></div>
+<div class="result pass"><a href="#snap-11">✓ Editor opens for Z</a></div>
+<div class="result pass"><a href="#snap-12">✓ Z editor closes after Escape</a></div>
+<div class="result pass"><a href="#snap-14">✓ Y editor opens</a></div>
+<div class="result pass"><a href="#snap-14">✓ Y editor closes after Escape</a></div>
+<div class="result pass"><a href="#snap-15">✓ X editor opens</a></div>
+<div class="result pass"><a href="#snap-15">✓ X editor closes after Escape</a></div>
+<div class="result pass"><a href="#snap-17">✓ Tracer opens on error</a></div>
+<div class="result pass"><a href="#snap-18">✓ Stack pane shows Z (top of stack)</a></div>
+<div class="result pass"><a href="#snap-18">✓ Stack pane shows stack frames</a></div>
+<div class="result pass"><a href="#snap-19">✓ Tracer switches to Y</a></div>
+<div class="result pass"><a href="#snap-22">✓ Stack cleared after popping all frames</a></div>
+
+    </div>
+
+    <h2>Snapshots</h2>
+    <div class="snapshot" id="snap-0">
+<h3>Initial state</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
+</pre>
+</div>
+<div class="snapshot" id="snap-1">
+<h3>After C-] d (debug pane open)</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                   <span style="color:#ff9933">╔ <span style="font-weight:bold">debug</span><span style="color:#ff9933"> ═════════════════════════════════════════╗ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║Connected, ready for input                      <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← UpdateSessionCaption {&#34;text&#34;:&#34;CLEAR WS - Dyalo<span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">╚════════════════════════════════════════════════╝ <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
+</pre>
+</div>
+<div class="snapshot" id="snap-2">
+<h3>After Esc (debug pane closed)</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
+</pre>
+</div>
+<div class="snapshot" id="snap-3">
+<h3>After executing 1+1</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│      1+1                                                                                                             <span style="color:#ff9933">│
+│2                                                                                                                     <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
+</pre>
+</div>
+<div class="snapshot" id="snap-4">
+<h3>After executing ⍳5</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│      1+1                                                                                                             <span style="color:#ff9933">│
+│2                                                                                                                     <span style="color:#ff9933">│
+│      ⍳5                                                                                                              <span style="color:#ff9933">│
+│1 2 3 4 5                                                                                                             <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
+</pre>
+</div>
+<div class="snapshot" id="snap-5">
+<h3>After editing 1+1 to 1+2</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│      1+2                                                                                                             <span style="color:#ff9933">│
+│2                                                                                                                     <span style="color:#ff9933">│
+│      ⍳5                                                                                                              <span style="color:#ff9933">│
+│1 2 3 4 5                                                                                                             <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
+</pre>
+</div>
+<div class="snapshot" id="snap-6">
+<h3>After executing edited line</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│      1+1                                                                                                             <span style="color:#ff9933">│
+│2                                                                                                                     <span style="color:#ff9933">│
+│      ⍳5                                                                                                              <span style="color:#ff9933">│
+│1 2 3 4 5                                                                                                             <span style="color:#ff9933">│
+│      1+2                                                                                                             <span style="color:#ff9933">│
+│3                                                                                                                     <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
+</pre>
+</div>
+<div class="snapshot" id="snap-7">
+<h3>Debug pane with protocol log</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│      1+1                                                          <span style="color:#ff9933">╔ <span style="font-weight:bold">debug</span><span style="color:#ff9933"> ═════════════════════════════════════════╗ <span style="color:#ff9933">│
+│2                                                                  <span style="color:#ff9933">║Connected, ready for input                      <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│      ⍳5                                                           <span style="color:#ff9933">║← UpdateSessionCaption {&#34;text&#34;:&#34;CLEAR WS - Dyalo<span style="color:#ff9933">║ <span style="color:#ff9933">│
+│1 2 3 4 5                                                          <span style="color:#ff9933">║→ Execute &#34;      1+1&#34;                           <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│      1+2                                                          <span style="color:#ff9933">║← AppendSessionOutput {&#34;group&#34;:0,&#34;result&#34;:&#34;     <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│3                                                                  <span style="color:#ff9933">║  (skipped: our input echo)                     <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← SetPromptType {&#34;type&#34;:0}                      <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║  ready: false → false                          <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← AppendSessionOutput {&#34;group&#34;:0,&#34;result&#34;:&#34;2\n&#34;,<span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← SetPromptType {&#34;type&#34;:1}                      <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║  ready: false → true                           <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║→ Execute &#34;      ⍳5&#34;                            <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← AppendSessionOutput {&#34;group&#34;:0,&#34;result&#34;:&#34;     <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║  (skipped: our input echo)                     <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← SetPromptType {&#34;type&#34;:0}                      <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║  ready: false → false                          <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← AppendSessionOutput {&#34;group&#34;:0,&#34;result&#34;:&#34;1 2 3<span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← SetPromptType {&#34;type&#34;:1}                      <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║  ready: false → true                           <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║→ Execute &#34;      1+2&#34;                           <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← AppendSessionOutput {&#34;group&#34;:0,&#34;result&#34;:&#34;     <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║  (skipped: our input echo)                     <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← SetPromptType {&#34;type&#34;:0}                      <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║  ready: false → false                          <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← AppendSessionOutput {&#34;group&#34;:0,&#34;result&#34;:&#34;3\n&#34;,<span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← SetPromptType {&#34;type&#34;:1}                      <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║  ready: false → true                           <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">╚════════════════════════════════════════════════╝ <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
+</pre>
+</div>
+<div class="snapshot" id="snap-8">
+<h3>After C-] ? (key mappings pane)</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│      1+1                                                                                                             <span style="color:#ff9933">│
+│2                                                                                                                     <span style="color:#ff9933">│
+│      ⍳5                                                                                                              <span style="color:#ff9933">│
+│1 2 3 4 5                                                                                                             <span style="color:#ff9933">│
+│      1+2                                                                                                             <span style="color:#ff9933">│
+│3                                                                                                                     <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">╔ <span style="font-weight:bold">key mappings</span><span style="color:#ff9933"> ════════════════════════╗                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║─── Actions ───                       <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║  enter        execute                <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║  ctrl+] d     debug                  <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║  tab          cycle pane             <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║  esc          close pane             <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║  ctrl+] ?     show keys              <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║  ctrl+] q     quit                   <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║                                      <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║─── Navigation ───                    <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║  up           up                     <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║  down         down                   <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║  left         left                   <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║  right        right                  <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║  home         line start             <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║  end          line end               <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║  pgup         page up                <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║  pgdown       page down              <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║                                      <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║─── Editing ───                       <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║  backspace    delete back            <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║  delete       delete forward         <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║                                      <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║Press Esc to close                    <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">╚══════════════════════════════════════╝                                       <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
+</pre>
+</div>
+<div class="snapshot" id="snap-9">
+<h3>After Ctrl+C (quit hint)</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│      1+1                                                                                                             <span style="color:#ff9933">│
+│2                                                                                                                     <span style="color:#ff9933">│
+│      ⍳5                                                                                                              <span style="color:#ff9933">│
+│1 2 3 4 5                                                                                                             <span style="color:#ff9933">│
+│      1+2                                                                                                             <span style="color:#ff9933">│
+│3                                                                                                                     <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+Type C-] q to quit
+</pre>
+</div>
+<div class="snapshot" id="snap-10">
+<h3>After C-] q (quit confirmation)</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│      1+1                                                                                                             <span style="color:#ff9933">│
+│2                                                                                                                     <span style="color:#ff9933">│
+│      ⍳5                                                                                                              <span style="color:#ff9933">│
+│1 2 3 4 5                                                                                                             <span style="color:#ff9933">│
+│      1+2                                                                                                             <span style="color:#ff9933">│
+│3                                                                                                                     <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+<span style="font-weight:bold"><span style="color:#ff0000">Quit? (y/n)</span>
+</pre>
+</div>
+<div class="snapshot" id="snap-11">
+<h3>Editor opened for Z</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│      1+1                                                                                                             <span style="color:#ff9933">│
+│2                                                                                                                     <span style="color:#ff9933">│
+│      ⍳5                                                                                                              <span style="color:#ff9933">│
+│1 2 3 4 5                                                                                                             <span style="color:#ff9933">│
+│      1+2                                                                                                             <span style="color:#ff9933">│
+│3                                                                                                                     <span style="color:#ff9933">│
+│      )erase X Y Z                                                                                                    <span style="color:#ff9933">│
+│      )ed Z                                                                                                           <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">╔ <span style="font-weight:bold">Z</span><span style="color:#ff9933"> ═══════════════════════════════════════════════════════╗                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║<span style="color:#767676">[0] Z                                                     <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">╚══════════════════════════════════════════════════════════╝                             <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
+</pre>
+</div>
+<div class="snapshot" id="snap-12">
+<h3>Z function with 9÷0</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│      1+1                                                                                                             <span style="color:#ff9933">│
+│2                                                                                                                     <span style="color:#ff9933">│
+│      ⍳5                                                                                                              <span style="color:#ff9933">│
+│1 2 3 4 5                                                                                                             <span style="color:#ff9933">│
+│      1+2                                                                                                             <span style="color:#ff9933">│
+│3                                                                                                                     <span style="color:#ff9933">│
+│      )erase X Y Z                                                                                                    <span style="color:#ff9933">│
+│      )ed Z                                                                                                           <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">╔ <span style="font-weight:bold">* Z</span><span style="color:#ff9933"> ═════════════════════════════════════════════════════╗                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║<span style="color:#767676">[0] Z                                                     <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║<span style="color:#767676">[1]                                                       <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║<span style="color:#767676">[2] 9÷0                                                   <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">╚══════════════════════════════════════════════════════════╝                             <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
+</pre>
+</div>
+<div class="snapshot" id="snap-13">
+<h3>After closing Z editor</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│      1+1                                                                                                             <span style="color:#ff9933">│
+│2                                                                                                                     <span style="color:#ff9933">│
+│      ⍳5                                                                                                              <span style="color:#ff9933">│
+│1 2 3 4 5                                                                                                             <span style="color:#ff9933">│
+│      1+2                                                                                                             <span style="color:#ff9933">│
+│3                                                                                                                     <span style="color:#ff9933">│
+│      )erase X Y Z                                                                                                    <span style="color:#ff9933">│
+│      )ed Z                                                                                                           <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
+</pre>
+</div>
+<div class="snapshot" id="snap-14">
+<h3>Y editor opened</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│      1+1                                                                                                             <span style="color:#ff9933">│
+│2                                                                                                                     <span style="color:#ff9933">│
+│      ⍳5                                                                                                              <span style="color:#ff9933">│
+│1 2 3 4 5                                                                                                             <span style="color:#ff9933">│
+│      1+2                                                                                                             <span style="color:#ff9933">│
+│3                                                                                                                     <span style="color:#ff9933">│
+│      )erase X Y Z                                                                                                    <span style="color:#ff9933">│
+│      )ed Z                                                                                                           <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">╔ <span style="font-weight:bold">Y</span><span style="color:#ff9933"> ═══════════════════════════════════════════════════════╗                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║<span style="color:#767676">[0] Y                                                     <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│      )ed Y                  <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">╚══════════════════════════════════════════════════════════╝                             <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
+</pre>
+</div>
+<div class="snapshot" id="snap-15">
+<h3>X editor opened</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│      1+1                                                                                                             <span style="color:#ff9933">│
+│2                                                                                                                     <span style="color:#ff9933">│
+│      ⍳5                                                                                                              <span style="color:#ff9933">│
+│1 2 3 4 5                                                                                                             <span style="color:#ff9933">│
+│      1+2                                                                                                             <span style="color:#ff9933">│
+│3                                                                                                                     <span style="color:#ff9933">│
+│      )erase X Y Z                                                                                                    <span style="color:#ff9933">│
+│      )ed Z                                                                                                           <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">╔ <span style="font-weight:bold">X</span><span style="color:#ff9933"> ═══════════════════════════════════════════════════════╗                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║<span style="color:#767676">[0] X                                                     <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│      )ed Y                  <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│      )ed X                  <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">╚══════════════════════════════════════════════════════════╝                             <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
+</pre>
+</div>
+<div class="snapshot" id="snap-16">
+<h3>After defining X, Y, Z</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│      1+1                                                                                                             <span style="color:#ff9933">│
+│2                                                                                                                     <span style="color:#ff9933">│
+│      ⍳5                                                                                                              <span style="color:#ff9933">│
+│1 2 3 4 5                                                                                                             <span style="color:#ff9933">│
+│      1+2                                                                                                             <span style="color:#ff9933">│
+│3                                                                                                                     <span style="color:#ff9933">│
+│      )erase X Y Z                                                                                                    <span style="color:#ff9933">│
+│      )ed Z                                                                                                           <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│      )ed Y                                                                                                           <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│      )ed X                                                                                                           <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
+</pre>
+</div>
+<div class="snapshot" id="snap-17">
+<h3>After X errors - tracer opens</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│      1+1                                                                                                             <span style="color:#ff9933">│
+│2                                                                                                                     <span style="color:#ff9933">│
+│      ⍳5                                                                                                              <span style="color:#ff9933">│
+│1 2 3 4 5                                                                                                             <span style="color:#ff9933">│
+│      1+2                                                                                                             <span style="color:#ff9933">│
+│3                                                                                                                     <span style="color:#ff9933">│
+│      )erase X Y Z                                                                                                    <span style="color:#ff9933">│
+│      )ed Z                                                                                                           <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">╔ <span style="font-weight:bold">Z [tracer]</span><span style="color:#ff9933"> ══════════════════════════════════════════════╗                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║<span style="color:#767676">[0] Z                                                     <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│      )ed Y                  <span style="color:#ff9933">║<span style="color:#767676">[1]                                                       <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║<span style="color:#767676">[2] 9÷0                                                   <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│      )ed X                  <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│      X                      <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│DOMAIN ERROR: Divide by zero <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│Z[2] 9÷0                     <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│      ∧                      <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">╚══════════════════════════════════════════════════════════╝                             <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
+</pre>
+</div>
+<div class="snapshot" id="snap-18">
+<h3>Stack pane showing X→Y→Z</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│      1+1                                                                                                             <span style="color:#ff9933">│
+│2                                                                                      <span style="color:#ff9933">╔ <span style="font-weight:bold">stack (3)</span><span style="color:#ff9933"> ═════════════════╗ <span style="color:#ff9933">│
+│      ⍳5                                                                               <span style="color:#ff9933">║<span style="font-weight:bold">►</span>[2] 9÷0                    <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│1 2 3 4 5                                                                              <span style="color:#ff9933">║Y[2] Z                      <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│      1+2                                                                              <span style="color:#ff9933">║X[2] Y                      <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│3                                                                                      <span style="color:#ff9933">║                            <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│      )erase X Y Z                                                                     <span style="color:#ff9933">║                            <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│      )ed Z                                                                            <span style="color:#ff9933">║                            <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                                       <span style="color:#ff9933">║                            <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">┌ <span style="font-weight:bold">Z [tracer]</span><span style="color:#ff9933"> ─────────────────────────────────────────────║                            <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">│<span style="color:#767676">[0] Z                                                    <span style="color:#ff9933">║                            <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│      )ed Y                  <span style="color:#ff9933">│<span style="color:#767676">[1]                                                      <span style="color:#ff9933">║                            <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">│<span style="color:#767676">[2] 9÷0                                                  <span style="color:#ff9933">║                            <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">│                                                         <span style="color:#ff9933">║                            <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">│                                                         <span style="color:#ff9933">║                            <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│      )ed X                  <span style="color:#ff9933">│                                                         <span style="color:#ff9933">╚════════════════════════════╝ <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">│                                                          <span style="color:#ff9933">│                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">│                                                          <span style="color:#ff9933">│                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">│                                                          <span style="color:#ff9933">│                             <span style="color:#ff9933">│
+│      X                      <span style="color:#ff9933">│                                                          <span style="color:#ff9933">│                             <span style="color:#ff9933">│
+│DOMAIN ERROR: Divide by zero <span style="color:#ff9933">│                                                          <span style="color:#ff9933">│                             <span style="color:#ff9933">│
+│Z[2] 9÷0                     <span style="color:#ff9933">│                                                          <span style="color:#ff9933">│                             <span style="color:#ff9933">│
+│      ∧                      <span style="color:#ff9933">│                                                          <span style="color:#ff9933">│                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">│                                                          <span style="color:#ff9933">│                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">│                                                          <span style="color:#ff9933">│                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">│                                                          <span style="color:#ff9933">│                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">│                                                          <span style="color:#ff9933">│                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">│                                                          <span style="color:#ff9933">│                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">└──────────────────────────────────────────────────────────┘                             <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
+</pre>
+</div>
+<div class="snapshot" id="snap-19">
+<h3>After selecting Y in stack</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│      1+1                                                                                                             <span style="color:#ff9933">│
+│2                                                                                      <span style="color:#ff9933">╔ <span style="font-weight:bold">stack (3)</span><span style="color:#ff9933"> ═════════════════╗ <span style="color:#ff9933">│
+│      ⍳5                                                                               <span style="color:#ff9933">║Z[2] 9÷0                    <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│1 2 3 4 5                                                                              <span style="color:#ff9933">║<span style="font-weight:bold">►</span>[2] Z                      <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│      1+2                                                                              <span style="color:#ff9933">║X[2] Y                      <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│3                                                                                      <span style="color:#ff9933">║                            <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│      )erase X Y Z                                                                     <span style="color:#ff9933">║                            <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│      )ed Z                                                                            <span style="color:#ff9933">║                            <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                                       <span style="color:#ff9933">║                            <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">┌ <span style="font-weight:bold">Y [tracer]</span><span style="color:#ff9933"> ─────────────────────────────────────────────║                            <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">│<span style="color:#767676">[0] Y                                                    <span style="color:#ff9933">║                            <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│      )ed Y                  <span style="color:#ff9933">│<span style="color:#767676">[1]                                                      <span style="color:#ff9933">║                            <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">│<span style="color:#767676">[2] Z                                                    <span style="color:#ff9933">║                            <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">│                                                         <span style="color:#ff9933">║                            <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">│                                                         <span style="color:#ff9933">║                            <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│      )ed X                  <span style="color:#ff9933">│                                                         <span style="color:#ff9933">╚════════════════════════════╝ <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">│                                                          <span style="color:#ff9933">│                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">│                                                          <span style="color:#ff9933">│                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">│                                                          <span style="color:#ff9933">│                             <span style="color:#ff9933">│
+│      X                      <span style="color:#ff9933">│                                                          <span style="color:#ff9933">│                             <span style="color:#ff9933">│
+│DOMAIN ERROR: Divide by zero <span style="color:#ff9933">│                                                          <span style="color:#ff9933">│                             <span style="color:#ff9933">│
+│Z[2] 9÷0                     <span style="color:#ff9933">│                                                          <span style="color:#ff9933">│                             <span style="color:#ff9933">│
+│      ∧                      <span style="color:#ff9933">│                                                          <span style="color:#ff9933">│                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">│                                                          <span style="color:#ff9933">│                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">│                                                          <span style="color:#ff9933">│                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">│                                                          <span style="color:#ff9933">│                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">│                                                          <span style="color:#ff9933">│                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">│                                                          <span style="color:#ff9933">│                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">└──────────────────────────────────────────────────────────┘                             <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
+</pre>
+</div>
+<div class="snapshot" id="snap-20">
+<h3>After popping Z</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│      1+1                                                                                                             <span style="color:#ff9933">│
+│2                                                                                                                     <span style="color:#ff9933">│
+│      ⍳5                                                                                                              <span style="color:#ff9933">│
+│1 2 3 4 5                                                                                                             <span style="color:#ff9933">│
+│      1+2                                                                                                             <span style="color:#ff9933">│
+│3                                                                                                                     <span style="color:#ff9933">│
+│      )erase X Y Z                                                                                                    <span style="color:#ff9933">│
+│      )ed Z                                                                                                           <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">╔ <span style="font-weight:bold">Y [tracer]</span><span style="color:#ff9933"> ══════════════════════════════════════════════╗                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║<span style="color:#767676">[0] Y                                                     <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│      )ed Y                  <span style="color:#ff9933">║<span style="color:#767676">[1]                                                       <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║<span style="color:#767676">[2] Z                                                     <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│      )ed X                  <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│      X                      <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│DOMAIN ERROR: Divide by zero <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│Z[2] 9÷0                     <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│      ∧                      <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">╚══════════════════════════════════════════════════════════╝                             <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
+</pre>
+</div>
+<div class="snapshot" id="snap-21">
+<h3>After popping Y</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│      1+1                                                                                                             <span style="color:#ff9933">│
+│2                                                                                                                     <span style="color:#ff9933">│
+│      ⍳5                                                                                                              <span style="color:#ff9933">│
+│1 2 3 4 5                                                                                                             <span style="color:#ff9933">│
+│      1+2                                                                                                             <span style="color:#ff9933">│
+│3                                                                                                                     <span style="color:#ff9933">│
+│      )erase X Y Z                                                                                                    <span style="color:#ff9933">│
+│      )ed Z                                                                                                           <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">╔ <span style="font-weight:bold">X [tracer]</span><span style="color:#ff9933"> ══════════════════════════════════════════════╗                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║<span style="color:#767676">[0] X                                                     <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│      )ed Y                  <span style="color:#ff9933">║<span style="color:#767676">[1]                                                       <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║<span style="color:#767676">[2] Y                                                     <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│      )ed X                  <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│      X                      <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│DOMAIN ERROR: Divide by zero <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│Z[2] 9÷0                     <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│      ∧                      <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">║                                                          <span style="color:#ff9933">║                             <span style="color:#ff9933">│
+│                             <span style="color:#ff9933">╚══════════════════════════════════════════════════════════╝                             <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
+</pre>
+</div>
+<div class="snapshot" id="snap-22">
+<h3>After popping X - stack cleared</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│      1+1                                                                                                             <span style="color:#ff9933">│
+│2                                                                                                                     <span style="color:#ff9933">│
+│      ⍳5                                                                                                              <span style="color:#ff9933">│
+│1 2 3 4 5                                                                                                             <span style="color:#ff9933">│
+│      1+2                                                                                                             <span style="color:#ff9933">│
+│3                                                                                                                     <span style="color:#ff9933">│
+│      )erase X Y Z                                                                                                    <span style="color:#ff9933">│
+│      )ed Z                                                                                                           <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│      )ed Y                                                                                                           <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│      )ed X                                                                                                           <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│      X                                                                                                               <span style="color:#ff9933">│
+│DOMAIN ERROR: Divide by zero                                                                                          <span style="color:#ff9933">│
+│Z[2] 9÷0                                                                                                              <span style="color:#ff9933">│
+│      ∧                                                                                                               <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
+</pre>
+</div>
+<div class="snapshot" id="snap-23">
+<h3>Final state</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│      1+1                                                                                                             <span style="color:#ff9933">│
+│2                                                                                                                     <span style="color:#ff9933">│
+│      ⍳5                                                                                                              <span style="color:#ff9933">│
+│1 2 3 4 5                                                                                                             <span style="color:#ff9933">│
+│      1+2                                                                                                             <span style="color:#ff9933">│
+│3                                                                                                                     <span style="color:#ff9933">│
+│      )erase X Y Z                                                                                                    <span style="color:#ff9933">│
+│      )ed Z                                                                                                           <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│      )ed Y                                                                                                           <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│      )ed X                                                                                                           <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│      X                                                                                                               <span style="color:#ff9933">│
+│DOMAIN ERROR: Divide by zero                                                                                          <span style="color:#ff9933">│
+│Z[2] 9÷0                                                                                                              <span style="color:#ff9933">│
+│      ∧                                                                                                               <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
+</pre>
+</div>
+
+</body>
+</html>
