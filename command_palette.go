@@ -9,17 +9,17 @@ import (
 
 // Command represents an executable command in the palette
 type Command struct {
-	Name   string
-	Help   string
-	Action func()
+	Name string
+	Help string
 }
 
 // CommandPalette is a searchable command list
 type CommandPalette struct {
-	commands []Command
-	filtered []Command
-	query    string
-	selected int
+	commands       []Command
+	filtered       []Command
+	query          string
+	selected       int
+	SelectedAction string // Set when Enter pressed
 }
 
 // NewCommandPalette creates a command palette with the given commands
@@ -134,7 +134,7 @@ func (c *CommandPalette) HandleKey(msg tea.KeyMsg) bool {
 
 	case tea.KeyEnter:
 		if c.selected >= 0 && c.selected < len(c.filtered) {
-			c.filtered[c.selected].Action()
+			c.SelectedAction = c.filtered[c.selected].Name
 		}
 		return true
 
@@ -161,7 +161,7 @@ func (c *CommandPalette) HandleMouse(x, y int, msg tea.MouseMsg) bool {
 		idx := y - 2 // Account for query and separator
 		if idx >= 0 && idx < len(c.filtered) {
 			c.selected = idx
-			c.filtered[c.selected].Action()
+			c.SelectedAction = c.filtered[c.selected].Name
 			return true
 		}
 	}

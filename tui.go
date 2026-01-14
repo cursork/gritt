@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image/color"
 	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -84,6 +85,10 @@ type Model struct {
 	showQuitHint bool
 	confirmQuit  bool
 	paneMoveMode bool // Arrow keys move/resize focused pane
+
+	// Save prompt state
+	savePromptActive   bool
+	savePromptFilename string
 
 	// Terminal dimensions
 	width  int
@@ -236,6 +241,30 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Handle save prompt
+	if m.savePromptActive {
+		switch msg.Type {
+		case tea.KeyEscape:
+			m.savePromptActive = false
+			m.log("Save cancelled")
+			return m, nil
+		case tea.KeyEnter:
+			m.savePromptActive = false
+			m.doSaveSession()
+			return m, nil
+		case tea.KeyBackspace:
+			if len(m.savePromptFilename) > 0 {
+				m.savePromptFilename = m.savePromptFilename[:len(m.savePromptFilename)-1]
+			}
+			return m, nil
+		default:
+			if len(msg.Runes) > 0 {
+				m.savePromptFilename += string(msg.Runes)
+			}
+			return m, nil
+		}
+	}
+
 	// Handle pane move mode
 	if m.paneMoveMode {
 		fp := m.panes.FocusedPane()
@@ -355,6 +384,15 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Route to focused pane - pane gets ALL keys when focused
 	if fp := m.panes.FocusedPane(); fp != nil && fp.Content != nil {
 		fp.Content.HandleKey(msg)
+
+		// Check if command palette selected an action
+		if cp, ok := fp.Content.(*CommandPalette); ok && cp.SelectedAction != "" {
+			action := cp.SelectedAction
+			cp.SelectedAction = ""
+			m.panes.Remove("commands")
+			return (&m).dispatchCommand(action)
+		}
+
 		return m, nil // Focused pane consumes all input
 	}
 
@@ -875,6 +913,47 @@ func (m *Model) toggleStackPane() {
 	m.panes.Focus("stack")
 }
 
+func (m *Model) dispatchCommand(action string) (tea.Model, tea.Cmd) {
+	switch action {
+	case "debug":
+		m.toggleDebugPane()
+	case "stack":
+		m.toggleStackPane()
+	case "keys":
+		m.toggleKeysPane()
+	case "reconnect":
+		return m.reconnect()
+	case "save":
+		m.saveSession()
+	case "quit":
+		m.confirmQuit = true
+	}
+	return *m, nil
+}
+
+func (m *Model) saveSession() {
+	m.savePromptActive = true
+	m.savePromptFilename = fmt.Sprintf("session-%s", time.Now().Format("20060102-150405"))
+}
+
+func (m *Model) doSaveSession() {
+	filename := m.savePromptFilename
+	if filename == "" {
+		m.log("Save cancelled")
+		return
+	}
+	var sb strings.Builder
+	for _, line := range m.lines {
+		sb.WriteString(line.Text)
+		sb.WriteString("\n")
+	}
+	if err := os.WriteFile(filename, []byte(sb.String()), 0644); err != nil {
+		m.log("Failed to save session: %v", err)
+	} else {
+		m.log("Session saved to %s", filename)
+	}
+}
+
 func (m *Model) openCommandPalette() {
 	// Remove existing palette if open
 	if m.panes.Get("commands") != nil {
@@ -884,42 +963,12 @@ func (m *Model) openCommandPalette() {
 
 	// Build command list
 	commands := []Command{
-		{Name: "debug", Help: "Toggle debug pane", Action: func() {
-			m.panes.Remove("commands")
-			m.toggleDebugPane()
-		}},
-		{Name: "stack", Help: "Toggle stack pane", Action: func() {
-			m.panes.Remove("commands")
-			m.toggleStackPane()
-		}},
-		{Name: "keys", Help: "Show key bindings", Action: func() {
-			m.panes.Remove("commands")
-			m.toggleKeysPane()
-		}},
-		{Name: "reconnect", Help: "Reconnect to Dyalog", Action: func() {
-			m.panes.Remove("commands")
-			// Note: reconnect returns tea.Cmd but we can't use it here
-			// Just close old client and try to connect
-			if !m.connected {
-				m.log("Reconnecting to %s...", m.addr)
-				if m.client != nil {
-					m.client.Close()
-				}
-				if client, err := ride.Connect(m.addr); err == nil {
-					m.client = client
-					m.connected = true
-					m.ready = true
-					m.msgs = m.startRecvLoop()
-					m.log("Reconnected to %s", m.addr)
-				} else {
-					m.log("Reconnect failed: %v", err)
-				}
-			}
-		}},
-		{Name: "quit", Help: "Quit gritt", Action: func() {
-			m.panes.Remove("commands")
-			m.confirmQuit = true
-		}},
+		{Name: "debug", Help: "Toggle debug pane"},
+		{Name: "stack", Help: "Toggle stack pane"},
+		{Name: "keys", Help: "Show key bindings"},
+		{Name: "reconnect", Help: "Reconnect to Dyalog"},
+		{Name: "save", Help: "Save session to file"},
+		{Name: "quit", Help: "Quit gritt"},
 	}
 
 	palette := NewCommandPalette(commands)
@@ -1179,6 +1228,9 @@ func (m Model) View() string {
 	} else if m.paneMoveMode {
 		moveStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("82")).Bold(true)
 		helpView = moveStyle.Render("MOVE: arrows move, shift+arrows resize, esc exit")
+	} else if m.savePromptActive {
+		promptStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("82")).Bold(true)
+		helpView = promptStyle.Render("Save as: ") + m.savePromptFilename + cursorStyle.Render(" ")
 	} else {
 		helpView = m.help.View(m.keys)
 	}

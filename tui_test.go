@@ -220,6 +220,29 @@ func TestTUI(t *testing.T) {
 		return !runner.Contains("Commands")
 	})
 
+	// Test: Save command shows filename prompt
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys(":")
+	runner.Sleep(300 * time.Millisecond)
+	runner.SendText("save")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Enter")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("Save prompt with default filename")
+
+	runner.Test("Save command shows filename prompt", func() bool {
+		return runner.Contains("Save as:")
+	})
+
+	runner.Test("Save prompt has default filename", func() bool {
+		return runner.Contains("session-")
+	})
+
+	// Cancel save and continue
+	runner.SendKeys("Escape")
+	runner.Sleep(200 * time.Millisecond)
+
 	// Test: Pane move mode
 	runner.SendKeys("C-]")
 	runner.Sleep(100 * time.Millisecond)

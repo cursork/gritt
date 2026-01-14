@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>gritt test report - 20260113-101803</title>
+    <title>gritt test report - 20260114-085908</title>
     <style>
         body {
             font-family: 'SF Mono', 'Menlo', 'Monaco', 'Cascadia Code', 'Consolas', 'DejaVu Sans Mono', -apple-system, monospace;
@@ -66,17 +66,17 @@
 </head>
 <body>
     <h1>gritt test report</h1>
-    <p class="timestamp">20260113-101803</p>
+    <p class="timestamp">20260114-085908</p>
 
     <div class="summary pass">
         <strong>All tests passed</strong>
         <div class="stats">
             <div class="stat">
-                <div class="stat-value">27</div>
+                <div class="stat-value">38</div>
                 <div class="stat-label">Total</div>
             </div>
             <div class="stat">
-                <div class="stat-value pass">27</div>
+                <div class="stat-value pass">38</div>
                 <div class="stat-label">Passed</div>
             </div>
             <div class="stat">
@@ -100,21 +100,32 @@
 <div class="result pass"><a href="#snap-8">✓ C-] ? opens key mappings pane</a></div>
 <div class="result pass"><a href="#snap-8">✓ Key mappings shows Actions section</a></div>
 <div class="result pass"><a href="#snap-8">✓ Esc closes key mappings pane</a></div>
-<div class="result pass"><a href="#snap-9">✓ Ctrl+C shows quit hint</a></div>
-<div class="result pass"><a href="#snap-9">✓ Key clears quit hint</a></div>
-<div class="result pass"><a href="#snap-10">✓ C-] q shows quit confirmation</a></div>
-<div class="result pass"><a href="#snap-10">✓ n cancels quit confirmation</a></div>
-<div class="result pass"><a href="#snap-11">✓ Editor opens for Z</a></div>
-<div class="result pass"><a href="#snap-12">✓ Z editor closes after Escape</a></div>
-<div class="result pass"><a href="#snap-14">✓ Y editor opens</a></div>
-<div class="result pass"><a href="#snap-14">✓ Y editor closes after Escape</a></div>
-<div class="result pass"><a href="#snap-15">✓ X editor opens</a></div>
-<div class="result pass"><a href="#snap-15">✓ X editor closes after Escape</a></div>
-<div class="result pass"><a href="#snap-17">✓ Tracer opens on error</a></div>
-<div class="result pass"><a href="#snap-18">✓ Stack pane shows Z (top of stack)</a></div>
-<div class="result pass"><a href="#snap-18">✓ Stack pane shows stack frames</a></div>
-<div class="result pass"><a href="#snap-19">✓ Tracer switches to Y</a></div>
-<div class="result pass"><a href="#snap-22">✓ Stack cleared after popping all frames</a></div>
+<div class="result pass"><a href="#snap-9">✓ C-] : opens command palette</a></div>
+<div class="result pass"><a href="#snap-9">✓ Command palette shows debug command</a></div>
+<div class="result pass"><a href="#snap-9">✓ Command palette shows quit command</a></div>
+<div class="result pass"><a href="#snap-10">✓ Typing filters commands</a></div>
+<div class="result pass"><a href="#snap-11">✓ Selecting debug opens debug pane</a></div>
+<div class="result pass"><a href="#snap-11">✓ Escape closes command palette</a></div>
+<div class="result pass"><a href="#snap-12">✓ Save command shows filename prompt</a></div>
+<div class="result pass"><a href="#snap-12">✓ Save prompt has default filename</a></div>
+<div class="result pass"><a href="#snap-13">✓ C-] m enters pane move mode</a></div>
+<div class="result pass"><a href="#snap-14">✓ Arrow keys move pane in move mode</a></div>
+<div class="result pass"><a href="#snap-14">✓ Escape exits pane move mode</a></div>
+<div class="result pass"><a href="#snap-15">✓ Ctrl+C shows quit hint</a></div>
+<div class="result pass"><a href="#snap-15">✓ Key clears quit hint</a></div>
+<div class="result pass"><a href="#snap-16">✓ C-] q shows quit confirmation</a></div>
+<div class="result pass"><a href="#snap-16">✓ n cancels quit confirmation</a></div>
+<div class="result pass"><a href="#snap-17">✓ Editor opens for Z</a></div>
+<div class="result pass"><a href="#snap-18">✓ Z editor closes after Escape</a></div>
+<div class="result pass"><a href="#snap-20">✓ Y editor opens</a></div>
+<div class="result pass"><a href="#snap-20">✓ Y editor closes after Escape</a></div>
+<div class="result pass"><a href="#snap-21">✓ X editor opens</a></div>
+<div class="result pass"><a href="#snap-21">✓ X editor closes after Escape</a></div>
+<div class="result pass"><a href="#snap-23">✓ Tracer opens on error</a></div>
+<div class="result pass"><a href="#snap-24">✓ Stack pane shows Z (top of stack)</a></div>
+<div class="result pass"><a href="#snap-24">✓ Stack pane shows stack frames</a></div>
+<div class="result pass"><a href="#snap-25">✓ Tracer switches to Y</a></div>
+<div class="result pass"><a href="#snap-28">✓ Stack cleared after popping all frames</a></div>
 
     </div>
 
@@ -167,7 +178,7 @@ enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • c
 <h3>After C-] d (debug pane open)</h3>
 <pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │                                                                   <span style="color:#ff9933">╔ <span style="font-weight:bold">debug</span><span style="color:#ff9933"> ═════════════════════════════════════════╗ <span style="color:#ff9933">│
-│                                                                   <span style="color:#ff9933">║Connected, ready for input                      <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║Connected to localhost:4502                     <span style="color:#ff9933">║ <span style="color:#ff9933">│
 │                                                                   <span style="color:#ff9933">║← UpdateSessionCaption {&#34;text&#34;:&#34;CLEAR WS - Dyalo<span style="color:#ff9933">║ <span style="color:#ff9933">│
 │                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
 │                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
@@ -431,7 +442,7 @@ enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • c
 <h3>Debug pane with protocol log</h3>
 <pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │      1+1                                                          <span style="color:#ff9933">╔ <span style="font-weight:bold">debug</span><span style="color:#ff9933"> ═════════════════════════════════════════╗ <span style="color:#ff9933">│
-│2                                                                  <span style="color:#ff9933">║Connected, ready for input                      <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│2                                                                  <span style="color:#ff9933">║Connected to localhost:4502                     <span style="color:#ff9933">║ <span style="color:#ff9933">│
 │      ⍳5                                                           <span style="color:#ff9933">║← UpdateSessionCaption {&#34;text&#34;:&#34;CLEAR WS - Dyalo<span style="color:#ff9933">║ <span style="color:#ff9933">│
 │1 2 3 4 5                                                          <span style="color:#ff9933">║→ Execute &#34;      1+1&#34;                           <span style="color:#ff9933">║ <span style="color:#ff9933">│
 │      1+2                                                          <span style="color:#ff9933">║← AppendSessionOutput {&#34;group&#34;:0,&#34;result&#34;:&#34;     <span style="color:#ff9933">║ <span style="color:#ff9933">│
@@ -516,6 +527,270 @@ enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • c
 </pre>
 </div>
 <div class="snapshot" id="snap-9">
+<h3>After C-] : (command palette)</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│      1+1                                                                                                             <span style="color:#ff9933">│
+│2                                      <span style="color:#ff9933">╔ <span style="font-weight:bold">Commands</span><span style="color:#ff9933"> ════════════════════════════╗                                       <span style="color:#ff9933">│
+│      ⍳5                               <span style="color:#ff9933">║:                                     <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│1 2 3 4 5                              <span style="color:#ff9933">║──────────────────────────────────────<span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│      1+2                              <span style="color:#ff9933">║debug        <span style="color:#8a8a8a">Toggle debug pane        <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│3                                      <span style="color:#ff9933">║stack <span style="color:#8a8a8a">Toggle stack pane               <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║keys <span style="color:#8a8a8a">Show key bindings                <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║reconnect <span style="color:#8a8a8a">Reconnect to Dyal           <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║save <span style="color:#8a8a8a">Save session to file                                                    <span style="color:#ff9933">││
+│                                       <span style="color:#ff9933">╚══════════════════════════════════════╝                                       <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
+</pre>
+</div>
+<div class="snapshot" id="snap-10">
+<h3>Command palette filtered to &#39;deb&#39;</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│      1+1                                                                                                             <span style="color:#ff9933">│
+│2                                      <span style="color:#ff9933">╔ <span style="font-weight:bold">Commands</span><span style="color:#ff9933"> ════════════════════════════╗                                       <span style="color:#ff9933">│
+│      ⍳5                               <span style="color:#ff9933">║: deb                                 <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│1 2 3 4 5                              <span style="color:#ff9933">║──────────────────────────────────────<span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│      1+2                              <span style="color:#ff9933">║debug        <span style="color:#8a8a8a">Toggle debug pane        <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│3                                      <span style="color:#ff9933">║                                      <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║                                      <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║                                      <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">║                                      <span style="color:#ff9933">║                                       <span style="color:#ff9933">│
+│                                       <span style="color:#ff9933">╚══════════════════════════════════════╝                                       <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
+</pre>
+</div>
+<div class="snapshot" id="snap-11">
+<h3>After selecting debug from palette</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│      1+1                                                          <span style="color:#ff9933">╔ <span style="font-weight:bold">debug</span><span style="color:#ff9933"> ═════════════════════════════════════════╗ <span style="color:#ff9933">│
+│2                                                                  <span style="color:#ff9933">║Connected to localhost:4502                     <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│      ⍳5                                                           <span style="color:#ff9933">║← UpdateSessionCaption {&#34;text&#34;:&#34;CLEAR WS - Dyalo<span style="color:#ff9933">║ <span style="color:#ff9933">│
+│1 2 3 4 5                                                          <span style="color:#ff9933">║→ Execute &#34;      1+1&#34;                           <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│      1+2                                                          <span style="color:#ff9933">║← AppendSessionOutput {&#34;group&#34;:0,&#34;result&#34;:&#34;     <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│3                                                                  <span style="color:#ff9933">║  (skipped: our input echo)                     <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← SetPromptType {&#34;type&#34;:0}                      <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║  ready: false → false                          <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← AppendSessionOutput {&#34;group&#34;:0,&#34;result&#34;:&#34;2\n&#34;,<span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← SetPromptType {&#34;type&#34;:1}                      <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║  ready: false → true                           <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║→ Execute &#34;      ⍳5&#34;                            <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← AppendSessionOutput {&#34;group&#34;:0,&#34;result&#34;:&#34;     <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║  (skipped: our input echo)                     <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← SetPromptType {&#34;type&#34;:0}                      <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║  ready: false → false                          <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← AppendSessionOutput {&#34;group&#34;:0,&#34;result&#34;:&#34;1 2 3<span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← SetPromptType {&#34;type&#34;:1}                      <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║  ready: false → true                           <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║→ Execute &#34;      1+2&#34;                           <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← AppendSessionOutput {&#34;group&#34;:0,&#34;result&#34;:&#34;     <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║  (skipped: our input echo)                     <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← SetPromptType {&#34;type&#34;:0}                      <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║  ready: false → false                          <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← AppendSessionOutput {&#34;group&#34;:0,&#34;result&#34;:&#34;3\n&#34;,<span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← SetPromptType {&#34;type&#34;:1}                      <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║  ready: false → true                           <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">╚════════════════════════════════════════════════╝ <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
+</pre>
+</div>
+<div class="snapshot" id="snap-12">
+<h3>Save prompt with default filename</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│      1+1                                                                                                             <span style="color:#ff9933">│
+│2                                                                                                                     <span style="color:#ff9933">│
+│      ⍳5                                                                                                              <span style="color:#ff9933">│
+│1 2 3 4 5                                                                                                             <span style="color:#ff9933">│
+│      1+2                                                                                                             <span style="color:#ff9933">│
+│3                                                                                                                     <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+<span style="font-weight:bold"><span style="color:#33ff00">Save as: </span>session-20260114-085918 
+</pre>
+</div>
+<div class="snapshot" id="snap-13">
+<h3>Pane move mode active</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│      1+1                                                          <span style="color:#ff9933">╔ <span style="font-weight:bold">debug</span><span style="color:#ff9933"> ═════════════════════════════════════════╗ <span style="color:#ff9933">│
+│2                                                                  <span style="color:#ff9933">║Connected to localhost:4502                     <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│      ⍳5                                                           <span style="color:#ff9933">║← UpdateSessionCaption {&#34;text&#34;:&#34;CLEAR WS - Dyalo<span style="color:#ff9933">║ <span style="color:#ff9933">│
+│1 2 3 4 5                                                          <span style="color:#ff9933">║→ Execute &#34;      1+1&#34;                           <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│      1+2                                                          <span style="color:#ff9933">║← AppendSessionOutput {&#34;group&#34;:0,&#34;result&#34;:&#34;     <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│3                                                                  <span style="color:#ff9933">║  (skipped: our input echo)                     <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← SetPromptType {&#34;type&#34;:0}                      <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║  ready: false → false                          <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← AppendSessionOutput {&#34;group&#34;:0,&#34;result&#34;:&#34;2\n&#34;,<span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← SetPromptType {&#34;type&#34;:1}                      <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║  ready: false → true                           <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║→ Execute &#34;      ⍳5&#34;                            <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← AppendSessionOutput {&#34;group&#34;:0,&#34;result&#34;:&#34;     <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║  (skipped: our input echo)                     <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← SetPromptType {&#34;type&#34;:0}                      <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║  ready: false → false                          <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← AppendSessionOutput {&#34;group&#34;:0,&#34;result&#34;:&#34;1 2 3<span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← SetPromptType {&#34;type&#34;:1}                      <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║  ready: false → true                           <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║→ Execute &#34;      1+2&#34;                           <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← AppendSessionOutput {&#34;group&#34;:0,&#34;result&#34;:&#34;     <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║  (skipped: our input echo)                     <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← SetPromptType {&#34;type&#34;:0}                      <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║  ready: false → false                          <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← AppendSessionOutput {&#34;group&#34;:0,&#34;result&#34;:&#34;3\n&#34;,<span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║← SetPromptType {&#34;type&#34;:1}                      <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║  ready: false → true                           <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║Save cancelled                                  <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">║                                                <span style="color:#ff9933">║ <span style="color:#ff9933">│
+│                                                                   <span style="color:#ff9933">╚════════════════════════════════════════════════╝ <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+<span style="font-weight:bold"><span style="color:#33ff00">MOVE: arrows move, shift+arrows resize, esc exit</span>
+</pre>
+</div>
+<div class="snapshot" id="snap-14">
+<h3>After moving pane</h3>
+<pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ─────────────────────────────────────────────────────────╔ <span style="font-weight:bold">debug</span><span style="color:#ff9933"> ═════════════════════════════════════════╗───╮
+│      1+1                                                        <span style="color:#ff9933">║Connected to localhost:4502                     <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│2                                                                <span style="color:#ff9933">║← UpdateSessionCaption {&#34;text&#34;:&#34;CLEAR WS - Dyalo<span style="color:#ff9933">║   <span style="color:#ff9933">│
+│      ⍳5                                                         <span style="color:#ff9933">║→ Execute &#34;      1+1&#34;                           <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│1 2 3 4 5                                                        <span style="color:#ff9933">║← AppendSessionOutput {&#34;group&#34;:0,&#34;result&#34;:&#34;     <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│      1+2                                                        <span style="color:#ff9933">║  (skipped: our input echo)                     <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│3                                                                <span style="color:#ff9933">║← SetPromptType {&#34;type&#34;:0}                      <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│                                                                 <span style="color:#ff9933">║  ready: false → false                          <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│                                                                 <span style="color:#ff9933">║← AppendSessionOutput {&#34;group&#34;:0,&#34;result&#34;:&#34;2\n&#34;,<span style="color:#ff9933">║   <span style="color:#ff9933">│
+│                                                                 <span style="color:#ff9933">║← SetPromptType {&#34;type&#34;:1}                      <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│                                                                 <span style="color:#ff9933">║  ready: false → true                           <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│                                                                 <span style="color:#ff9933">║→ Execute &#34;      ⍳5&#34;                            <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│                                                                 <span style="color:#ff9933">║← AppendSessionOutput {&#34;group&#34;:0,&#34;result&#34;:&#34;     <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│                                                                 <span style="color:#ff9933">║  (skipped: our input echo)                     <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│                                                                 <span style="color:#ff9933">║← SetPromptType {&#34;type&#34;:0}                      <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│                                                                 <span style="color:#ff9933">║  ready: false → false                          <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│                                                                 <span style="color:#ff9933">║← AppendSessionOutput {&#34;group&#34;:0,&#34;result&#34;:&#34;1 2 3<span style="color:#ff9933">║   <span style="color:#ff9933">│
+│                                                                 <span style="color:#ff9933">║← SetPromptType {&#34;type&#34;:1}                      <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│                                                                 <span style="color:#ff9933">║  ready: false → true                           <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│                                                                 <span style="color:#ff9933">║→ Execute &#34;      1+2&#34;                           <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│                                                                 <span style="color:#ff9933">║← AppendSessionOutput {&#34;group&#34;:0,&#34;result&#34;:&#34;     <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│                                                                 <span style="color:#ff9933">║  (skipped: our input echo)                     <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│                                                                 <span style="color:#ff9933">║← SetPromptType {&#34;type&#34;:0}                      <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│                                                                 <span style="color:#ff9933">║  ready: false → false                          <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│                                                                 <span style="color:#ff9933">║← AppendSessionOutput {&#34;group&#34;:0,&#34;result&#34;:&#34;3\n&#34;,<span style="color:#ff9933">║   <span style="color:#ff9933">│
+│                                                                 <span style="color:#ff9933">║← SetPromptType {&#34;type&#34;:1}                      <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│                                                                 <span style="color:#ff9933">║  ready: false → true                           <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│                                                                 <span style="color:#ff9933">║Save cancelled                                  <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│                                                                 <span style="color:#ff9933">║                                                <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│                                                                 <span style="color:#ff9933">║                                                <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│                                                                 <span style="color:#ff9933">║                                                <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│                                                                 <span style="color:#ff9933">║                                                <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│                                                                 <span style="color:#ff9933">║                                                <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│                                                                 <span style="color:#ff9933">║                                                <span style="color:#ff9933">║   <span style="color:#ff9933">│
+│                                                                 <span style="color:#ff9933">╚════════════════════════════════════════════════╝   <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+│                                                                                                                      <span style="color:#ff9933">│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+<span style="font-weight:bold"><span style="color:#33ff00">MOVE: arrows move, shift+arrows resize, esc exit</span>
+</pre>
+</div>
+<div class="snapshot" id="snap-15">
 <h3>After Ctrl+C (quit hint)</h3>
 <pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │      1+1                                                                                                             <span style="color:#ff9933">│
@@ -559,7 +834,7 @@ enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • c
 Type C-] q to quit
 </pre>
 </div>
-<div class="snapshot" id="snap-10">
+<div class="snapshot" id="snap-16">
 <h3>After C-] q (quit confirmation)</h3>
 <pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │      1+1                                                                                                             <span style="color:#ff9933">│
@@ -603,7 +878,7 @@ Type C-] q to quit
 <span style="font-weight:bold"><span style="color:#ff0000">Quit? (y/n)</span>
 </pre>
 </div>
-<div class="snapshot" id="snap-11">
+<div class="snapshot" id="snap-17">
 <h3>Editor opened for Z</h3>
 <pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │      1+1                                                                                                             <span style="color:#ff9933">│
@@ -647,7 +922,7 @@ Type C-] q to quit
 enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
 </pre>
 </div>
-<div class="snapshot" id="snap-12">
+<div class="snapshot" id="snap-18">
 <h3>Z function with 9÷0</h3>
 <pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │      1+1                                                                                                             <span style="color:#ff9933">│
@@ -691,7 +966,7 @@ enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • c
 enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
 </pre>
 </div>
-<div class="snapshot" id="snap-13">
+<div class="snapshot" id="snap-19">
 <h3>After closing Z editor</h3>
 <pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │      1+1                                                                                                             <span style="color:#ff9933">│
@@ -735,7 +1010,7 @@ enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • c
 enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
 </pre>
 </div>
-<div class="snapshot" id="snap-14">
+<div class="snapshot" id="snap-20">
 <h3>Y editor opened</h3>
 <pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │      1+1                                                                                                             <span style="color:#ff9933">│
@@ -779,7 +1054,7 @@ enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • c
 enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
 </pre>
 </div>
-<div class="snapshot" id="snap-15">
+<div class="snapshot" id="snap-21">
 <h3>X editor opened</h3>
 <pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │      1+1                                                                                                             <span style="color:#ff9933">│
@@ -823,7 +1098,7 @@ enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • c
 enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
 </pre>
 </div>
-<div class="snapshot" id="snap-16">
+<div class="snapshot" id="snap-22">
 <h3>After defining X, Y, Z</h3>
 <pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │      1+1                                                                                                             <span style="color:#ff9933">│
@@ -867,7 +1142,7 @@ enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • c
 enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
 </pre>
 </div>
-<div class="snapshot" id="snap-17">
+<div class="snapshot" id="snap-23">
 <h3>After X errors - tracer opens</h3>
 <pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │      1+1                                                                                                             <span style="color:#ff9933">│
@@ -911,7 +1186,7 @@ enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • c
 enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
 </pre>
 </div>
-<div class="snapshot" id="snap-18">
+<div class="snapshot" id="snap-24">
 <h3>Stack pane showing X→Y→Z</h3>
 <pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │      1+1                                                                                                             <span style="color:#ff9933">│
@@ -955,7 +1230,7 @@ enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • c
 enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
 </pre>
 </div>
-<div class="snapshot" id="snap-19">
+<div class="snapshot" id="snap-25">
 <h3>After selecting Y in stack</h3>
 <pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │      1+1                                                                                                             <span style="color:#ff9933">│
@@ -999,7 +1274,7 @@ enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • c
 enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
 </pre>
 </div>
-<div class="snapshot" id="snap-20">
+<div class="snapshot" id="snap-26">
 <h3>After popping Z</h3>
 <pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │      1+1                                                                                                             <span style="color:#ff9933">│
@@ -1043,7 +1318,7 @@ enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • c
 enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
 </pre>
 </div>
-<div class="snapshot" id="snap-21">
+<div class="snapshot" id="snap-27">
 <h3>After popping Y</h3>
 <pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │      1+1                                                                                                             <span style="color:#ff9933">│
@@ -1087,7 +1362,7 @@ enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • c
 enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
 </pre>
 </div>
-<div class="snapshot" id="snap-22">
+<div class="snapshot" id="snap-28">
 <h3>After popping X - stack cleared</h3>
 <pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │      1+1                                                                                                             <span style="color:#ff9933">│
@@ -1131,7 +1406,7 @@ enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • c
 enter execute • ctrl+] d debug • ctrl+] s stack • ctrl+] ? show keys • ctrl+] q quit
 </pre>
 </div>
-<div class="snapshot" id="snap-23">
+<div class="snapshot" id="snap-29">
 <h3>Final state</h3>
 <pre><span style="color:#ff9933">╭─ <span style="font-weight:bold">gritt</span><span style="color:#ff9933"> ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │      1+1                                                                                                             <span style="color:#ff9933">│
