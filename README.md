@@ -7,6 +7,8 @@ Pronounced like "grit" (G from Go + German "Ritt" = ride).
 ## Features
 
 - Full TUI with floating panes for editors, tracer, debug info
+- Command palette for quick access to all commands
+- Connection resilience - stays alive on disconnect, allows reconnect
 - Single-expression and stdin modes for scripting
 - Link integration for source-controlled APL projects
 - Tracer with stack navigation (single pane, not overlapping windows)
@@ -77,12 +79,32 @@ Leader key: `Ctrl+]`
 | Key | Action |
 |-----|--------|
 | Enter | Execute line |
-| C-] ? | Show key mappings |
+| C-] : | Command palette (search all commands) |
 | C-] d | Toggle debug pane |
 | C-] s | Toggle stack pane |
+| C-] m | Pane move mode (arrows move, shift+arrows resize) |
+| C-] r | Reconnect to Dyalog |
+| C-] ? | Show key mappings |
 | C-] q | Quit |
 | Tab | Cycle pane focus |
-| Esc | Close pane / pop tracer frame |
+| Esc | Close pane / exit mode / pop tracer frame |
+
+### Command Palette
+
+Press `C-] :` to open the command palette. Type to filter, Enter to select:
+- `debug` - Toggle debug pane
+- `stack` - Toggle stack pane
+- `keys` - Show key bindings
+- `reconnect` - Reconnect to Dyalog
+- `save` - Save session to file
+- `quit` - Quit gritt
+
+## Configuration
+
+gritt looks for config files in order:
+1. `./gritt.json` (local override)
+2. `~/.config/gritt/gritt.json` (user config)
+3. Embedded default (always available)
 
 ## Testing
 
@@ -90,7 +112,7 @@ Leader key: `Ctrl+]`
 go test -v -run TestTUI
 ```
 
-Requires Dyalog and tmux. Tests run in a tmux session and generate HTML reports with screenshots in `test-reports/`. See [example-test-report.html](example-test-report.html) for sample output.
+Requires Dyalog and tmux. Tests run in a tmux session and generate HTML reports with screenshots in `test-reports/`.
 
 ## Debugging
 

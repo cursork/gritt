@@ -2,29 +2,24 @@
 
 ## Active Work
 
-Tracer stack experience implemented. Protocol logging available for debugging.
+Connection resilience, command palette, and pane control complete. 39 passing tests.
 
-### What's Done
+### Recent Changes
 
-- **Tracer stack**: Single tracer pane (not multiple overlapping windows), stack pane for navigation
-- **Stack pane**: `C-] s` toggles, shows all suspended frames, click/Enter to switch
-- **Protocol logging**: `-log <file>` flag logs all RIDE messages and TUI actions
-- **Adaptive colors**: Detects terminal capabilities (ANSI, ANSI256, TrueColor), uses exact #F2A74F when supported
-- **CloseWindow timing fix**: Wait for `ReplySaveChanges` before sending `CloseWindow`
-- **Non-interactive mode**: `-e` for single expression, `-stdin` for piping
-- **Link support**: `-link path` or `-link ns:path` runs `]link.create` before executing
-- **apl script**: Ephemeral Dyalog instance for one-shot execution
-- **28 passing tests**: Including full X→Y→Z tracer scenario
+- **Connection resilience**: Disconnection detection, red border + [disconnected] indicator, C-] r to reconnect, session preserved
+- **Command palette**: C-] : opens searchable command list (debug, stack, keys, reconnect, save, quit)
+- **Pane move mode**: C-] m enters mode where arrows move pane, shift+arrows resize
+- **Save session**: Via command palette, prompts for filename with default
+- **Config robustness**: Embedded default config, renamed to gritt.json, handles missing keys gracefully
 
 ### Key Files Changed
 
 | File | Changes |
 |------|---------|
-| `tui.go` | Tracer stack state, adaptive color init, CloseWindow timing fix |
-| `editor.go` | Added `PendingClose` flag |
-| `stack_pane.go` | New - stack list pane |
-| `ride/logger.go` | New - protocol logging |
-| `main.go` | `-log` flag, color profile detection |
+| `tui.go` | Connection state, reconnect, pane move mode, save prompt, command dispatch |
+| `config.go` | go:embed, gritt.json paths, graceful missing keys |
+| `command_palette.go` | Simplified - returns selected action name |
+| `gritt.default.json` | Added reconnect, command_palette, pane_move_mode keys |
 
 ### Project Structure
 
@@ -39,10 +34,11 @@ gritt/
 ├── stack_pane.go        # Stack frame list pane
 ├── debug_pane.go        # Debug log pane
 ├── keys_pane.go         # Key mappings pane
+├── command_palette.go   # Searchable command list pane
 ├── keys.go              # KeyMap struct definition
-├── config.go            # Config loading from JSON files
-├── config.default.json  # Default key bindings
-├── tui_test.go          # TUI tests (28 tests)
+├── config.go            # Config loading (with embedded default)
+├── gritt.default.json   # Default key bindings (embedded at build)
+├── tui_test.go          # TUI tests (39 tests)
 ├── uitest/              # Test framework (tmux, HTML reports)
 ├── ride/
 │   ├── protocol.go      # Wire format
@@ -78,21 +74,25 @@ Leader key: `Ctrl+]` (configurable)
 | Key | Action |
 |-----|--------|
 | Enter | Execute line |
-| C-] ? | Show key mappings pane |
+| C-] : | Command palette |
 | C-] d | Toggle debug pane |
-| C-] s | Toggle stack pane (in tracer) |
+| C-] s | Toggle stack pane |
+| C-] m | Pane move mode |
+| C-] r | Reconnect |
+| C-] ? | Show key mappings |
 | C-] q | Quit |
 | Tab | Cycle focus between panes |
-| Esc | Close focused pane / pop tracer frame |
-| Ctrl+C | Shows "Type C-] q to quit" (vim style) |
+| Esc | Close pane / exit mode / pop tracer frame |
+| Ctrl+C | Shows "Type C-] q to quit" |
 
 ---
 
 ## Next Session
 
-Phase 4 continuation: Tracer operations
-- Step into/over/out commands
-- Breakpoint toggling
-- Variable inspection
+Remaining pane interactivity:
+- Mouse drag edges to resize (partially broken)
+- Multiple interactive panes
 
-Reference: `adnotata/0003-debugging-protocol.md` for protocol debugging approach
+Or continue with Phase 4 tracer operations:
+- Step into/over/out commands
+- Breakpoints

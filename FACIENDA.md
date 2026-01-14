@@ -1,20 +1,11 @@
 # FACIENDA - Things to be done
 
-## Priority: Connection Resilience
-- [ ] Detect disconnection (EOF, connection reset) - don't crash, show disconnected state
-- [ ] Detect stale connection (recv timeout) - don't hang forever
-- [ ] Keep gritt alive when disconnected: session buffer, debug logs preserved
-- [ ] Allow reconnect (C-] r?) without losing local state
-- [ ] `)off` intentional shutdown should still exit cleanly
-
-## Next: Pane Interactivity
-- [ ] Mouse control: click to focus, drag to move, drag edges to resize (partially broken)
-- [ ] Keyboard pane control: move/resize focused pane
+## Priority: Pane Interactivity
+- [ ] Mouse drag edges to resize (partially broken)
 - [ ] Multiple interactive panes: all N panes should be interactive, not just focused one
 
 ## Future Enhancements
 - [ ] Protocol audit: evaluate all unsupported RIDE messages, prioritize by importance
-- [ ] ⍝« command syntax (log save, etc.)
 - [ ] Clipboard support (Ctrl+C copy, Ctrl+V paste)
 
 ## Phase 3: Editors - DONE
@@ -44,11 +35,11 @@
 - [ ] Input history (beyond session - persist across runs?)
 - [ ] Status bar (connection info, workspace name from UpdateSessionCaption)
 - [ ] Better error display (HadError message handling)
+- [ ] Highlight ⍝« commands in session output
 
 ## Future Ideas
 - [ ] Multiline input improvements (RIDE does this poorly)
 - [ ] Multiple workspace connections?
-- [ ] Session export/save
 
 ---
 
@@ -142,9 +133,27 @@ RIDE handles multiline poorly. Research needed on:
 - [x] CloseWindow timing fix (wait for ReplySaveChanges before closing)
 - [x] Protocol logging (-log flag for RIDE messages and TUI actions)
 - [x] Adaptive color detection (ANSI/ANSI256/TrueColor, exact #F2A74F when supported)
-- [x] 28 passing tests including X→Y→Z nested tracer scenario
 
 ### CLI & Scripting
 - [x] Non-interactive mode: -e for single expression, -stdin for piping
 - [x] Link support: -link path or -link ns:path runs ]link.create before executing
 - [x] apl script: ephemeral Dyalog instance for one-shot execution
+
+### Connection Resilience
+- [x] Detect disconnection (EOF, connection reset) - show [disconnected] state with red border
+- [x] Keep gritt alive when disconnected: session buffer, debug logs preserved
+- [x] Allow reconnect (C-] r) without losing local state
+- [x] `)off` intentional shutdown exits cleanly
+- [x] External `)off` just disconnects (doesn't exit)
+- [x] `⍝ Disconnected` marker in session output
+
+### Config Robustness
+- [x] Embedded default config (go:embed gritt.default.json)
+- [x] Renamed config files to gritt.json (avoids conflicts)
+- [x] Missing key bindings handled gracefully (disabled, not crash)
+
+### Command Palette & Pane Control
+- [x] Command palette (C-] :) - searchable command list
+- [x] Pane move mode (C-] m) - arrows move, shift+arrows resize
+- [x] Save session command (via command palette, prompts for filename)
+- [x] 39 passing tests
