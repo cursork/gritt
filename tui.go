@@ -48,12 +48,17 @@ type Model struct {
 	client *ride.Client
 	msgs   <-chan rideEvent
 
+	// Connection state
+	addr      string
+	connected bool
+
 	// Session state
-	lines       []Line
-	cursorRow   int
-	cursorCol   int
-	ready       bool   // Interpreter ready for input
-	lastExecute string // Last text we sent via Execute (to skip our own echo)
+	lines        []Line
+	cursorRow    int
+	cursorCol    int
+	ready        bool   // Interpreter ready for input
+	lastExecute  string // Last text we sent via Execute (to skip our own echo)
+	pendingQuit  bool   // True if last command was )off
 
 	// Debug log (shared with debug pane, survives Model copies)
 	debugLog *LogBuffer
@@ -94,37 +99,86 @@ type rideEvent struct {
 }
 
 // NewModel creates a Model connected to the given RIDE client.
-// Optional logFile will receive timestamped log entries.
-func NewModel(client *ride.Client, logFile io.Writer, profile colorprofile.Profile) Model {
+func NewModel(client *ride.Client, addr string, logFile io.Writer, profile colorprofile.Profile) Model {
 	initColors(profile)
+
+	cfg := LoadConfig()
+	m := Model{
+		client:    client,
+		addr:      addr,
+		connected: true,
+		ready:     true, // Handshake already completed
+		lines:     []Line{{Text: aplIndent}},
+		debugLog:  &LogBuffer{}, // Shared buffer survives Model copies
+		logFile:   logFile,
+		panes:     NewPaneManager(80, 24), // Will be updated on WindowSizeMsg
+		editors:   make(map[int]*EditorWindow),
+		help:      help.New(),
+		keys:      cfg.ToKeyMap(),
+	}
+	m.cursorCol = len(aplIndent)
+	m.msgs = m.startRecvLoop()
+	m.log("Connected to %s", addr)
+	return m
+}
+
+// startRecvLoop starts a goroutine to receive RIDE messages.
+func (m *Model) startRecvLoop() <-chan rideEvent {
 	ch := make(chan rideEvent)
 	go func() {
 		for {
-			msg, raw, err := client.Recv()
+			msg, raw, err := m.client.Recv()
 			ch <- rideEvent{msg: msg, raw: raw, err: err}
 			if err != nil {
-				close(ch)
 				return
 			}
 		}
 	}()
+	return ch
+}
 
-	cfg := LoadConfig()
-	m := Model{
-		client:   client,
-		msgs:     ch,
-		ready:    true, // Handshake already completed
-		lines:    []Line{{Text: aplIndent}},
-		debugLog: &LogBuffer{}, // Shared buffer survives Model copies
-		logFile:  logFile,
-		panes:    NewPaneManager(80, 24), // Will be updated on WindowSizeMsg
-		editors:  make(map[int]*EditorWindow),
-		help:     help.New(),
-		keys:     cfg.ToKeyMap(),
+// send wraps client.Send and handles disconnection on error.
+func (m *Model) send(cmd string, args map[string]any) error {
+	if !m.connected {
+		return fmt.Errorf("not connected")
 	}
-	m.cursorCol = len(aplIndent)
-	m.log("Connected, ready for input")
-	return m
+	err := m.client.Send(cmd, args)
+	if err != nil {
+		m.connected = false
+		m.ready = false
+		m.log("Send failed, disconnected: %v", err)
+	}
+	return err
+}
+
+// reconnect attempts to reconnect to the RIDE server.
+func (m Model) reconnect() (tea.Model, tea.Cmd) {
+	if m.connected {
+		m.log("Already connected")
+		return m, nil
+	}
+
+	m.log("Reconnecting to %s...", m.addr)
+
+	// Close old client if exists
+	if m.client != nil {
+		m.client.Close()
+	}
+
+	// Try to connect
+	client, err := ride.Connect(m.addr)
+	if err != nil {
+		m.log("Reconnect failed: %v", err)
+		return m, nil
+	}
+
+	m.client = client
+	m.connected = true
+	m.ready = true
+	m.msgs = m.startRecvLoop()
+	m.log("Reconnected to %s", m.addr)
+
+	return m, waitForRide(m.msgs)
 }
 
 func (m *Model) log(format string, args ...any) {
@@ -191,6 +245,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.ToggleStack):
 			m.toggleStackPane()
 			return m, nil
+		case key.Matches(msg, m.keys.Reconnect):
+			return m.reconnect()
 		case key.Matches(msg, m.keys.ShowKeys):
 			m.toggleKeysPane()
 			return m, nil
@@ -570,12 +626,13 @@ func (m Model) execute() (tea.Model, tea.Cmd) {
 
 	m.ready = false
 	m.lastExecute = editedText + "\n" // Track what we sent to skip our own echo
+	m.pendingQuit = strings.TrimSpace(editedText) == ")off"
 	m.log("→ Execute %q", editedText)
 
 	// Send to interpreter
-	if err := m.client.Send("Execute", map[string]any{"text": m.lastExecute, "trace": 0}); err != nil {
-		m.err = err
-		return m, tea.Quit
+	if err := m.send("Execute", map[string]any{"text": m.lastExecute, "trace": 0}); err != nil {
+		// Disconnect handled by send(), just return
+		return m, nil
 	}
 
 	return m, nil
@@ -613,15 +670,13 @@ func (m *Model) saveEditor(token int) {
 
 	m.log("→ SaveChanges win=%d", token)
 
-	if err := m.client.Send("SaveChanges", map[string]any{
+	m.send("SaveChanges", map[string]any{
 		"win":     token,
 		"text":    text,
 		"stop":    stop,
 		"monitor": monitor,
 		"trace":   trace,
-	}); err != nil {
-		m.log("  SaveChanges error: %v", err)
-	}
+	})
 }
 
 func (m *Model) closeEditor(token int) {
@@ -645,11 +700,9 @@ func (m *Model) closeEditor(token int) {
 func (m *Model) sendCloseWindow(token int) {
 	m.log("→ CloseWindow win=%d", token)
 
-	if err := m.client.Send("CloseWindow", map[string]any{
+	m.send("CloseWindow", map[string]any{
 		"win": token,
-	}); err != nil {
-		m.log("  CloseWindow error: %v", err)
-	}
+	})
 	// Don't remove pane yet - wait for CloseWindow from Dyalog
 }
 
@@ -773,8 +826,23 @@ func (m *Model) toggleStackPane() {
 
 func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
 	if ev.err != nil {
-		m.err = ev.err
-		return m, tea.Quit
+		m.connected = false
+		m.ready = false
+
+		// If last command was )off, this is intentional shutdown - exit cleanly
+		if m.pendingQuit {
+			m.log("Session ended with )off")
+			return m, tea.Quit
+		}
+
+		m.log("Disconnected: %v", ev.err)
+		// Append visible disconnect marker to session (with blank line after)
+		m.lines = append(m.lines, Line{Text: "⍝ Disconnected"})
+		m.lines = append(m.lines, Line{Text: ""})
+		m.cursorRow = len(m.lines) - 1
+		m.cursorCol = 0
+		// Don't quit - keep UI alive so user can view logs, reconnect, etc.
+		return m, nil
 	}
 
 	if ev.msg == nil {
@@ -800,6 +868,11 @@ func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
 			if result, ok := msg.Args["result"].(string); ok && result == m.lastExecute {
 				m.log("  (skipped: our input echo)")
 				m.lastExecute = "" // Clear after matching
+				return m, waitForRide(m.msgs)
+			}
+			// Skip )off from external input - just noise before disconnect
+			if result, ok := msg.Args["result"].(string); ok && strings.TrimSpace(result) == ")off" {
+				m.log("  (skipped: external )off)")
 				return m, waitForRide(m.msgs)
 			}
 			// Input from elsewhere - display it
@@ -1004,7 +1077,15 @@ func (m Model) viewSession(w, h int) string {
 	contentH := h - 2
 
 	content := m.renderSession(contentW, contentH)
-	return m.renderBox("gritt", content, contentW, contentH, DyalogOrange)
+
+	title := "gritt"
+	borderColor := DyalogOrange
+	if !m.connected {
+		title = "gritt [disconnected]"
+		borderColor = lipgloss.Color("196") // Red
+	}
+
+	return m.renderBox(title, content, contentW, contentH, borderColor)
 }
 
 func (m Model) renderBox(title, content string, w, h int, borderColor color.Color) string {

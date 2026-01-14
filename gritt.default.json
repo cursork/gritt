@@ -4,6 +4,7 @@
     "execute": ["enter"],
     "toggle_debug": ["d"],
     "toggle_stack": ["s"],
+    "reconnect": ["r"],
     "cycle_pane": ["tab"],
     "close_pane": ["esc"],
     "quit": ["q"],

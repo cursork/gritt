@@ -1,12 +1,16 @@
 package main
 
 import (
+	_ "embed"
 	"encoding/json"
 	"os"
 	"path/filepath"
 
 	"github.com/charmbracelet/bubbles/key"
 )
+
+//go:embed gritt.default.json
+var defaultConfigJSON []byte
 
 // Config holds all gritt configuration
 type Config struct {
@@ -19,6 +23,7 @@ type KeyMapConfig struct {
 	Execute     []string `json:"execute"`
 	ToggleDebug []string `json:"toggle_debug"`
 	ToggleStack []string `json:"toggle_stack"`
+	Reconnect   []string `json:"reconnect"`
 	CyclePane   []string `json:"cycle_pane"`
 	ClosePane   []string `json:"close_pane"`
 	Quit        []string `json:"quit"`
@@ -40,9 +45,9 @@ type KeyMapConfig struct {
 // LoadConfig loads configuration from first found config file
 func LoadConfig() Config {
 	paths := []string{
-		"config.json",
-		filepath.Join(os.Getenv("HOME"), ".config", "gritt", "config.json"),
-		"config.default.json",
+		"gritt.json",
+		filepath.Join(os.Getenv("HOME"), ".config", "gritt", "gritt.json"),
+		"gritt.default.json",
 	}
 
 	for _, path := range paths {
@@ -51,7 +56,12 @@ func LoadConfig() Config {
 		}
 	}
 
-	panic("no config file found (need config.json or config.default.json)")
+	// Fall back to embedded default config
+	var cfg Config
+	if err := json.Unmarshal(defaultConfigJSON, &cfg); err != nil {
+		panic("embedded default config is invalid: " + err.Error())
+	}
+	return cfg
 }
 
 func loadConfigFile(path string) (Config, error) {
@@ -71,77 +81,56 @@ func loadConfigFile(path string) (Config, error) {
 // ToKeyMap converts config to KeyMap
 func (c *Config) ToKeyMap() KeyMap {
 	return KeyMap{
-		Leader: key.NewBinding(
-			key.WithKeys(c.Keys.Leader...),
-			key.WithHelp(c.Keys.Leader[0], "leader"),
-		),
-		Execute: key.NewBinding(
-			key.WithKeys(c.Keys.Execute...),
-			key.WithHelp(c.Keys.Execute[0], "execute"),
-		),
-		ToggleDebug: key.NewBinding(
-			key.WithKeys(c.Keys.ToggleDebug...),
-			key.WithHelp(c.Keys.Leader[0]+" "+c.Keys.ToggleDebug[0], "debug"),
-		),
-		ToggleStack: key.NewBinding(
-			key.WithKeys(c.Keys.ToggleStack...),
-			key.WithHelp(c.Keys.Leader[0]+" "+c.Keys.ToggleStack[0], "stack"),
-		),
-		CyclePane: key.NewBinding(
-			key.WithKeys(c.Keys.CyclePane...),
-			key.WithHelp(c.Keys.CyclePane[0], "cycle pane"),
-		),
-		ClosePane: key.NewBinding(
-			key.WithKeys(c.Keys.ClosePane...),
-			key.WithHelp(c.Keys.ClosePane[0], "close pane"),
-		),
-		Quit: key.NewBinding(
-			key.WithKeys(c.Keys.Quit...),
-			key.WithHelp(c.Keys.Leader[0]+" "+c.Keys.Quit[0], "quit"),
-		),
-		ShowKeys: key.NewBinding(
-			key.WithKeys(c.Keys.ShowKeys...),
-			key.WithHelp(c.Keys.Leader[0]+" "+c.Keys.ShowKeys[0], "show keys"),
-		),
-		Up: key.NewBinding(
-			key.WithKeys(c.Keys.Up...),
-			key.WithHelp(c.Keys.Up[0], "up"),
-		),
-		Down: key.NewBinding(
-			key.WithKeys(c.Keys.Down...),
-			key.WithHelp(c.Keys.Down[0], "down"),
-		),
-		Left: key.NewBinding(
-			key.WithKeys(c.Keys.Left...),
-			key.WithHelp(c.Keys.Left[0], "left"),
-		),
-		Right: key.NewBinding(
-			key.WithKeys(c.Keys.Right...),
-			key.WithHelp(c.Keys.Right[0], "right"),
-		),
-		Home: key.NewBinding(
-			key.WithKeys(c.Keys.Home...),
-			key.WithHelp(c.Keys.Home[0], "line start"),
-		),
-		End: key.NewBinding(
-			key.WithKeys(c.Keys.End...),
-			key.WithHelp(c.Keys.End[0], "line end"),
-		),
-		PgUp: key.NewBinding(
-			key.WithKeys(c.Keys.PgUp...),
-			key.WithHelp(c.Keys.PgUp[0], "page up"),
-		),
-		PgDn: key.NewBinding(
-			key.WithKeys(c.Keys.PgDn...),
-			key.WithHelp(c.Keys.PgDn[0], "page down"),
-		),
-		Backspace: key.NewBinding(
-			key.WithKeys(c.Keys.Backspace...),
-			key.WithHelp(c.Keys.Backspace[0], "delete back"),
-		),
-		Delete: key.NewBinding(
-			key.WithKeys(c.Keys.Delete...),
-			key.WithHelp(c.Keys.Delete[0], "delete forward"),
-		),
+		Leader:      c.binding(c.Keys.Leader, "", "leader"),
+		Execute:     c.binding(c.Keys.Execute, "", "execute"),
+		ToggleDebug: c.bindingWithLeader(c.Keys.ToggleDebug, "debug"),
+		ToggleStack: c.bindingWithLeader(c.Keys.ToggleStack, "stack"),
+		Reconnect:   c.bindingWithLeader(c.Keys.Reconnect, "reconnect"),
+		CyclePane:   c.binding(c.Keys.CyclePane, "", "cycle pane"),
+		ClosePane:   c.binding(c.Keys.ClosePane, "", "close pane"),
+		Quit:        c.bindingWithLeader(c.Keys.Quit, "quit"),
+		ShowKeys:    c.bindingWithLeader(c.Keys.ShowKeys, "show keys"),
+		Up:          c.binding(c.Keys.Up, "", "up"),
+		Down:        c.binding(c.Keys.Down, "", "down"),
+		Left:        c.binding(c.Keys.Left, "", "left"),
+		Right:       c.binding(c.Keys.Right, "", "right"),
+		Home:        c.binding(c.Keys.Home, "", "line start"),
+		End:         c.binding(c.Keys.End, "", "line end"),
+		PgUp:        c.binding(c.Keys.PgUp, "", "page up"),
+		PgDn:        c.binding(c.Keys.PgDn, "", "page down"),
+		Backspace:   c.binding(c.Keys.Backspace, "", "delete back"),
+		Delete:      c.binding(c.Keys.Delete, "", "delete forward"),
 	}
+}
+
+// binding creates a key binding, returning disabled binding if keys is empty
+func (c *Config) binding(keys []string, prefix, help string) key.Binding {
+	if len(keys) == 0 {
+		return key.NewBinding(key.WithDisabled())
+	}
+	helpText := help
+	if prefix != "" {
+		helpText = prefix + " " + keys[0]
+	} else {
+		helpText = keys[0]
+	}
+	return key.NewBinding(
+		key.WithKeys(keys...),
+		key.WithHelp(helpText, help),
+	)
+}
+
+// bindingWithLeader creates a key binding with leader prefix in help text
+func (c *Config) bindingWithLeader(keys []string, help string) key.Binding {
+	if len(keys) == 0 {
+		return key.NewBinding(key.WithDisabled())
+	}
+	prefix := ""
+	if len(c.Keys.Leader) > 0 {
+		prefix = c.Keys.Leader[0]
+	}
+	return key.NewBinding(
+		key.WithKeys(keys...),
+		key.WithHelp(prefix+" "+keys[0], help),
+	)
 }

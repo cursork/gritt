@@ -1,13 +1,19 @@
 # FACIENDA - Things to be done
 
-## Priority: Pane Interactivity
+## Priority: Connection Resilience
+- [ ] Detect disconnection (EOF, connection reset) - don't crash, show disconnected state
+- [ ] Detect stale connection (recv timeout) - don't hang forever
+- [ ] Keep gritt alive when disconnected: session buffer, debug logs preserved
+- [ ] Allow reconnect (C-] r?) without losing local state
+- [ ] `)off` intentional shutdown should still exit cleanly
+
+## Next: Pane Interactivity
 - [ ] Mouse control: click to focus, drag to move, drag edges to resize (partially broken)
 - [ ] Keyboard pane control: move/resize focused pane
 - [ ] Multiple interactive panes: all N panes should be interactive, not just focused one
 
 ## Future Enhancements
 - [ ] Protocol audit: evaluate all unsupported RIDE messages, prioritize by importance
-- [ ] Connection resilience: on unexpected Dyalog death, keep gritt alive with session buffer intact, show disconnected state, allow reconnect (`)off` intentional shutdown should still exit cleanly)
 - [ ] ⍝« command syntax (log save, etc.)
 - [ ] Clipboard support (Ctrl+C copy, Ctrl+V paste)
 

@@ -11,6 +11,7 @@ type KeyMap struct {
 	Execute     key.Binding
 	ToggleDebug key.Binding // After leader
 	ToggleStack key.Binding // After leader
+	Reconnect   key.Binding // After leader
 	CyclePane   key.Binding
 	ClosePane   key.Binding
 	Quit        key.Binding

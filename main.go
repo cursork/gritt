@@ -78,7 +78,7 @@ func main() {
 	}
 	defer client.Close()
 
-	p := tea.NewProgram(NewModel(client, logWriter, colorProfile), tea.WithAltScreen(), tea.WithMouseCellMotion())
+	p := tea.NewProgram(NewModel(client, *addr, logWriter, colorProfile), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
 	}
