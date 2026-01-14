@@ -25,6 +25,7 @@ type KeyMapConfig struct {
 	ToggleStack []string `json:"toggle_stack"`
 	Reconnect      []string `json:"reconnect"`
 	CommandPalette []string `json:"command_palette"`
+	PaneMoveMode   []string `json:"pane_move_mode"`
 	CyclePane      []string `json:"cycle_pane"`
 	ClosePane   []string `json:"close_pane"`
 	Quit        []string `json:"quit"`
@@ -88,6 +89,7 @@ func (c *Config) ToKeyMap() KeyMap {
 		ToggleStack: c.bindingWithLeader(c.Keys.ToggleStack, "stack"),
 		Reconnect:      c.bindingWithLeader(c.Keys.Reconnect, "reconnect"),
 		CommandPalette: c.bindingWithLeader(c.Keys.CommandPalette, "commands"),
+		PaneMoveMode:   c.bindingWithLeader(c.Keys.PaneMoveMode, "move pane"),
 		CyclePane:      c.binding(c.Keys.CyclePane, "", "cycle pane"),
 		ClosePane:   c.binding(c.Keys.ClosePane, "", "close pane"),
 		Quit:        c.bindingWithLeader(c.Keys.Quit, "quit"),

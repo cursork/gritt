@@ -6,6 +6,7 @@
     "toggle_stack": ["s"],
     "reconnect": ["r"],
     "command_palette": [":"],
+    "pane_move_mode": ["m"],
     "cycle_pane": ["tab"],
     "close_pane": ["esc"],
     "quit": ["q"],

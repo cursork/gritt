@@ -13,6 +13,7 @@ type KeyMap struct {
 	ToggleStack    key.Binding // After leader
 	Reconnect      key.Binding // After leader
 	CommandPalette key.Binding // After leader
+	PaneMoveMode   key.Binding // After leader
 	CyclePane      key.Binding
 	ClosePane      key.Binding
 	Quit           key.Binding

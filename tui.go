@@ -83,6 +83,7 @@ type Model struct {
 	leaderActive bool
 	showQuitHint bool
 	confirmQuit  bool
+	paneMoveMode bool // Arrow keys move/resize focused pane
 
 	// Terminal dimensions
 	width  int
@@ -235,6 +236,48 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Handle pane move mode
+	if m.paneMoveMode {
+		fp := m.panes.FocusedPane()
+		if fp == nil {
+			m.paneMoveMode = false
+			return m, nil
+		}
+
+		step := 1
+		k := msg.String()
+		switch {
+		case msg.Type == tea.KeyEscape || msg.Type == tea.KeyEnter:
+			m.paneMoveMode = false
+			return m, nil
+		case k == "up":
+			fp.Y = max(0, fp.Y-step)
+			return m, nil
+		case k == "shift+up":
+			fp.Height = max(5, fp.Height-step)
+			return m, nil
+		case k == "down":
+			fp.Y = min(m.height-fp.Height-1, fp.Y+step)
+			return m, nil
+		case k == "shift+down":
+			fp.Height = min(m.height-2, fp.Height+step)
+			return m, nil
+		case k == "left":
+			fp.X = max(0, fp.X-step)
+			return m, nil
+		case k == "shift+left":
+			fp.Width = max(10, fp.Width-step)
+			return m, nil
+		case k == "right":
+			fp.X = min(m.width-fp.Width-1, fp.X+step)
+			return m, nil
+		case k == "shift+right":
+			fp.Width = min(m.width-2, fp.Width+step)
+			return m, nil
+		}
+		return m, nil
+	}
+
 	// Handle leader key sequences
 	if m.leaderActive {
 		m.leaderActive = false // Reset on any key
@@ -249,6 +292,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.reconnect()
 		case key.Matches(msg, m.keys.CommandPalette):
 			m.openCommandPalette()
+			return m, nil
+		case key.Matches(msg, m.keys.PaneMoveMode):
+			if m.panes.FocusedPane() != nil {
+				m.paneMoveMode = true
+			}
 			return m, nil
 		case key.Matches(msg, m.keys.ShowKeys):
 			m.toggleKeysPane()
@@ -1128,6 +1176,9 @@ func (m Model) View() string {
 	} else if m.leaderActive {
 		leaderStyle := lipgloss.NewStyle().Foreground(DyalogOrange).Bold(true)
 		helpView = leaderStyle.Render("C-] ...")
+	} else if m.paneMoveMode {
+		moveStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("82")).Bold(true)
+		helpView = moveStyle.Render("MOVE: arrows move, shift+arrows resize, esc exit")
 	} else {
 		helpView = m.help.View(m.keys)
 	}
