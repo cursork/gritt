@@ -247,6 +247,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case key.Matches(msg, m.keys.Reconnect):
 			return m.reconnect()
+		case key.Matches(msg, m.keys.CommandPalette):
+			m.openCommandPalette()
+			return m, nil
 		case key.Matches(msg, m.keys.ShowKeys):
 			m.toggleKeysPane()
 			return m, nil
@@ -822,6 +825,66 @@ func (m *Model) toggleStackPane() {
 	pane := NewPane("stack", stackPane, paneX, paneY, paneW, paneH)
 	m.panes.Add(pane)
 	m.panes.Focus("stack")
+}
+
+func (m *Model) openCommandPalette() {
+	// Remove existing palette if open
+	if m.panes.Get("commands") != nil {
+		m.panes.Remove("commands")
+		return
+	}
+
+	// Build command list
+	commands := []Command{
+		{Name: "debug", Help: "Toggle debug pane", Action: func() {
+			m.panes.Remove("commands")
+			m.toggleDebugPane()
+		}},
+		{Name: "stack", Help: "Toggle stack pane", Action: func() {
+			m.panes.Remove("commands")
+			m.toggleStackPane()
+		}},
+		{Name: "keys", Help: "Show key bindings", Action: func() {
+			m.panes.Remove("commands")
+			m.toggleKeysPane()
+		}},
+		{Name: "reconnect", Help: "Reconnect to Dyalog", Action: func() {
+			m.panes.Remove("commands")
+			// Note: reconnect returns tea.Cmd but we can't use it here
+			// Just close old client and try to connect
+			if !m.connected {
+				m.log("Reconnecting to %s...", m.addr)
+				if m.client != nil {
+					m.client.Close()
+				}
+				if client, err := ride.Connect(m.addr); err == nil {
+					m.client = client
+					m.connected = true
+					m.ready = true
+					m.msgs = m.startRecvLoop()
+					m.log("Reconnected to %s", m.addr)
+				} else {
+					m.log("Reconnect failed: %v", err)
+				}
+			}
+		}},
+		{Name: "quit", Help: "Quit gritt", Action: func() {
+			m.panes.Remove("commands")
+			m.confirmQuit = true
+		}},
+	}
+
+	palette := NewCommandPalette(commands)
+
+	// Position: center top
+	paneW := 40
+	paneH := min(len(commands)+3, 15)
+	paneX := (m.width - paneW) / 2
+	paneY := 2
+
+	pane := NewPane("commands", palette, paneX, paneY, paneW, paneH)
+	m.panes.Add(pane)
+	m.panes.Focus("commands")
 }
 
 func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {

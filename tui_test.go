@@ -167,7 +167,60 @@ func TestTUI(t *testing.T) {
 		return !runner.Contains("key mappings")
 	})
 
-	// Test 13: Ctrl+C shows quit hint
+	// Test: C-] : opens command palette
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys(":")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("After C-] : (command palette)")
+
+	runner.Test("C-] : opens command palette", func() bool {
+		return runner.Contains("Commands")
+	})
+
+	runner.Test("Command palette shows debug command", func() bool {
+		return runner.Contains("debug")
+	})
+
+	runner.Test("Command palette shows quit command", func() bool {
+		return runner.Contains("quit")
+	})
+
+	// Test: Filter commands by typing
+	runner.SendText("deb")
+	runner.Sleep(200 * time.Millisecond)
+	runner.Snapshot("Command palette filtered to 'deb'")
+
+	runner.Test("Typing filters commands", func() bool {
+		// Should still show debug but not quit
+		return runner.Contains("debug")
+	})
+
+	// Test: Execute command from palette
+	runner.SendKeys("Enter")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("After selecting debug from palette")
+
+	runner.Test("Selecting debug opens debug pane", func() bool {
+		return runner.Contains("debug") && !runner.Contains("Commands")
+	})
+
+	runner.SendKeys("Escape")
+	runner.Sleep(200 * time.Millisecond)
+
+	// Test: Escape closes command palette
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys(":")
+	runner.Sleep(300 * time.Millisecond)
+	runner.SendKeys("Escape")
+	runner.Sleep(200 * time.Millisecond)
+
+	runner.Test("Escape closes command palette", func() bool {
+		return !runner.Contains("Commands")
+	})
+
+	// Test: Ctrl+C shows quit hint
 	runner.SendKeys("C-c")
 	runner.Sleep(200 * time.Millisecond)
 	runner.Snapshot("After Ctrl+C (quit hint)")

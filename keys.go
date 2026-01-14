@@ -8,14 +8,15 @@ type KeyMap struct {
 	Leader key.Binding
 
 	// Actions (some require leader prefix)
-	Execute     key.Binding
-	ToggleDebug key.Binding // After leader
-	ToggleStack key.Binding // After leader
-	Reconnect   key.Binding // After leader
-	CyclePane   key.Binding
-	ClosePane   key.Binding
-	Quit        key.Binding
-	ShowKeys    key.Binding // After leader
+	Execute        key.Binding
+	ToggleDebug    key.Binding // After leader
+	ToggleStack    key.Binding // After leader
+	Reconnect      key.Binding // After leader
+	CommandPalette key.Binding // After leader
+	CyclePane      key.Binding
+	ClosePane      key.Binding
+	Quit           key.Binding
+	ShowKeys       key.Binding // After leader
 
 	// Navigation
 	Up    key.Binding

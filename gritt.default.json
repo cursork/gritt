@@ -5,6 +5,7 @@
     "toggle_debug": ["d"],
     "toggle_stack": ["s"],
     "reconnect": ["r"],
+    "command_palette": [":"],
     "cycle_pane": ["tab"],
     "close_pane": ["esc"],
     "quit": ["q"],
