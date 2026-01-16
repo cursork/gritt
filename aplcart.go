@@ -153,17 +153,19 @@ func (a *APLcart) Render(w, h int) string {
 		syntax := e.Syntax
 		desc := e.Description
 
-		// Truncate syntax if too long
+		// Truncate syntax if too long (rune-aware)
 		maxSyntax := w / 3
-		if len(syntax) > maxSyntax {
-			syntax = syntax[:maxSyntax-1] + "…"
+		syntaxRunes := []rune(syntax)
+		if len(syntaxRunes) > maxSyntax {
+			syntax = string(syntaxRunes[:maxSyntax-1]) + "…"
 		}
 		syntax = padRight(syntax, maxSyntax)
 
-		// Truncate desc
+		// Truncate desc (rune-aware)
 		maxDesc := w - maxSyntax - 2
-		if len(desc) > maxDesc {
-			desc = desc[:maxDesc-1] + "…"
+		descRunes := []rune(desc)
+		if len(descRunes) > maxDesc {
+			desc = string(descRunes[:maxDesc-1]) + "…"
 		}
 
 		if i == a.selected {

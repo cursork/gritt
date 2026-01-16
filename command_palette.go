@@ -86,15 +86,17 @@ func (c *CommandPalette) Render(w, h int) string {
 		name := cmd.Name
 		help := cmd.Help
 
-		// Truncate if needed
+		// Truncate if needed (rune-aware)
 		maxName := w / 3
-		if len(name) > maxName {
-			name = name[:maxName-1] + "…"
+		nameRunes := []rune(name)
+		if len(nameRunes) > maxName {
+			name = string(nameRunes[:maxName-1]) + "…"
 		}
 
 		line := name + " " + helpStyle.Render(help)
-		if len(line) > w {
-			line = line[:w]
+		lineRunes := []rune(line)
+		if len(lineRunes) > w {
+			line = string(lineRunes[:w])
 		}
 
 		if i == c.selected {

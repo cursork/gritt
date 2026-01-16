@@ -3,6 +3,9 @@
 ## Priority: Pane Interactivity
 - [ ] Mouse drag edges to resize (partially broken)
 - [ ] Multiple interactive panes: all N panes should be interactive, not just focused one
+- [ ] Singleton panes (stack, debug, etc.) should persist position/size after dismiss/recreate
+- [ ] Tab should cycle focus back to session (not just between panes)
+
 
 ## Future Enhancements
 - [ ] Protocol audit: evaluate all unsupported RIDE messages, prioritize by importance

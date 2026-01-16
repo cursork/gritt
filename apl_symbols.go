@@ -20,7 +20,7 @@ var backtickMap = map[rune]rune{
 	'e': '∊', // epsilon / membership
 	'E': '⍷', // epsilon underbar / find
 	'r': '⍴', // rho / shape
-	't': '∼', // tilde / not
+	't': '~', // tilde / not
 	'T': '⍨', // tilde diaeresis / commute
 	'y': '↑', // up arrow / take/mix
 	'u': '↓', // down arrow / drop/split
@@ -51,14 +51,13 @@ var backtickMap = map[rune]rune{
 	// Brackets and misc
 	'[': '←', // left arrow / assignment
 	']': '→', // right arrow / branch
-	'=': '×', // times
-	'-': '÷', // divide
-	'\\': '⍀', // slope bar / expand first
+	'=': '÷', // divide
+	'-': '×', // times
 	'/': '⌿', // slash bar / replicate first
-	'.': '⍎', // hydrant / execute
-	',': '⍕', // thorn / format
-	';': '⋄', // diamond / statement separator
-	'\'': '⌸', // quad equal / key
+	'.': '⍀', // slope bar / expand first
+	',': '⍝', // lamp / comment
+	'\'': '⍕', // thorn / format
+	';': '⍎', // hydrant / execute
 
 	// Numbers row
 	'1': '¨', // diaeresis / each
@@ -83,12 +82,12 @@ var backtickMap = map[rune]rune{
 	'`': '⋄', // diamond (backtick-backtick)
 
 	// Additional useful ones
-	'n': '⊥', // up tack / decode
-	'm': '⊤', // down tack / encode
-	'b': '⊣', // left tack
-	'B': '⊢', // right tack
-	'N': '⍲', // nand
-	'M': '⍱', // nor
+	'n': '⊤', // down tack / encode
+	'm': '|', // stile / magnitude/residue
+	'b': '⊥', // up tack / decode
+	'K': '⌸', // quad equal / key
+	'|': '⊣', // left tack
+	'\\': '⊢', // right tack
 }
 
 // APLSymbol holds information about an APL symbol for search

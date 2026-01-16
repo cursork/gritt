@@ -89,10 +89,11 @@ func (s *SymbolSearch) Render(w, h int) string {
 		}
 		desc := sym.Desc
 
-		// Truncate desc if needed
+		// Truncate desc if needed (rune-aware)
 		maxDesc := w - 8
-		if len(desc) > maxDesc {
-			desc = desc[:maxDesc-1] + "…"
+		descRunes := []rune(desc)
+		if len(descRunes) > maxDesc {
+			desc = string(descRunes[:maxDesc-1]) + "…"
 		}
 
 		if i == s.selected {
