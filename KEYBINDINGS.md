@@ -1,6 +1,6 @@
 # Key Bindings
 
-**NOTA BENE:** gritt **intentionally** breaks with APL tradition. The goal is to make all of this configurable _and_ to be able to offer keybindings familiar to long-time APL programmers. For now, the bindings are based purely on the whim of [cursork](https://github.com/cursork). He would be happy for a PR for alternative bindings, but also like his setup as below...
+**NOTA BENE:** gritt **intentionally** breaks with APL tradition. The goal is to make all of this configurable _and_ to be able to offer keybindings familiar to long-time APL programmers. For now, the bindings are based purely on the whim of [cursork](https://github.com/cursork). He would be happy for a PR for alternative bindings, but also likes his setup as below...
 
 Leader key: `Ctrl+]` (keeps all keys free for APL input)
 
