@@ -19,13 +19,20 @@
 - [x] CloseWindow handling
 - [x] Tracer window support (debugger:1, SetHighlightLine, WindowTypeChanged)
 
-## Phase 4: Tracer (in progress)
+## Phase 4: Tracer (mostly complete)
 - [x] Stack trace pane (C-] s toggle, click to switch frames)
 - [x] Single tracer pane (not multiple overlapping windows like JS RIDE)
 - [x] Escape pops stack frame
-- [ ] Step into/over/out commands
-- [ ] Breakpoints
+- [x] Step into/over/out commands (i, Enter/n, o keys)
+- [x] Continue, resume all (c, r keys)
+- [x] Trace backward/forward (p, f keys)
+- [x] Breakpoints (C-] b toggle, visual indicator, immediate effect)
+- [x] Edit mode in tracer (e to edit, Esc to return to tracing)
+- [x] Clear stuck state command (close-all-windows via command palette)
+- [x] Automatic window restoration (GetWindowLayout on connect)
 - [ ] Variable inspection
+- [ ] Tracer-specific status bar (show tracer keys when focused)
+- [ ] Configurable tracer keys (currently hardcoded)
 
 ## Phase 5: Dialogs
 - [ ] OptionsDialog (yes/no/cancel prompts)
@@ -71,11 +78,14 @@ RIDE handles multiline poorly. Research needed on:
 - Execute (→), AppendSessionOutput (←), SetPromptType (←)
 - OpenWindow, UpdateWindow, CloseWindow, SaveChanges, ReplySaveChanges (editors)
 - SetHighlightLine, WindowTypeChanged (tracer)
+- SetLineAttributes (→) - breakpoints
+- StepInto, RunCurrentLine, ContinueTrace, Continue, RestartThreads (→) - stepping
+- TraceBackward, TraceForward (→) - trace navigation
 
 **Not yet implemented:**
 - OptionsDialog, StringDialog, Reply* (dialogs)
 - HadError (error handling)
-- Step/trace control messages
+- GetAutoComplete, ReplyGetAutoComplete (autocomplete)
 
 ---
 
@@ -140,6 +150,24 @@ RIDE handles multiline poorly. Research needed on:
 - [x] CloseWindow timing fix (wait for ReplySaveChanges before closing)
 - [x] Protocol logging (-log flag for RIDE messages and TUI actions)
 - [x] Adaptive color detection (ANSI/ANSI256/TrueColor, exact #F2A74F when supported)
+
+### Phase 4b: Tracer Controls & Breakpoints
+- [x] Breakpoint toggle (C-] b) with visual indicator (●)
+- [x] SetLineAttributes message for immediate breakpoint effect
+- [x] Breakpoints saved with SaveChanges (Modified flag set)
+- [x] Tracer mode read-only (blocks text insertion when Debugger=true)
+- [x] Stepping: Enter/n=step over, i=into, o=out
+- [x] Continue: c=continue, r=resume all
+- [x] Navigation: p=backward, f=forward (skip)
+- [x] Edit mode: e=enter edit, Esc=save & return to tracer
+- [x] Title shows [tracer] vs [edit] mode
+
+### Phase 4c: Connection Resilience & Window Management
+- [x] GetWindowLayout on connect/reconnect (restores orphaned windows)
+- [x] CloseAllWindows command (close-all-windows via command palette)
+- [x] Command palette scrolling support
+- [x] Protocol exploration tool (cmd/explore/)
+- [x] 54 passing tests
 
 ### CLI & Scripting
 - [x] Non-interactive mode: -e for single expression, -stdin for piping

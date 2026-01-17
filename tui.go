@@ -187,6 +187,9 @@ func (m Model) reconnect() (tea.Model, tea.Cmd) {
 	m.msgs = m.startRecvLoop()
 	m.log("Reconnected to %s", m.addr)
 
+	// Request any open windows from Dyalog (restores orphaned editors)
+	m.send("GetWindowLayout", map[string]any{})
+
 	return m, waitForRide(m.msgs)
 }
 
@@ -211,6 +214,8 @@ func waitForRide(ch <-chan rideEvent) tea.Cmd {
 }
 
 func (m Model) Init() tea.Cmd {
+	// Request any open windows from Dyalog (restores orphaned editors on reconnect)
+	m.send("GetWindowLayout", map[string]any{})
 	return waitForRide(m.msgs)
 }
 
@@ -870,6 +875,76 @@ func (m *Model) sendSetLineAttributes(token int) {
 	})
 }
 
+// Tracer control methods
+
+func (m *Model) tracerStepInto() {
+	if m.tracerCurrent == 0 {
+		return
+	}
+	m.log("→ StepInto win=%d", m.tracerCurrent)
+	m.send("StepInto", map[string]any{"win": m.tracerCurrent})
+}
+
+func (m *Model) tracerStepOver() {
+	if m.tracerCurrent == 0 {
+		return
+	}
+	m.log("→ RunCurrentLine win=%d", m.tracerCurrent)
+	m.send("RunCurrentLine", map[string]any{"win": m.tracerCurrent})
+}
+
+func (m *Model) tracerStepOut() {
+	if m.tracerCurrent == 0 {
+		return
+	}
+	m.log("→ ContinueTrace win=%d", m.tracerCurrent)
+	m.send("ContinueTrace", map[string]any{"win": m.tracerCurrent})
+}
+
+func (m *Model) tracerContinue() {
+	if m.tracerCurrent == 0 {
+		return
+	}
+	m.log("→ Continue win=%d", m.tracerCurrent)
+	m.send("Continue", map[string]any{"win": m.tracerCurrent})
+}
+
+func (m *Model) tracerResumeAll() {
+	m.log("→ RestartThreads")
+	m.send("RestartThreads", map[string]any{})
+}
+
+func (m *Model) tracerBackward() {
+	if m.tracerCurrent == 0 {
+		return
+	}
+	m.log("→ TraceBackward win=%d", m.tracerCurrent)
+	m.send("TraceBackward", map[string]any{"win": m.tracerCurrent})
+}
+
+func (m *Model) tracerForward() {
+	if m.tracerCurrent == 0 {
+		return
+	}
+	m.log("→ TraceForward win=%d", m.tracerCurrent)
+	m.send("TraceForward", map[string]any{"win": m.tracerCurrent})
+}
+
+// closeAllWindows sends CloseAllWindows to Dyalog to close all editor/tracer windows
+// Useful for clearing stuck state after a crash or disconnect
+func (m *Model) closeAllWindows() {
+	m.log("→ CloseAllWindows")
+	m.send("CloseAllWindows", map[string]any{})
+	// Clear local state
+	m.editors = make(map[int]*EditorWindow)
+	m.tracerStack = nil
+	m.tracerCurrent = 0
+	// Remove panes
+	m.panes.Remove("editor")
+	m.panes.Remove("tracer")
+	m.panes.Remove("stack")
+}
+
 func (m *Model) closeEditor(token int) {
 	w, exists := m.editors[token]
 	if !exists {
@@ -951,6 +1026,17 @@ func (m *Model) showTracer(token int) {
 			func() { m.closeEditor(m.tracerCurrent) },
 		)
 
+		// Set tracer control callbacks
+		editorPane.SetTracerCallbacks(TracerCallbacks{
+			StepInto:  func() { m.tracerStepInto() },
+			StepOver:  func() { m.tracerStepOver() },
+			StepOut:   func() { m.tracerStepOut() },
+			Continue:  func() { m.tracerContinue() },
+			ResumeAll: func() { m.tracerResumeAll() },
+			Backward:  func() { m.tracerBackward() },
+			Forward:   func() { m.tracerForward() },
+		})
+
 		// Position: center of screen
 		paneW := min(m.width-4, 60)
 		paneH := min(m.height-6, 20)
@@ -1030,10 +1116,8 @@ func (m *Model) toggleBreakpoint() {
 	// Toggle the breakpoint
 	ep.window.ToggleStop(ep.window.CursorRow)
 
-	// If it's a tracer (debugger), send immediately
-	if ep.window.Debugger {
-		m.sendSetLineAttributes(ep.window.Token)
-	}
+	// Send immediately so breakpoint takes effect without requiring save
+	m.sendSetLineAttributes(ep.window.Token)
 }
 
 func (m *Model) dispatchCommand(action string) (tea.Model, tea.Cmd) {
@@ -1056,6 +1140,23 @@ func (m *Model) dispatchCommand(action string) (tea.Model, tea.Cmd) {
 		m.saveSession()
 	case "quit":
 		m.confirmQuit = true
+	// Tracer controls
+	case "step-into":
+		m.tracerStepInto()
+	case "step-over":
+		m.tracerStepOver()
+	case "step-out":
+		m.tracerStepOut()
+	case "continue":
+		m.tracerContinue()
+	case "resume-all":
+		m.tracerResumeAll()
+	case "trace-back":
+		m.tracerBackward()
+	case "trace-forward":
+		m.tracerForward()
+	case "close-all-windows":
+		m.closeAllWindows()
 	}
 	return *m, nil
 }
@@ -1136,10 +1237,18 @@ func (m *Model) openCommandPalette() {
 		{Name: "debug", Help: "Toggle debug pane"},
 		{Name: "stack", Help: "Toggle stack pane"},
 		{Name: "breakpoint", Help: "Toggle breakpoint on current line"},
+		{Name: "step-into", Help: "Tracer: step into (Enter)"},
+		{Name: "step-over", Help: "Tracer: step over (n)"},
+		{Name: "step-out", Help: "Tracer: step out (o)"},
+		{Name: "continue", Help: "Tracer: continue (c)"},
+		{Name: "resume-all", Help: "Tracer: resume all threads (r)"},
+		{Name: "trace-back", Help: "Tracer: move back (p)"},
+		{Name: "trace-forward", Help: "Tracer: move forward (f)"},
 		{Name: "keys", Help: "Show key bindings"},
 		{Name: "symbols", Help: "Search APL symbols"},
 		{Name: "aplcart", Help: "Search APLcart idioms"},
 		{Name: "reconnect", Help: "Reconnect to Dyalog"},
+		{Name: "close-all-windows", Help: "Close all editors/tracers (clear stuck state)"},
 		{Name: "save", Help: "Save session to file"},
 		{Name: "quit", Help: "Quit gritt"},
 	}

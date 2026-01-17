@@ -348,6 +348,16 @@ func TestTUI(t *testing.T) {
 		return runner.Contains("(") || runner.Contains("⍬")
 	})
 
+	// Filter for "interval"
+	runner.SendText("interval")
+	runner.Sleep(500 * time.Millisecond)
+	runner.Snapshot("APLcart filtered for interval")
+
+	runner.Test("APLcart filters results", func() bool {
+		// Should show interval-related entries
+		return runner.Contains("interval") || runner.Contains("Interval")
+	})
+
 	runner.SendKeys("Escape")
 	runner.Sleep(200 * time.Millisecond)
 
@@ -523,6 +533,64 @@ func TestTUI(t *testing.T) {
 	runner.Sleep(100 * time.Millisecond)
 	runner.SendKeys("b")
 	runner.Sleep(200 * time.Millisecond)
+
+	// Test: Tracer mode blocks text insertion
+	runner.Snapshot("Before typing in tracer")
+
+	// Try to type some text - should be blocked in tracer mode
+	runner.SendText("xyz")
+	runner.Sleep(200 * time.Millisecond)
+	runner.Snapshot("After typing xyz in tracer mode")
+
+	runner.Test("Tracer mode blocks text insertion", func() bool {
+		// Content should be unchanged - no "xyz" inserted
+		return !runner.Contains("xyz")
+	})
+
+	// Test: Edit mode toggle with 'e' key
+	runner.SendText("e")
+	runner.Sleep(200 * time.Millisecond)
+	runner.Snapshot("After pressing e - edit mode")
+
+	runner.Test("Edit mode shows [edit] in title", func() bool {
+		return runner.Contains("[edit]")
+	})
+
+	// Test: Can type in edit mode
+	runner.SendText("test123")
+	runner.Sleep(200 * time.Millisecond)
+	runner.Snapshot("After typing in edit mode")
+
+	runner.Test("Edit mode allows text insertion", func() bool {
+		return runner.Contains("test123")
+	})
+
+	// Test: Escape in edit mode returns to tracer (doesn't close)
+	runner.SendKeys("Escape")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("After Escape in edit mode")
+
+	runner.Test("Escape in edit mode returns to tracer", func() bool {
+		// Should still have a tracer pane open, now showing [tracer] not [edit]
+		return runner.Contains("[tracer]")
+	})
+
+	// Test: Second Escape closes tracer
+	runner.SendKeys("Escape")
+	runner.Sleep(500 * time.Millisecond)
+	runner.Snapshot("After second Escape - tracer closes")
+
+	// Note: This might pop a stack frame, re-open the tracer for remaining tests
+	// Let's re-trigger the error to get back into tracer
+	runner.SendText("X")
+	runner.SendKeys("Enter")
+	runner.Sleep(2 * time.Second)
+	runner.Snapshot("Re-entered tracer after X")
+
+	// Verify we're back in tracer
+	runner.Test("Re-entered tracer for remaining tests", func() bool {
+		return runner.Contains("[tracer]") || runner.Contains("tracer")
+	})
 
 	// Open stack pane
 	runner.SendKeys("C-]")

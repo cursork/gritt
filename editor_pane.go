@@ -13,11 +13,21 @@ type EditorPane struct {
 	window *EditorWindow
 
 	// View state
-	scrollY int // First visible line
+	scrollY  int  // First visible line
+	editMode bool // True when tracer is in edit mode (Shift+Enter to enable)
 
 	// Callbacks
 	onSave  func()
 	onClose func()
+
+	// Tracer control callbacks (only used when window.Debugger is true)
+	onStepInto   func()
+	onStepOver   func()
+	onStepOut    func()
+	onContinue   func()
+	onResumeAll  func()
+	onBackward   func()
+	onForward    func()
 
 	// Styles
 	cursorStyle     lipgloss.Style
@@ -46,6 +56,7 @@ func (e *EditorPane) SetWindow(w *EditorWindow) {
 	e.window = w
 	e.scrollY = 0
 	e.highlightLine = -1
+	e.editMode = false
 	// Position cursor at highlighted line if set
 	if w.CurrentRow >= 0 && w.CurrentRow < len(w.Text) {
 		e.window.CursorRow = w.CurrentRow
@@ -60,9 +71,18 @@ func (e *EditorPane) Title() string {
 	}
 	suffix := ""
 	if e.window.Debugger {
-		suffix = " [tracer]"
+		if e.editMode {
+			suffix = " [edit]"
+		} else {
+			suffix = " [tracer]"
+		}
 	}
 	return prefix + e.window.Name + suffix
+}
+
+// InTracerMode returns true if this is a tracer in trace mode (not edit mode)
+func (e *EditorPane) InTracerMode() bool {
+	return e.window.Debugger && !e.editMode
 }
 
 func (e *EditorPane) Render(w, h int) string {
@@ -168,7 +188,77 @@ func (e *EditorPane) renderLineWithCursor(runes []rune, col, w int) string {
 }
 
 func (e *EditorPane) HandleKey(msg tea.KeyMsg) bool {
-	// Read-only mode (tracer) - only allow navigation, breakpoints, and close
+	// Tracer mode - navigation, tracer controls, and close
+	// Tracer windows (Debugger=true) are read-only unless edit mode enabled
+	if e.window.Debugger && !e.editMode {
+		switch msg.Type {
+		case tea.KeyUp:
+			e.cursorUp()
+		case tea.KeyDown:
+			e.cursorDown()
+		case tea.KeyLeft:
+			e.cursorLeft()
+		case tea.KeyRight:
+			e.cursorRight()
+		case tea.KeyHome:
+			e.window.CursorCol = 0
+		case tea.KeyEnd:
+			e.window.CursorCol = len([]rune(e.currentLine()))
+		case tea.KeyEnter:
+			// Enter = Step over (run current line)
+			if e.onStepOver != nil {
+				e.onStepOver()
+			}
+		case tea.KeyEscape:
+			if e.onClose != nil {
+				e.onClose()
+			}
+		case tea.KeyRunes:
+			if len(msg.Runes) == 1 {
+				switch msg.Runes[0] {
+				case 'i': // Step into
+					if e.onStepInto != nil {
+						e.onStepInto()
+					}
+				case 'n': // Next (step over)
+					if e.onStepOver != nil {
+						e.onStepOver()
+					}
+				case 'o': // Step out
+					if e.onStepOut != nil {
+						e.onStepOut()
+					}
+				case 'c': // Continue
+					if e.onContinue != nil {
+						e.onContinue()
+					}
+				case 'r': // Resume all
+					if e.onResumeAll != nil {
+						e.onResumeAll()
+					}
+				case 'p': // Previous (backward)
+					if e.onBackward != nil {
+						e.onBackward()
+					}
+				case 'f': // Forward (skip)
+					if e.onForward != nil {
+						e.onForward()
+					}
+				case 'e': // Edit mode
+					e.editMode = true
+				default:
+					return false
+				}
+			} else {
+				return false
+			}
+		default:
+			return false
+		}
+		return true
+	}
+
+	// Read-only mode (non-tracer read-only windows)
 	if e.window.ReadOnly {
 		switch msg.Type {
 		case tea.KeyUp:
@@ -218,7 +308,13 @@ func (e *EditorPane) HandleKey(msg tea.KeyMsg) bool {
 			e.onSave()
 		}
 	case tea.KeyEscape:
-		if e.onClose != nil {
+		// If in edit mode of a tracer, exit edit mode (return to tracer)
+		if e.editMode && e.window.Debugger {
+			if e.onSave != nil {
+				e.onSave()
+			}
+			e.editMode = false
+		} else if e.onClose != nil {
 			e.onClose()
 		}
 	case tea.KeyRunes:
@@ -421,4 +517,26 @@ func (e *EditorPane) SetHighlightLine(line int) {
 		e.window.CursorRow = line
 		e.window.CursorCol = 0
 	}
+}
+
+// TracerCallbacks holds all tracer control callbacks
+type TracerCallbacks struct {
+	StepInto  func()
+	StepOver  func()
+	StepOut   func()
+	Continue  func()
+	ResumeAll func()
+	Backward  func()
+	Forward   func()
+}
+
+// SetTracerCallbacks sets all tracer control callbacks at once
+func (e *EditorPane) SetTracerCallbacks(cb TracerCallbacks) {
+	e.onStepInto = cb.StepInto
+	e.onStepOver = cb.StepOver
+	e.onStepOut = cb.StepOut
+	e.onContinue = cb.Continue
+	e.onResumeAll = cb.ResumeAll
+	e.onBackward = cb.Backward
+	e.onForward = cb.Forward
 }

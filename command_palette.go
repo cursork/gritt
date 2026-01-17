@@ -19,6 +19,7 @@ type CommandPalette struct {
 	filtered       []Command
 	query          string
 	selected       int
+	scrollOffset   int    // First visible item index
 	SelectedAction string // Set when Enter pressed
 }
 
@@ -34,25 +35,25 @@ func NewCommandPalette(commands []Command) *CommandPalette {
 func (c *CommandPalette) filter() {
 	if c.query == "" {
 		c.filtered = c.commands
-		return
-	}
-
-	q := strings.ToLower(c.query)
-	c.filtered = nil
-	for _, cmd := range c.commands {
-		if strings.Contains(strings.ToLower(cmd.Name), q) ||
-			strings.Contains(strings.ToLower(cmd.Help), q) {
-			c.filtered = append(c.filtered, cmd)
+	} else {
+		q := strings.ToLower(c.query)
+		c.filtered = nil
+		for _, cmd := range c.commands {
+			if strings.Contains(strings.ToLower(cmd.Name), q) ||
+				strings.Contains(strings.ToLower(cmd.Help), q) {
+				c.filtered = append(c.filtered, cmd)
+			}
 		}
 	}
 
-	// Reset selection if out of bounds
+	// Reset selection and scroll if out of bounds
 	if c.selected >= len(c.filtered) {
 		c.selected = len(c.filtered) - 1
 	}
 	if c.selected < 0 {
 		c.selected = 0
 	}
+	c.scrollOffset = 0
 }
 
 func (c *CommandPalette) Title() string {
@@ -78,34 +79,59 @@ func (c *CommandPalette) Render(w, h int) string {
 	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 
 	listH := h - 2 // Account for query line and separator
-	for i, cmd := range c.filtered {
-		if i >= listH {
-			break
-		}
+	if listH < 1 {
+		listH = 1
+	}
 
+	// Adjust scroll to keep selection visible
+	c.AdjustScroll(listH)
+
+	// Render visible items based on scroll offset
+	visibleCount := 0
+	for i := c.scrollOffset; i < len(c.filtered) && visibleCount < listH; i++ {
+		cmd := c.filtered[i]
 		name := cmd.Name
 		help := cmd.Help
 
-		// Truncate if needed (rune-aware)
+		// Truncate name if needed (rune-aware)
 		maxName := w / 3
+		if maxName < 10 {
+			maxName = 10
+		}
 		nameRunes := []rune(name)
 		if len(nameRunes) > maxName {
 			name = string(nameRunes[:maxName-1]) + "…"
 		}
 
-		line := name + " " + helpStyle.Render(help)
-		lineRunes := []rune(line)
-		if len(lineRunes) > w {
-			line = string(lineRunes[:w])
-		}
-
+		var line string
 		if i == c.selected {
 			// Render selected line with highlight
 			line = selectedStyle.Render(padRight(name, maxName)) + " " + helpStyle.Render(help)
+		} else {
+			line = padRight(name, maxName) + " " + helpStyle.Render(help)
+		}
+
+		// Truncate whole line to width
+		if lipgloss.Width(line) > w {
+			// Simple truncation - could be improved for ANSI awareness
+			lineRunes := []rune(line)
+			if len(lineRunes) > w {
+				line = string(lineRunes[:w])
+			}
 		}
 
 		sb.WriteString(line)
-		if i < len(c.filtered)-1 && i < listH-1 {
+		visibleCount++
+		if visibleCount < listH {
+			sb.WriteString("\n")
+		}
+	}
+
+	// Pad remaining lines if needed
+	for visibleCount < listH {
+		sb.WriteString(strings.Repeat(" ", w))
+		visibleCount++
+		if visibleCount < listH {
 			sb.WriteString("\n")
 		}
 	}
@@ -125,12 +151,17 @@ func (c *CommandPalette) HandleKey(msg tea.KeyMsg) bool {
 	case tea.KeyUp:
 		if c.selected > 0 {
 			c.selected--
+			// Scroll up if needed
+			if c.selected < c.scrollOffset {
+				c.scrollOffset = c.selected
+			}
 		}
 		return true
 
 	case tea.KeyDown:
 		if c.selected < len(c.filtered)-1 {
 			c.selected++
+			// Note: scrollOffset adjustment happens in Render based on visible height
 		}
 		return true
 
@@ -147,6 +178,10 @@ func (c *CommandPalette) HandleKey(msg tea.KeyMsg) bool {
 		}
 		return true
 
+	case tea.KeyEscape:
+		// Let parent handle escape
+		return false
+
 	default:
 		if len(msg.Runes) > 0 {
 			c.query += string(msg.Runes)
@@ -158,9 +193,24 @@ func (c *CommandPalette) HandleKey(msg tea.KeyMsg) bool {
 	return false
 }
 
+// AdjustScroll ensures selected item is visible given the list height
+func (c *CommandPalette) AdjustScroll(listH int) {
+	if listH < 1 {
+		listH = 1
+	}
+	// Scroll down if selected is below visible area
+	if c.selected >= c.scrollOffset+listH {
+		c.scrollOffset = c.selected - listH + 1
+	}
+	// Scroll up if selected is above visible area
+	if c.selected < c.scrollOffset {
+		c.scrollOffset = c.selected
+	}
+}
+
 func (c *CommandPalette) HandleMouse(x, y int, msg tea.MouseMsg) bool {
-	if msg.Type == tea.MouseLeft && y >= 2 {
-		idx := y - 2 // Account for query and separator
+	if msg.Button == tea.MouseButtonLeft && y >= 2 {
+		idx := c.scrollOffset + y - 2 // Account for scroll offset, query and separator
 		if idx >= 0 && idx < len(c.filtered) {
 			c.selected = idx
 			c.SelectedAction = c.filtered[c.selected].Name
