@@ -1,5 +1,7 @@
 # gritt
 
+![Iris](logo.png)
+
 A terminal IDE for Dyalog APL.
 
 Pronounced like "grit" (G from Go + German "Ritt" = ride).

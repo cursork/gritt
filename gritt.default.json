@@ -4,6 +4,7 @@
     "execute": ["enter"],
     "toggle_debug": ["d"],
     "toggle_stack": ["s"],
+    "toggle_breakpoint": ["b"],
     "reconnect": ["r"],
     "command_palette": [":"],
     "pane_move_mode": ["m"],

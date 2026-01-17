@@ -464,6 +464,66 @@ func TestTUI(t *testing.T) {
 		return runner.Contains("[tracer]") || runner.Contains("DOMAIN ERROR") || runner.Contains("tracer")
 	})
 
+	// Test breakpoint toggling
+	// Focus tracer if not focused
+	runner.SendKeys("Tab")
+	runner.Sleep(200 * time.Millisecond)
+
+	// Move to a line and toggle breakpoint
+	runner.SendKeys("Down")
+	runner.Sleep(100 * time.Millisecond)
+	runner.Snapshot("Before breakpoint toggle")
+
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys("b")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("After breakpoint toggle")
+
+	runner.Test("Breakpoint indicator appears", func() bool {
+		return runner.Contains("●")
+	})
+
+	// Toggle off
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys("b")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("After breakpoint toggle off")
+
+	runner.Test("Breakpoint indicator removed", func() bool {
+		// Check that there's no red dot (or fewer than before)
+		// Since we only had one, it should be gone
+		return !runner.Contains("●")
+	})
+
+	// Test breakpoint via command palette
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys(":")
+	runner.Sleep(300 * time.Millisecond)
+	runner.SendText("break")
+	runner.Sleep(200 * time.Millisecond)
+	runner.Snapshot("Command palette filtered to breakpoint")
+
+	runner.Test("Command palette shows breakpoint command", func() bool {
+		return runner.Contains("breakpoint")
+	})
+
+	runner.SendKeys("Enter")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("After breakpoint via command palette")
+
+	runner.Test("Breakpoint set via command palette", func() bool {
+		return runner.Contains("●")
+	})
+
+	// Clear the breakpoint for clean state
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys("b")
+	runner.Sleep(200 * time.Millisecond)
+
 	// Open stack pane
 	runner.SendKeys("C-]")
 	runner.Sleep(100 * time.Millisecond)

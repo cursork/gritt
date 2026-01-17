@@ -19,17 +19,18 @@ type Config struct {
 
 // KeyMapConfig defines key bindings in config file format
 type KeyMapConfig struct {
-	Leader      []string `json:"leader"`
-	Execute     []string `json:"execute"`
-	ToggleDebug []string `json:"toggle_debug"`
-	ToggleStack []string `json:"toggle_stack"`
-	Reconnect      []string `json:"reconnect"`
-	CommandPalette []string `json:"command_palette"`
-	PaneMoveMode   []string `json:"pane_move_mode"`
-	CyclePane      []string `json:"cycle_pane"`
-	ClosePane   []string `json:"close_pane"`
-	Quit        []string `json:"quit"`
-	ShowKeys    []string `json:"show_keys"`
+	Leader           []string `json:"leader"`
+	Execute          []string `json:"execute"`
+	ToggleDebug      []string `json:"toggle_debug"`
+	ToggleStack      []string `json:"toggle_stack"`
+	ToggleBreakpoint []string `json:"toggle_breakpoint"`
+	Reconnect        []string `json:"reconnect"`
+	CommandPalette   []string `json:"command_palette"`
+	PaneMoveMode     []string `json:"pane_move_mode"`
+	CyclePane        []string `json:"cycle_pane"`
+	ClosePane        []string `json:"close_pane"`
+	Quit             []string `json:"quit"`
+	ShowKeys         []string `json:"show_keys"`
 
 	Up    []string `json:"up"`
 	Down  []string `json:"down"`
@@ -83,17 +84,18 @@ func loadConfigFile(path string) (Config, error) {
 // ToKeyMap converts config to KeyMap
 func (c *Config) ToKeyMap() KeyMap {
 	return KeyMap{
-		Leader:      c.binding(c.Keys.Leader, "", "leader"),
-		Execute:     c.binding(c.Keys.Execute, "", "execute"),
-		ToggleDebug: c.bindingWithLeader(c.Keys.ToggleDebug, "debug"),
-		ToggleStack: c.bindingWithLeader(c.Keys.ToggleStack, "stack"),
-		Reconnect:      c.bindingWithLeader(c.Keys.Reconnect, "reconnect"),
-		CommandPalette: c.bindingWithLeader(c.Keys.CommandPalette, "commands"),
-		PaneMoveMode:   c.bindingWithLeader(c.Keys.PaneMoveMode, "move pane"),
-		CyclePane:      c.binding(c.Keys.CyclePane, "", "cycle pane"),
-		ClosePane:   c.binding(c.Keys.ClosePane, "", "close pane"),
-		Quit:        c.bindingWithLeader(c.Keys.Quit, "quit"),
-		ShowKeys:    c.bindingWithLeader(c.Keys.ShowKeys, "show keys"),
+		Leader:           c.binding(c.Keys.Leader, "", "leader"),
+		Execute:          c.binding(c.Keys.Execute, "", "execute"),
+		ToggleDebug:      c.bindingWithLeader(c.Keys.ToggleDebug, "debug"),
+		ToggleStack:      c.bindingWithLeader(c.Keys.ToggleStack, "stack"),
+		ToggleBreakpoint: c.bindingWithLeader(c.Keys.ToggleBreakpoint, "breakpoint"),
+		Reconnect:        c.bindingWithLeader(c.Keys.Reconnect, "reconnect"),
+		CommandPalette:   c.bindingWithLeader(c.Keys.CommandPalette, "commands"),
+		PaneMoveMode:     c.bindingWithLeader(c.Keys.PaneMoveMode, "move pane"),
+		CyclePane:        c.binding(c.Keys.CyclePane, "", "cycle pane"),
+		ClosePane:        c.binding(c.Keys.ClosePane, "", "close pane"),
+		Quit:             c.bindingWithLeader(c.Keys.Quit, "quit"),
+		ShowKeys:         c.bindingWithLeader(c.Keys.ShowKeys, "show keys"),
 		Up:          c.binding(c.Keys.Up, "", "up"),
 		Down:        c.binding(c.Keys.Down, "", "down"),
 		Left:        c.binding(c.Keys.Left, "", "left"),

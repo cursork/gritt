@@ -114,3 +114,27 @@ func (w *EditorWindow) Update(args map[string]any) {
 		}
 	}
 }
+
+// HasStop returns true if the given line has a breakpoint
+func (w *EditorWindow) HasStop(line int) bool {
+	for _, s := range w.Stop {
+		if s == line {
+			return true
+		}
+	}
+	return false
+}
+
+// ToggleStop adds or removes a breakpoint on the given line
+func (w *EditorWindow) ToggleStop(line int) {
+	// Check if already present
+	for i, s := range w.Stop {
+		if s == line {
+			// Remove it
+			w.Stop = append(w.Stop[:i], w.Stop[i+1:]...)
+			return
+		}
+	}
+	// Not present - add it
+	w.Stop = append(w.Stop, line)
+}

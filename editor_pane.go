@@ -20,9 +20,10 @@ type EditorPane struct {
 	onClose func()
 
 	// Styles
-	cursorStyle   lipgloss.Style
-	lineNumStyle  lipgloss.Style
-	highlightLine int // -1 = none, otherwise 0-based line for tracer highlight
+	cursorStyle     lipgloss.Style
+	lineNumStyle    lipgloss.Style
+	breakpointStyle lipgloss.Style
+	highlightLine   int // -1 = none, otherwise 0-based line for tracer highlight
 }
 
 // NewEditorPane creates an editor pane for the given window
@@ -34,8 +35,9 @@ func NewEditorPane(w *EditorWindow, onSave, onClose func()) *EditorPane {
 		cursorStyle: lipgloss.NewStyle().
 			Background(lipgloss.Color("255")).
 			Foreground(lipgloss.Color("0")),
-		lineNumStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("243")),
-		highlightLine: -1,
+		lineNumStyle:    lipgloss.NewStyle().Foreground(lipgloss.Color("243")),
+		breakpointStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("9")), // Red
+		highlightLine:   -1,
 	}
 }
 
@@ -89,6 +91,12 @@ func (e *EditorPane) Render(w, h int) string {
 			continue
 		}
 
+		// Breakpoint indicator
+		bp := " "
+		if e.window.HasStop(lineIdx) {
+			bp = e.breakpointStyle.Render("●")
+		}
+
 		// Line number
 		lineNum := e.lineNumStyle.Render(fmt.Sprintf("[%*d]", numWidth-2, lineIdx))
 
@@ -96,8 +104,8 @@ func (e *EditorPane) Render(w, h int) string {
 		text := e.window.Text[lineIdx]
 		textRunes := []rune(text)
 
-		// Content width after line number and space
-		contentW := w - numWidth - 1
+		// Content width after breakpoint, line number and spaces
+		contentW := w - numWidth - 3 // 1 for bp, 1 space after bp, 1 space after linenum
 		if contentW < 1 {
 			contentW = 1
 		}
@@ -110,7 +118,7 @@ func (e *EditorPane) Render(w, h int) string {
 			lineContent = e.renderLine(textRunes, contentW)
 		}
 
-		lines = append(lines, lineNum+" "+lineContent)
+		lines = append(lines, bp+" "+lineNum+" "+lineContent)
 	}
 
 	return strings.Join(lines, "\n")
@@ -160,7 +168,7 @@ func (e *EditorPane) renderLineWithCursor(runes []rune, col, w int) string {
 }
 
 func (e *EditorPane) HandleKey(msg tea.KeyMsg) bool {
-	// Read-only mode (tracer) - only allow navigation and close
+	// Read-only mode (tracer) - only allow navigation, breakpoints, and close
 	if e.window.ReadOnly {
 		switch msg.Type {
 		case tea.KeyUp:

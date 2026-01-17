@@ -135,6 +135,9 @@ echo "1+1" | ./gritt -stdin
 
 # Ephemeral Dyalog instance (starts/stops automatically)
 ./apl "⍳5"
+
+# Protocol logging (for debugging)
+./gritt -log debug.log
 ```
 
 ## Debugging

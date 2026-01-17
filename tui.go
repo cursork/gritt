@@ -354,6 +354,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.ToggleStack):
 			m.toggleStackPane()
 			return m, nil
+		case key.Matches(msg, m.keys.ToggleBreakpoint):
+			m.toggleBreakpoint()
+			return m, nil
 		case key.Matches(msg, m.keys.Reconnect):
 			return m.reconnect()
 		case key.Matches(msg, m.keys.CommandPalette):
@@ -427,6 +430,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			action := cp.SelectedAction
 			cp.SelectedAction = ""
 			m.panes.Remove("commands")
+			// For breakpoint action, focus the tracer/editor pane first
+			if action == "breakpoint" {
+				if m.panes.Get("tracer") != nil {
+					m.panes.Focus("tracer")
+				}
+			}
 			return (&m).dispatchCommand(action)
 		}
 
@@ -826,6 +835,41 @@ func (m *Model) saveEditor(token int) {
 	})
 }
 
+// sendSetLineAttributes sends breakpoint state for tracer windows (immediate update)
+func (m *Model) sendSetLineAttributes(token int) {
+	w, exists := m.editors[token]
+	if !exists {
+		return
+	}
+
+	// Build stop array (breakpoints)
+	stop := make([]any, len(w.Stop))
+	for i, s := range w.Stop {
+		stop[i] = s
+	}
+
+	// Build monitor array
+	monitor := make([]any, len(w.Monitor))
+	for i, s := range w.Monitor {
+		monitor[i] = s
+	}
+
+	// Build trace array
+	trace := make([]any, len(w.Trace))
+	for i, s := range w.Trace {
+		trace[i] = s
+	}
+
+	m.log("→ SetLineAttributes win=%d stop=%v", token, w.Stop)
+
+	m.send("SetLineAttributes", map[string]any{
+		"win":     token,
+		"stop":    stop,
+		"monitor": monitor,
+		"trace":   trace,
+	})
+}
+
 func (m *Model) closeEditor(token int) {
 	w, exists := m.editors[token]
 	if !exists {
@@ -971,12 +1015,35 @@ func (m *Model) toggleStackPane() {
 	m.panes.Focus("stack")
 }
 
+// toggleBreakpoint toggles a breakpoint on the current line in the focused editor/tracer
+func (m *Model) toggleBreakpoint() {
+	fp := m.panes.FocusedPane()
+	if fp == nil {
+		return
+	}
+
+	ep, ok := fp.Content.(*EditorPane)
+	if !ok {
+		return
+	}
+
+	// Toggle the breakpoint
+	ep.window.ToggleStop(ep.window.CursorRow)
+
+	// If it's a tracer (debugger), send immediately
+	if ep.window.Debugger {
+		m.sendSetLineAttributes(ep.window.Token)
+	}
+}
+
 func (m *Model) dispatchCommand(action string) (tea.Model, tea.Cmd) {
 	switch action {
 	case "debug":
 		m.toggleDebugPane()
 	case "stack":
 		m.toggleStackPane()
+	case "breakpoint":
+		m.toggleBreakpoint()
 	case "keys":
 		m.toggleKeysPane()
 	case "symbols":
@@ -1068,6 +1135,7 @@ func (m *Model) openCommandPalette() {
 	commands := []Command{
 		{Name: "debug", Help: "Toggle debug pane"},
 		{Name: "stack", Help: "Toggle stack pane"},
+		{Name: "breakpoint", Help: "Toggle breakpoint on current line"},
 		{Name: "keys", Help: "Show key bindings"},
 		{Name: "symbols", Help: "Search APL symbols"},
 		{Name: "aplcart", Help: "Search APLcart idioms"},
