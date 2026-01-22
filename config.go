@@ -45,6 +45,7 @@ type KeyMapConfig struct {
 	ClosePane        []string `json:"close_pane"`
 	Quit             []string `json:"quit"`
 	ShowKeys         []string `json:"show_keys"`
+	Autocomplete     []string `json:"autocomplete"`
 
 	Up    []string `json:"up"`
 	Down  []string `json:"down"`
@@ -107,10 +108,11 @@ func (c *Config) ToKeyMap() KeyMap {
 		Reconnect:        c.bindingWithLeader(c.Keys.Reconnect, "reconnect"),
 		CommandPalette:   c.bindingWithLeader(c.Keys.CommandPalette, "commands"),
 		PaneMoveMode:     c.bindingWithLeader(c.Keys.PaneMoveMode, "move pane"),
-		CyclePane:        c.binding(c.Keys.CyclePane, "", "cycle pane"),
+		CyclePane:        c.bindingWithLeader(c.Keys.CyclePane, "cycle pane"),
 		ClosePane:        c.binding(c.Keys.ClosePane, "", "close pane"),
 		Quit:             c.bindingWithLeader(c.Keys.Quit, "quit"),
 		ShowKeys:         c.bindingWithLeader(c.Keys.ShowKeys, "show keys"),
+		Autocomplete:     c.binding(c.Keys.Autocomplete, "", "autocomplete"),
 		Up:          c.binding(c.Keys.Up, "", "up"),
 		Down:        c.binding(c.Keys.Down, "", "down"),
 		Left:        c.binding(c.Keys.Left, "", "left"),

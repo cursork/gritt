@@ -570,6 +570,7 @@ func (e *EditorPane) SetTracerCallbacks(cb TracerCallbacks) {
 	e.onForward = cb.Forward
 }
 
+
 // matchKey checks if a rune matches a single-character config key
 func (e *EditorPane) matchKey(r rune, configKey string) bool {
 	if configKey == "" {

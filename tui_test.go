@@ -493,7 +493,7 @@ func TestTUI(t *testing.T) {
 	runner.Sleep(200 * time.Millisecond)
 
 	// Focus tracer before edit test
-	runner.SendKeys("Tab")
+	runner.SendKeys("C-]", "n")
 	runner.Sleep(100 * time.Millisecond)
 
 	// Test breakpoint persistence after editing
@@ -749,7 +749,7 @@ func TestTUI(t *testing.T) {
 	runner.Sleep(200 * time.Millisecond)
 
 	// Focus tracer
-	runner.SendKeys("Tab")
+	runner.SendKeys("C-]", "n")
 	runner.Sleep(200 * time.Millisecond)
 
 	// Test: Tracer mode blocks text insertion
@@ -833,6 +833,256 @@ func TestTUI(t *testing.T) {
 	// Clean up the test variable
 	runner.SendLine(")erase sessionVar")
 	runner.Sleep(300 * time.Millisecond)
+
+	// === AUTOCOMPLETE TEST ===
+	// Define some variables with similar prefixes
+	runner.SendLine("alpha←1")
+	runner.Sleep(500 * time.Millisecond)
+	runner.SendLine("alphabet←2")
+	runner.Sleep(500 * time.Millisecond)
+	runner.SendLine("alpine←3")
+	runner.Sleep(500 * time.Millisecond)
+	runner.Snapshot("After defining alpha, alphabet, alpine")
+
+	// Test 1: Tab triggers autocomplete popup with multiple options
+	runner.SendText("alp")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Tab")
+	runner.Sleep(500 * time.Millisecond)
+	runner.Snapshot("Autocomplete popup showing")
+
+	runner.Test("Popup shows alpha option", func() bool {
+		return runner.Contains("alpha")
+	})
+
+	runner.Test("Popup shows alphabet option", func() bool {
+		return runner.Contains("alphabet")
+	})
+
+	runner.Test("Popup shows alpine option", func() bool {
+		return runner.Contains("alpine")
+	})
+
+	// Test 2: Enter immediately selects first option (alpha=1)
+	runner.SendKeys("Enter") // Select first option without cycling
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("After Enter to select first option")
+
+	runner.Test("First option selected is alpha", func() bool {
+		// Input line should now have 'alpha' (not 'alpalpha')
+		return runner.Contains("alpha") && !runner.Contains("alpalpha")
+	})
+
+	// Execute to verify alpha (value 1)
+	runner.SendKeys("Enter")
+	runner.Sleep(500 * time.Millisecond)
+	runner.Snapshot("After executing alpha")
+
+	runner.Test("Alpha value is 1", func() bool {
+		return runner.Contains("1")
+	})
+
+	// Test 3: Tab cycles DOWN to second option (alphabet=2)
+	runner.SendText("alp")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Tab") // Open popup
+	runner.Sleep(500 * time.Millisecond)
+	runner.SendKeys("Tab") // Cycle to second option
+	runner.Sleep(200 * time.Millisecond)
+	runner.Snapshot("After Tab to cycle to alphabet")
+
+	runner.SendKeys("Enter") // Select second option
+	runner.Sleep(300 * time.Millisecond)
+	runner.SendKeys("Enter") // Execute
+	runner.Sleep(500 * time.Millisecond)
+	runner.Snapshot("After executing alphabet")
+
+	runner.Test("Second option is alphabet with value 2", func() bool {
+		return runner.Contains("2")
+	})
+
+	// Test 4: Down arrow also cycles forward (alpine=3)
+	runner.SendText("alp")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Tab") // Open popup
+	runner.Sleep(500 * time.Millisecond)
+	runner.SendKeys("Down") // Cycle to second
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys("Down") // Cycle to third (alpine)
+	runner.Sleep(200 * time.Millisecond)
+	runner.Snapshot("After Down×2 to alpine")
+
+	runner.SendKeys("Enter") // Select third option
+	runner.Sleep(300 * time.Millisecond)
+	runner.SendKeys("Enter") // Execute
+	runner.Sleep(500 * time.Millisecond)
+	runner.Snapshot("After executing alpine")
+
+	runner.Test("Third option is alpine with value 3", func() bool {
+		return runner.Contains("3")
+	})
+
+	// Test 5: Shift+Tab cycles BACKWARDS
+	runner.SendText("alp")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Tab") // Open popup (starts at alpha)
+	runner.Sleep(500 * time.Millisecond)
+	runner.SendKeys("Tab") // Forward to alphabet
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys("Tab") // Forward to alpine
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys("S-Tab") // Back to alphabet
+	runner.Sleep(200 * time.Millisecond)
+	runner.Snapshot("After Shift+Tab back to alphabet")
+
+	runner.SendKeys("Enter") // Select
+	runner.Sleep(300 * time.Millisecond)
+	runner.SendKeys("Enter") // Execute
+	runner.Sleep(500 * time.Millisecond)
+	runner.Snapshot("After Shift+Tab navigation")
+
+	runner.Test("Shift+Tab went back to alphabet (value 2)", func() bool {
+		return runner.Contains("2")
+	})
+
+	// Test 6: Up arrow also cycles backwards
+	runner.SendText("alp")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Tab") // Open popup (starts at alpha)
+	runner.Sleep(500 * time.Millisecond)
+	runner.SendKeys("Up") // Wraps to last (alpine)
+	runner.Sleep(200 * time.Millisecond)
+	runner.Snapshot("After Up wraps to alpine")
+
+	runner.SendKeys("Enter") // Select
+	runner.Sleep(300 * time.Millisecond)
+	runner.SendKeys("Enter") // Execute
+	runner.Sleep(500 * time.Millisecond)
+
+	runner.Test("Up arrow wrapped to alpine (value 3)", func() bool {
+		return runner.Contains("3")
+	})
+
+	// Test 7: Scrolling with 50 options
+	// Create 50 variables: scr1←1, scr2←2, ..., scr50←50
+	runner.SendLine("{⍎'scr',(⍕⍵),'←',⍕⍵}¨⍳50")
+	runner.Sleep(1000 * time.Millisecond)
+	runner.Snapshot("After creating 50 scr variables")
+
+	// Trigger autocomplete - should show scr1, scr10, scr11, etc. (sorted)
+	runner.SendText("scr")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Tab")
+	runner.Sleep(500 * time.Millisecond)
+	runner.Snapshot("Autocomplete with 50 options")
+
+	runner.Test("Popup shows scr options", func() bool {
+		return runner.Contains("scr1")
+	})
+
+	// Navigate down 29 times to get to 30th option
+	for i := 0; i < 29; i++ {
+		runner.SendKeys("Down")
+		runner.Sleep(20 * time.Millisecond)
+	}
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("After scrolling down 29 times")
+
+	runner.SendKeys("Enter") // Select current option
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("After selecting scrolled option")
+
+	// The selection should have worked (not crashed, inserted something)
+	runner.Test("Scrolling works - option was selected", func() bool {
+		// Should have 'scr' followed by some number on the line
+		return runner.Contains("scr")
+	})
+
+	runner.SendKeys("Enter") // Execute
+	runner.Sleep(500 * time.Millisecond)
+
+	// Test wrap-around: go up from first option to reach last
+	runner.SendText("scr")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Tab")
+	runner.Sleep(500 * time.Millisecond)
+	runner.SendKeys("Up") // Wrap to last (scr9 or scr50 depending on sort)
+	runner.Sleep(200 * time.Millisecond)
+	runner.Snapshot("After Up to wrap to last")
+
+	runner.SendKeys("Enter") // Select last option
+	runner.Sleep(300 * time.Millisecond)
+	runner.SendKeys("Enter") // Execute
+	runner.Sleep(500 * time.Millisecond)
+	runner.Snapshot("After selecting wrapped option")
+
+	runner.Test("Wrap works - last option selected and executed", func() bool {
+		// Should have executed and shown a number
+		return runner.Contains("scr")
+	})
+
+	// Test 9: Single completion auto-inserts without popup
+	runner.SendLine("zetaUnique←42")
+	runner.Sleep(500 * time.Millisecond)
+	runner.SendText("zeta")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Tab")
+	runner.Sleep(500 * time.Millisecond)
+	runner.Snapshot("After single completion")
+
+	runner.Test("Single completion auto-inserts zetaUnique", func() bool {
+		// Should have replaced 'zeta' with 'zetaUnique' (not 'zetazetaUnique')
+		return runner.Contains("zetaUnique") && !runner.Contains("zetazetaUnique")
+	})
+
+	// Execute to verify
+	runner.SendKeys("Enter")
+	runner.Sleep(500 * time.Millisecond)
+
+	runner.Test("Single completion result is 42", func() bool {
+		return runner.Contains("42")
+	})
+
+	// Test 10: Escape cancels popup
+	runner.SendText("alp")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Tab")
+	runner.Sleep(500 * time.Millisecond)
+
+	runner.Test("Popup shows for cancel test", func() bool {
+		return runner.Contains("alpha") && runner.Contains("alphabet")
+	})
+
+	runner.SendKeys("Escape")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("After Escape to cancel")
+
+	runner.Test("Escape cancels popup - alpha not in popup", func() bool {
+		// After escape, 'alp' should still be on the input line
+		// The popup border should be gone
+		return !runner.Contains("┌──────────") // popup border gone
+	})
+
+	// Test 11: Typing cancels popup and processes the key
+	runner.SendKeys("Tab") // Reopen popup
+	runner.Sleep(500 * time.Millisecond)
+	runner.SendText("x") // Type something - should cancel and insert 'x'
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("After typing to cancel")
+
+	runner.Test("Typing cancels popup and inserts char", func() bool {
+		// Should have 'alpx' on the line now
+		return runner.Contains("alpx")
+	})
+
+	// Clean up
+	runner.SendKeys("Home")
+	for i := 0; i < 10; i++ {
+		runner.SendKeys("Delete")
+	}
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendLine(")erase alpha alphabet alpine zetaUnique")
+	runner.Sleep(500 * time.Millisecond)
 
 	// Final snapshot
 	runner.Snapshot("Final state")

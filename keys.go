@@ -20,6 +20,7 @@ type KeyMap struct {
 	ClosePane        key.Binding
 	Quit             key.Binding
 	ShowKeys         key.Binding // After leader
+	Autocomplete     key.Binding // Trigger code completion
 
 	// Navigation
 	Up    key.Binding

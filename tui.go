@@ -95,6 +95,10 @@ type Model struct {
 	// Backtick mode for APL symbol input
 	backtickActive bool
 
+	// Autocomplete state
+	acPending bool          // True if waiting for ReplyGetAutocomplete
+	acPopup   *Autocomplete // Non-nil when popup is showing
+
 	// Internal queries (don't display in session)
 	internalQuery    string                   // Command text being executed internally
 	internalCallback func(outputs []string)   // Where to send results
@@ -270,6 +274,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Handle autocomplete popup - must be first to intercept keys
+	if m.acPopup != nil {
+		switch msg.Type {
+		case tea.KeyTab, tea.KeyDown:
+			m.acPopup.CycleNext()
+			return m, nil
+		case tea.KeyShiftTab, tea.KeyUp:
+			m.acPopup.CyclePrev()
+			return m, nil
+		case tea.KeyEnter:
+			// Select and insert
+			m.insertAutocomplete()
+			return m, nil
+		case tea.KeyEscape:
+			// Cancel
+			m.acPopup = nil
+			return m, nil
+		default:
+			// Any other key cancels autocomplete and gets processed normally
+			m.acPopup = nil
+			// Fall through to normal key handling
+		}
+	}
+
 	// Handle backtick mode - insert APL symbol
 	if m.backtickActive {
 		m.backtickActive = false
@@ -400,6 +428,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.ShowKeys):
 			m.toggleKeysPane()
 			return m, nil
+		case key.Matches(msg, m.keys.CyclePane):
+			if m.panes.HasPanes() {
+				m.panes.FocusNext()
+			}
+			return m, nil
 		case key.Matches(msg, m.keys.Quit):
 			m.confirmQuit = true
 			return m, nil
@@ -426,11 +459,20 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Global shortcuts (always work regardless of focus)
 	switch {
 
-	case key.Matches(msg, m.keys.CyclePane):
-		if m.panes.HasPanes() {
-			m.panes.FocusNext()
+	case key.Matches(msg, m.keys.Autocomplete):
+		// Trigger autocomplete request - works in session or editor (edit mode)
+		if fp := m.panes.FocusedPane(); fp != nil {
+			// Editor in edit mode - trigger autocomplete
+			if ep, ok := fp.Content.(*EditorPane); ok && !ep.InTracerMode() {
+				m.requestAutocomplete(ep.window.Token)
+				return m, nil
+			}
+			// Other pane focused - autocomplete not applicable
+		} else {
+			// Session context - no panes focused
+			m.requestAutocomplete(0)
+			return m, nil
 		}
-		return m, nil
 
 	case key.Matches(msg, m.keys.ClosePane):
 		if fp := m.panes.FocusedPane(); fp != nil {
@@ -1331,6 +1373,195 @@ func (m *Model) fetchVarValuesInternal(pane *VariablesPane, names []string, loca
 	})
 }
 
+// Autocomplete methods
+
+// requestAutocomplete sends a GetAutocomplete request for the current line/position
+// token is 0 for session, or window token for editor
+func (m *Model) requestAutocomplete(token int) {
+	line, pos := m.getAutocompleteContext(token)
+	if line == "" || pos == 0 {
+		return
+	}
+
+	// Check if cursor follows APL name characters
+	if !m.shouldTriggerAutocomplete(line, pos) {
+		return
+	}
+
+	m.acPending = true
+	m.log("→ GetAutocomplete line=%q pos=%d token=%d", line, pos, token)
+	m.send("GetAutocomplete", map[string]any{
+		"line":  line,
+		"pos":   pos,
+		"token": token,
+	})
+}
+
+// shouldTriggerAutocomplete checks if cursor position is valid for autocomplete
+// (cursor must follow APL name characters)
+func (m *Model) shouldTriggerAutocomplete(line string, pos int) bool {
+	if pos == 0 || pos > len(line) {
+		return false
+	}
+
+	// Get character before cursor
+	runes := []rune(line)
+	if pos > len(runes) {
+		return false
+	}
+
+	// Check if previous character is an APL name character
+	prevChar := runes[pos-1]
+	return isAPLNameChar(prevChar)
+}
+
+// isAPLNameChar returns true if the rune is valid in an APL name
+func isAPLNameChar(r rune) bool {
+	// APL names can contain: A-Z, a-z, 0-9, _, ⎕, ∆, ⍙
+	if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') {
+		return true
+	}
+	if r >= '0' && r <= '9' {
+		return true
+	}
+	if r == '_' || r == '⎕' || r == '∆' || r == '⍙' {
+		return true
+	}
+	return false
+}
+
+// getAutocompleteContext returns the line text and cursor position for autocomplete
+func (m *Model) getAutocompleteContext(token int) (string, int) {
+	if token == 0 {
+		// Session context
+		return m.currentLine(), m.cursorCol
+	}
+
+	// Editor context - find the editor
+	if w, exists := m.editors[token]; exists {
+		if w.CursorRow >= 0 && w.CursorRow < len(w.Text) {
+			return w.Text[w.CursorRow], w.CursorCol
+		}
+	}
+
+	return "", 0
+}
+
+// showAutocomplete displays the autocomplete popup with options
+func (m *Model) showAutocomplete(options []string, skip, token, triggerCol int) {
+	m.acPopup = NewAutocomplete(options, skip, token, triggerCol)
+}
+
+// insertAutocomplete inserts the selected completion option
+func (m *Model) insertAutocomplete() {
+	if m.acPopup == nil {
+		return
+	}
+
+	option := m.acPopup.SelectedOption()
+	skip := m.acPopup.Skip
+	token := m.acPopup.Token
+	triggerCol := m.acPopup.TriggerCol
+
+	m.log("  inserting completion: %s (skip=%d, triggerCol=%d)", option, skip, triggerCol)
+
+	if token == 0 {
+		// Session context - replace from triggerCol-skip to triggerCol
+		runes := m.currentLineRunes()
+		replaceStart := triggerCol - skip
+		if replaceStart < 0 {
+			replaceStart = 0
+		}
+
+		newRunes := make([]rune, 0, len(runes)-skip+len([]rune(option)))
+		newRunes = append(newRunes, runes[:replaceStart]...)
+		newRunes = append(newRunes, []rune(option)...)
+		newRunes = append(newRunes, runes[triggerCol:]...)
+
+		m.setCurrentLine(string(newRunes))
+		m.cursorCol = replaceStart + len([]rune(option))
+	} else {
+		// Editor context
+		if w, exists := m.editors[token]; exists {
+			if w.CursorRow >= 0 && w.CursorRow < len(w.Text) {
+				runes := []rune(w.Text[w.CursorRow])
+				replaceStart := triggerCol - skip
+				if replaceStart < 0 {
+					replaceStart = 0
+				}
+
+				newRunes := make([]rune, 0, len(runes)-skip+len([]rune(option)))
+				newRunes = append(newRunes, runes[:replaceStart]...)
+				newRunes = append(newRunes, []rune(option)...)
+				newRunes = append(newRunes, runes[triggerCol:]...)
+
+				w.Text[w.CursorRow] = string(newRunes)
+				w.CursorCol = replaceStart + len([]rune(option))
+				w.Modified = true
+			}
+		}
+	}
+
+	m.acPopup = nil
+}
+
+// renderAutocompleteOverlay renders the autocomplete popup over the base content
+func (m *Model) renderAutocompleteOverlay(base string, screenW, screenH int) string {
+	if m.acPopup == nil {
+		return base
+	}
+
+	popup := m.acPopup.Render(40, screenH-4)
+	popupLines := strings.Split(popup, "\n")
+	popupW := 0
+	for _, line := range popupLines {
+		if lipgloss.Width(line) > popupW {
+			popupW = lipgloss.Width(line)
+		}
+	}
+
+	// Position popup at top-right (same position as stack pane)
+	popupX := screenW - popupW - 2
+	popupY := 2
+	if popupX < 0 {
+		popupX = 0
+	}
+
+	// Composite popup over base
+	baseLines := strings.Split(base, "\n")
+	for i, pline := range popupLines {
+		y := popupY + i
+		if y < 0 || y >= len(baseLines) {
+			continue
+		}
+
+		baseLine := baseLines[y]
+		baseRunes := []rune(baseLine)
+
+		// Build new line with popup overlaid
+		var newLine strings.Builder
+		for x := 0; x < popupX && x < len(baseRunes); x++ {
+			newLine.WriteRune(baseRunes[x])
+		}
+		for x := len(baseRunes); x < popupX; x++ {
+			newLine.WriteRune(' ')
+		}
+		newLine.WriteString(pline)
+
+		// Add rest of base line after popup
+		afterPopup := popupX + popupW
+		if afterPopup < len(baseRunes) {
+			for x := afterPopup; x < len(baseRunes); x++ {
+				newLine.WriteRune(baseRunes[x])
+			}
+		}
+
+		baseLines[y] = newLine.String()
+	}
+
+	return strings.Join(baseLines, "\n")
+}
+
 // isTracerFocused returns true if the focused pane is a tracer in trace mode (not edit mode)
 func (m *Model) isTracerFocused() bool {
 	fp := m.panes.FocusedPane()
@@ -1752,6 +1983,47 @@ func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
 			w.Debugger = tracer != 0
 			m.log("  window type changed: token=%d, tracer=%v", win, w.Debugger)
 		}
+
+	case "ReplyGetAutocomplete":
+		token := int(msg.Args["token"].(float64))
+		skip := 0
+		if s, ok := msg.Args["skip"].(float64); ok {
+			skip = int(s)
+		}
+		var options []string
+		if opts, ok := msg.Args["options"].([]any); ok {
+			for _, o := range opts {
+				if s, ok := o.(string); ok {
+					options = append(options, s)
+				}
+			}
+		}
+		m.log("  autocomplete: token=%d, skip=%d, options=%d", token, skip, len(options))
+
+		// Ignore if we're not waiting for autocomplete
+		if !m.acPending {
+			m.log("  (no pending request, ignoring)")
+			return m, waitForRide(m.msgs)
+		}
+		m.acPending = false
+
+		if len(options) == 0 {
+			// No completions - do nothing
+			return m, waitForRide(m.msgs)
+		}
+
+		// Get current cursor position for insertion later
+		_, triggerCol := m.getAutocompleteContext(token)
+
+		if len(options) == 1 {
+			// Single option - auto-insert immediately
+			m.acPopup = NewAutocomplete(options, skip, token, triggerCol)
+			m.insertAutocomplete()
+			return m, waitForRide(m.msgs)
+		}
+
+		// Multiple options - show popup
+		m.showAutocomplete(options, skip, token, triggerCol)
 	}
 
 	return m, waitForRide(m.msgs)
@@ -1783,6 +2055,11 @@ func (m Model) View() string {
 	// Composite floating panes over session
 	if m.panes.HasPanes() {
 		base = m.panes.Render(base)
+	}
+
+	// Render autocomplete overlay if active
+	if m.acPopup != nil {
+		base = m.renderAutocompleteOverlay(base, w, mainH)
 	}
 
 	// Add help at bottom

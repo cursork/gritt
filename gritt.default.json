@@ -9,10 +9,11 @@
     "reconnect": ["r"],
     "command_palette": [":"],
     "pane_move_mode": ["m"],
-    "cycle_pane": ["tab"],
+    "cycle_pane": ["n"],
     "close_pane": ["esc"],
     "quit": ["q"],
     "show_keys": ["?"],
+    "autocomplete": ["tab"],
 
     "up": ["up"],
     "down": ["down"],
