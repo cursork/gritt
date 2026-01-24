@@ -195,7 +195,12 @@ func execCapture(client *ride.Client, expr string) string {
 				buf.WriteString(result)
 			}
 		case "SetPromptType":
-			if t, ok := msg.Args["type"].(float64); ok && t == 1 {
+			// Return on type > 0:
+			// - type 1: ready for input (expression complete)
+			// - type 2: quad input (⎕:)
+			// - type 3: quote-quad input (⍞)
+			// - type 0: no prompt (processing) - keep waiting
+			if t, ok := msg.Args["type"].(float64); ok && t > 0 {
 				return buf.String()
 			}
 		}
