@@ -1,6 +1,26 @@
 # OPERANDA - Current State
 
-## Latest Session: Variables Pane Complete
+## Latest Session: Auto-Launch Dyalog
+
+Added `-launch` / `-l` flag to automatically start Dyalog APL with RIDE.
+
+**Usage:**
+```bash
+./gritt -l              # Interactive TUI with auto-launched Dyalog
+./gritt -l -e "⍳5"      # Execute and exit
+./gritt -l -stdin       # Pipe mode with auto-launch
+```
+
+**Implementation:**
+- Picks random port (10000-60000)
+- Starts Dyalog with `RIDE_INIT=SERVE:*:$port`
+- Polls for port availability (up to 5 seconds)
+- Uses process group (`Setpgid: true`) for clean cleanup
+- All Dyalog helper processes killed on exit via `syscall.Kill(-pid, SIGKILL)`
+
+---
+
+## Previous Session: Variables Pane Complete
 
 Full variables pane implementation with local/all modes and visual distinction between local and outer-scope variables.
 

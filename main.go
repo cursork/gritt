@@ -5,17 +5,43 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math/rand"
 	"net"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/colorprofile"
 	"gritt/ride"
 )
+
+// launchDyalog starts Dyalog APL with RIDE on a random port
+func launchDyalog() (*exec.Cmd, int) {
+	port := 10000 + rand.Intn(50000)
+	cmd := exec.Command("dyalog", "+s", "-q")
+	cmd.Env = append(os.Environ(), fmt.Sprintf("RIDE_INIT=SERVE:*:%d", port))
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := cmd.Start(); err != nil {
+		log.Fatalf("Failed to start Dyalog: %v", err)
+	}
+	// Poll for RIDE to be ready
+	addr := fmt.Sprintf("localhost:%d", port)
+	for i := 0; i < 50; i++ { // 5 second timeout
+		conn, err := net.DialTimeout("tcp", addr, 100*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			return cmd, port
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	log.Fatalf("Dyalog did not start on port %d", port)
+	return nil, 0
+}
 
 func main() {
 	addr := flag.String("addr", "localhost:4502", "Dyalog RIDE address")
@@ -24,7 +50,23 @@ func main() {
 	stdin := flag.Bool("stdin", false, "Read expressions from stdin")
 	sock := flag.String("sock", "", "Unix socket path for APL server")
 	link := flag.String("link", "", "Link directory (path or ns:path)")
+	launch := flag.Bool("launch", false, "Launch Dyalog automatically (alias: -l)")
+	flag.BoolVar(launch, "l", false, "Launch Dyalog automatically")
 	flag.Parse()
+
+	// Launch Dyalog if requested
+	var dyalogCmd *exec.Cmd
+	if *launch {
+		var port int
+		dyalogCmd, port = launchDyalog()
+		*addr = fmt.Sprintf("localhost:%d", port)
+		defer func() {
+			if dyalogCmd.Process != nil {
+				// Kill process group to clean up helper processes
+				syscall.Kill(-dyalogCmd.Process.Pid, syscall.SIGKILL)
+			}
+		}()
+	}
 
 	// Set up logging if requested
 	var logWriter *os.File

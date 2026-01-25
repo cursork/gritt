@@ -47,35 +47,31 @@ go build -o gritt .
 
 ### Interactive TUI
 
-Start Dyalog with RIDE:
+Auto-launch Dyalog and connect:
 ```bash
-RIDE_INIT=SERVE:*:4502 dyalog +s -q
+./gritt -l
 ```
 
-Connect with gritt:
+Or connect to an existing Dyalog instance:
 ```bash
-./gritt
+RIDE_INIT=SERVE:*:4502 dyalog +s -q  # Start Dyalog first
+./gritt                               # Then connect
 ```
 
 ### Non-interactive
 
 ```bash
-# Single expression
+# Single expression (with auto-launch)
+./gritt -l -e "⍳5"
+
+# Single expression (connect to existing Dyalog)
 ./gritt -e "⍳5"
 
 # Pipe from stdin
-echo "1+1" | ./gritt -stdin
+echo "1+1" | ./gritt -l -stdin
 
 # Link a directory first
-./gritt -link /path/to/src -e "MyFn 42"
-./gritt -link "#:." -e "⎕nl -3"
-```
-
-### Ephemeral Dyalog
-
-The `apl` script starts a temporary Dyalog instance:
-```bash
-./apl "⍳5"
+./gritt -l -link /path/to/src -e "MyFn 42"
 ```
 
 ## Key Bindings

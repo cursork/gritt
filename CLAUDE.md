@@ -147,21 +147,23 @@ Use the **text reports** for debugging test failures - they contain the same sna
 ## CLI Usage
 
 ```bash
-# Interactive TUI
+# Interactive TUI (requires Dyalog running on localhost:4502)
 ./gritt
+
+# Launch Dyalog automatically (-l or -launch)
+./gritt -l              # Interactive TUI with auto-launched Dyalog
+./gritt -l -e "⍳5"      # Execute and exit
 
 # Execute single expression
 ./gritt -e "⍳5"
 
 # Pipe expressions from stdin
 echo "1+1" | ./gritt -stdin
+printf "x←5\nx×2\n" | ./gritt -l -stdin   # With auto-launch
 
 # Link directory before executing
 ./gritt -link /path/to/src -e "MyFn 42"
 ./gritt -link "#:." -e "⎕nl -3"    # Link root ns to current dir
-
-# Ephemeral Dyalog instance (starts/stops automatically)
-./apl "⍳5"
 
 # Protocol logging (for debugging)
 ./gritt -log debug.log
