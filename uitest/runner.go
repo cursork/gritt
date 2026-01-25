@@ -87,6 +87,19 @@ func (r *Runner) WaitFor(pattern string, timeout time.Duration) bool {
 	return true
 }
 
+// WaitForNot waits for a pattern to disappear
+func (r *Runner) WaitForNot(pattern string, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if !r.Contains(pattern) {
+			return true
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	r.T.Logf("Timeout waiting for %q to disappear", pattern)
+	return false
+}
+
 // Contains checks if the screen contains a pattern
 func (r *Runner) Contains(pattern string) bool {
 	found, err := r.Session.Contains(pattern)

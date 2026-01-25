@@ -47,8 +47,8 @@ func TestTUI(t *testing.T) {
 	}
 	defer runner.Close()
 
-	// Wait for gritt to start
-	runner.Sleep(1 * time.Second)
+	// Wait for gritt to render
+	runner.WaitFor("gritt", 10*time.Second)
 
 	// Take initial snapshot
 	runner.Snapshot("Initial state")
