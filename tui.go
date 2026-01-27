@@ -300,22 +300,33 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Handle backtick mode - insert APL symbol
+	// insertTarget routes to focused editor if one exists, otherwise session
+	insertTarget := func(r rune) {
+		if fp := m.panes.FocusedPane(); fp != nil {
+			if ep, ok := fp.Content.(*EditorPane); ok && !ep.InTracerMode() {
+				ep.insertChar(r)
+				return
+			}
+		}
+		m.insertChar(r)
+	}
+
 	if m.backtickActive {
 		m.backtickActive = false
 		if len(msg.Runes) > 0 {
 			r := msg.Runes[0]
 			if sym, ok := backtickMap[r]; ok {
 				// Insert symbol at cursor
-				m.insertChar(sym)
+				insertTarget(sym)
 				return m, nil
 			}
 			// Unknown key - insert the backtick and the key
-			m.insertChar('`')
-			m.insertChar(r)
+			insertTarget('`')
+			insertTarget(r)
 			return m, nil
 		}
 		// Special key after backtick - just insert backtick
-		m.insertChar('`')
+		insertTarget('`')
 		return m, nil
 	}
 

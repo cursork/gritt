@@ -346,6 +346,8 @@ func (e *EditorPane) HandleKey(msg tea.KeyMsg) bool {
 		} else if e.onClose != nil {
 			e.onClose()
 		}
+	case tea.KeySpace:
+		e.insertChar(' ')
 	case tea.KeyRunes:
 		for _, r := range msg.Runes {
 			e.insertChar(r)
