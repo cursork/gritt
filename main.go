@@ -63,10 +63,20 @@ func launchDyalog() (*exec.Cmd, int) {
 	return nil, 0
 }
 
+// multiFlag allows a flag to be specified multiple times, collecting all values
+type multiFlag []string
+
+func (m *multiFlag) String() string { return strings.Join(*m, ", ") }
+func (m *multiFlag) Set(value string) error {
+	*m = append(*m, value)
+	return nil
+}
+
 func main() {
 	addr := flag.String("addr", "localhost:4502", "Dyalog RIDE address")
 	logFile := flag.String("log", "", "Log protocol messages to file")
-	expr := flag.String("e", "", "Execute expression and exit")
+	var exprs multiFlag
+	flag.Var(&exprs, "e", "Execute expression and exit (can be repeated)")
 	stdin := flag.Bool("stdin", false, "Read expressions from stdin")
 	sock := flag.String("sock", "", "Unix socket path for APL server")
 	link := flag.String("link", "", "Link directory (path or ns:path)")
@@ -101,10 +111,10 @@ func main() {
 	}
 
 	// Non-interactive mode
-	if *expr != "" && *stdin {
+	if len(exprs) > 0 && *stdin {
 		log.Fatal("-e and -stdin are mutually exclusive")
 	}
-	if *expr != "" {
+	if len(exprs) > 0 {
 		client, err := ride.Connect(*addr)
 		if err != nil {
 			log.Fatal(err)
@@ -113,7 +123,9 @@ func main() {
 		if *link != "" {
 			runLink(client, *link)
 		}
-		runExpr(client, *expr)
+		for _, expr := range exprs {
+			runExpr(client, expr)
+		}
 		return
 	}
 	if *stdin {
