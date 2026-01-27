@@ -47,6 +47,7 @@ type KeyMapConfig struct {
 	Quit             []string `json:"quit"`
 	ShowKeys         []string `json:"show_keys"`
 	Autocomplete     []string `json:"autocomplete"`
+	DocHelp          []string `json:"doc_help"`
 
 	Up    []string `json:"up"`
 	Down  []string `json:"down"`
@@ -114,6 +115,7 @@ func (c *Config) ToKeyMap() KeyMap {
 		Quit:             c.bindingWithLeader(c.Keys.Quit, "quit"),
 		ShowKeys:         c.bindingWithLeader(c.Keys.ShowKeys, "show keys"),
 		Autocomplete:     c.binding(c.Keys.Autocomplete, "", "autocomplete"),
+		DocHelp:          c.binding(c.Keys.DocHelp, "", "doc help"),
 		Up:          c.binding(c.Keys.Up, "", "up"),
 		Down:        c.binding(c.Keys.Down, "", "down"),
 		Left:        c.binding(c.Keys.Left, "", "left"),

@@ -1,11 +1,13 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"image/color"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -17,6 +19,7 @@ import (
 	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/charmbracelet/x/cellbuf"
 	"github.com/cursork/gritt/ride"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 // AccentColor is the UI accent, configurable via "accent" in gritt.json.
@@ -104,6 +107,9 @@ type Model struct {
 	// Backtick mode for APL symbol input
 	backtickActive bool
 
+	// Documentation database
+	docsDB *sql.DB
+
 	// Autocomplete state
 	acPending bool          // True if waiting for ReplyGetAutocomplete
 	acPopup   *Autocomplete // Non-nil when popup is showing
@@ -148,6 +154,19 @@ func NewModel(client *ride.Client, addr string, logFile io.Writer, profile color
 	m.cursorCol = len(aplIndent)
 	m.msgs = m.startRecvLoop()
 	m.log("Connected to %s", addr)
+
+	// Open docs database (optional — F1 help is unavailable without it)
+	dbPath := filepath.Join(os.Getenv("HOME"), ".config", "gritt", "dyalog-docs.db")
+	if db, err := sql.Open("sqlite3", dbPath+"?mode=ro"); err == nil {
+		// Verify the database is usable
+		if err := db.Ping(); err == nil {
+			m.docsDB = db
+			m.log("Docs database loaded: %s", dbPath)
+		} else {
+			db.Close()
+		}
+	}
+
 	return m
 }
 
@@ -473,6 +492,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if msg.Type == tea.KeyCtrlC {
 		m.showQuitHint = true
 		return m, nil
+	}
+
+	// Context-sensitive documentation
+	if key.Matches(msg, m.keys.DocHelp) {
+		return m.openDocHelp()
 	}
 
 	// Global shortcuts (always work regardless of focus)
@@ -1670,6 +1694,77 @@ func (m *Model) openSymbolSearch() {
 	pane := NewPane("symbols", ss, paneX, paneY, paneW, paneH)
 	m.panes.Add(pane)
 	m.panes.Focus("symbols")
+}
+
+func (m *Model) openDocHelp() (tea.Model, tea.Cmd) {
+	// Toggle off if already open
+	if m.panes.Get("docs") != nil {
+		m.panes.Remove("docs")
+		return *m, nil
+	}
+
+	if m.docsDB == nil {
+		m.log("No docs database (run bundle-docs, copy to ~/.config/gritt/dyalog-docs.db)")
+		return *m, nil
+	}
+
+	// Get symbol at cursor (to the left of cursor position)
+	symbol := m.symbolAtCursor()
+	if symbol == "" {
+		m.log("No symbol at cursor")
+		return *m, nil
+	}
+
+	// Look up in help_urls
+	var navPath string
+	err := m.docsDB.QueryRow("SELECT path FROM help_urls WHERE symbol = ?", symbol).Scan(&navPath)
+	if err != nil {
+		m.log("No help for %q", symbol)
+		return *m, nil
+	}
+
+	// Fetch content
+	var file, content string
+	err = m.docsDB.QueryRow("SELECT file, content FROM docs WHERE path = ?", navPath).Scan(&file, &content)
+	if err != nil {
+		m.log("Doc not found: %s", navPath)
+		return *m, nil
+	}
+
+	// Open pane
+	paneW := min(90, m.width-4)
+	paneH := min(35, m.height-4)
+	paneX := (m.width - paneW) / 2
+	paneY := (m.height - paneH) / 2
+
+	processed, links := processLinks(content, file)
+	rendered := RenderMarkdown(processed, paneW-2)
+	doc := NewDocPane(navPath, file, rendered, links, m.docsDB, paneW-2)
+	pane := NewPane("docs", doc, paneX, paneY, paneW, paneH)
+	m.panes.Add(pane)
+	m.panes.Focus("docs")
+
+	return *m, nil
+}
+
+// symbolAtCursor returns the APL symbol or keyword at/before the cursor.
+func (m *Model) symbolAtCursor() string {
+	runes := m.currentLineRunes()
+	col := m.cursorCol
+
+	// Look at the character to the left of the cursor
+	if col <= 0 || col > len(runes) {
+		return ""
+	}
+
+	r := runes[col-1]
+
+	// Single-character APL symbol
+	if r > 127 || strings.ContainsRune("+-×÷*!?|<>=≠≤≥∨∧~,./\\@&#;:()[]{}", r) {
+		return string(r)
+	}
+
+	return ""
 }
 
 func (m *Model) openAPLcart() (tea.Model, tea.Cmd) {

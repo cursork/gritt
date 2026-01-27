@@ -21,6 +21,7 @@ type KeyMap struct {
 	Quit             key.Binding
 	ShowKeys         key.Binding // After leader
 	Autocomplete     key.Binding // Trigger code completion
+	DocHelp          key.Binding // Context-sensitive documentation
 
 	// Navigation
 	Up    key.Binding
