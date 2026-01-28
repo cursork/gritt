@@ -6,8 +6,8 @@
 package main
 
 import (
-	"bufio"
 	"database/sql"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -31,7 +31,7 @@ type mkdocsConfig struct {
 func main() {
 	output := flag.String("o", "dyalog-docs.db", "output database path")
 	repo := flag.String("repo", "git@github.com:Dyalog/documentation.git", "documentation repo URL")
-	helpURLs := flag.String("help-urls", "help_urls.h", "path to help_urls.h")
+	helpURLs := flag.String("help-urls", "symbol-urls.json", "path to symbol-urls.json")
 	keep := flag.Bool("keep", false, "keep cloned repo (print path)")
 	flag.Parse()
 
@@ -121,7 +121,7 @@ func main() {
 
 	// Parse help_urls.h and insert mappings
 	if *helpURLs != "" {
-		entries, err := parseHelpURLs(*helpURLs)
+		entries, err := parseSymbolURLs(*helpURLs)
 		if err != nil {
 			log.Printf("warning: help_urls: %v", err)
 		} else {
@@ -325,65 +325,26 @@ type helpURLEntry struct {
 	url    string // expanded URL path
 }
 
-var (
-	defineRe  = regexp.MustCompile(`^#define\s+(\w+)\s+"([^"]*)"`)
-	helpURLRe = regexp.MustCompile(`^HELP_URL\("([^"]*?)"\s*,\s*(.+)\)`)
-)
-
-func parseHelpURLs(path string) ([]helpURLEntry, error) {
-	f, err := os.Open(path)
+// parseSymbolURLs reads a JSON file of [{symbol, url}] entries.
+func parseSymbolURLs(path string) ([]helpURLEntry, error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
-
-	macros := make(map[string]string)
-	var entries []helpURLEntry
-
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-
-		if m := defineRe.FindStringSubmatch(line); m != nil {
-			macros[m[1]] = m[2]
-			continue
-		}
-
-		if m := helpURLRe.FindStringSubmatch(line); m != nil {
-			symbol := m[1]
-			urlExpr := strings.TrimSpace(m[2])
-			url := expandMacro(urlExpr, macros)
-			entries = append(entries, helpURLEntry{symbol: symbol, url: url})
-		}
+	var raw []struct {
+		Symbol string `json:"symbol"`
+		URL    string `json:"url"`
 	}
-
-	return entries, scanner.Err()
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	entries := make([]helpURLEntry, len(raw))
+	for i, r := range raw {
+		entries[i] = helpURLEntry{symbol: r.Symbol, url: r.URL}
+	}
+	return entries, nil
 }
 
-// expandMacro expands expressions like: SY"/iota" or "full/path" or QUAD"/json"
-func expandMacro(expr string, macros map[string]string) string {
-	expr = strings.TrimSpace(expr)
-
-	// Pure string literal: "some/path"
-	if strings.HasPrefix(expr, "\"") {
-		return strings.Trim(expr, "\"")
-	}
-
-	// MACRO"/suffix" or MACRO (no suffix)
-	for name, value := range macros {
-		if strings.HasPrefix(expr, name) {
-			rest := strings.TrimPrefix(expr, name)
-			if rest == "" {
-				return value
-			}
-			// rest is like "/iota" (with quotes from concatenation)
-			rest = strings.Trim(rest, "\"")
-			return value + rest
-		}
-	}
-
-	return strings.Trim(expr, "\"")
-}
 
 // matchHelpURL tries to match a help URL path to a doc entry's file path.
 func matchHelpURL(url string, fileIndex map[string]string) (string, bool) {
