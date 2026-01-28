@@ -20,26 +20,6 @@ import (
 	"github.com/cursork/gritt/ride"
 )
 
-const splash = `
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡄⣀⡰⡆⠖⠢⢌⠲⠙⠤⠀⠐⠀⡄⠀⠠⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣇⡒⠂⣈⠃⠀⠂⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠂⠀⠀⠀⠈⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠄⠉⠵⠉⠀⠀⠄⠀⠀⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠄⣀⣀⣀⣀⣀⣠⡤⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠂⢄⣔⠄⠐⠀⠈⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠠⢀⣈⣽⣿⣿⣿⣿⣿⣿⣿⣷⣄⠀⠀⠀⠀
-⠀⠀⠀⠀⢀⠬⠜⠦⠈⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠐⠒⠶⣶⣶⣿⣻⣿⣿⣿⣿⣿⣿⣿⣿⣦⡀⠀⠀
-⠀⠀⠀⠀⠈⢀⠈⠀⠀⠀⠄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⢛⣻⣿⣿⣿⣿⣿⣿⣿⡏⠀⠉⠉⠙⠿⠋⠀⠀
-⠀⠀⠈⢀⢁⠀⠀⠀⠀⠀⠀⣀⣠⡤⣠⣶⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⢄⣀⣀⣀⣀⣐⣲⣿⣿⣿⠛⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢿⣿⣦⣤⣀⡀⠀⠂⢀⡀⠀
-⠀⠀⡀⠉⢙⣛⣻⣿⠿⢛⠝⠁⢀⣿⣿⣿⣿⡿⢻⠿⣿⣿⣿⣿⣿⣿⣽⢿⣿⣿⣶⣬⡍⣿⡇⠀⠉⢢⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣶⣾⣿⡿⣿⣟⣯⣾⠿⠋⠀⠀⠀⠉⠉⠀⠀⣠⣄⣤⡾⢛⣡⣿⠀⢠⢤⢼⠀⠀
-⠀⠀⠀⠀⠐⠀⠂⠀⢠⣿⠋⠁⢠⣿⠟⠋⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⠛⠋⠉⠀⠞⠋⠁⢨⡤⣿⡇⠀⠀
-⠀⠀⠀⠀⠀⢀⣴⣶⠿⠁⣀⣠⡿⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⠀⢠⠂⠊⠖⣻⣟⡟⠀⠀⠀
-⠀⠀⠀⠀⡐⠈⠉⠀⠀⠔⠛⠋⠁⠀⠀⠠⠀⠀⠀⠐⠀⠀⠀⠀⠀⢀⠠⡈⣤⣤⣧⣿⣿⣿⣿⠍⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⢠⣠⡠⣆⡐⢀⢀⠄⢄⢀⢤⡀⣄⠀⢀⣀⡬⡠⣶⣶⣿⣿⣾⣾⣿⣿⡿⠋⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠈⠂⠚⠯⣻⡿⣿⣻⣾⣿⣿⣾⣿⣽⣷⣷⣟⣿⣿⣿⣿⣿⣿⣿⢿⡿⠋⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠻⢿⣟⣿⢿⣿⣿⣿⣿⣮⣿⣿⣿⣿⣿⣿⠿⠻⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠈⠈⠛⠞⠟⡻⠛⠛⠛⠛⠛⠉⠁⠠⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-`
-
 // launchDyalog starts Dyalog APL with RIDE on a random port
 func launchDyalog() (*exec.Cmd, int) {
 	port := 10000 + rand.Intn(50000)
@@ -166,15 +146,7 @@ func main() {
 		colorProfile = colorprofile.TrueColor
 	}
 
-	fmt.Print(splash)
-	fmt.Printf("\n  gritt - Go RIDE Terminal\n  Connecting to %s...\n", *addr)
-	client, err := ride.Connect(*addr)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer client.Close()
-
-	p := tea.NewProgram(NewModel(client, *addr, logWriter, colorProfile), tea.WithAltScreen(), tea.WithMouseCellMotion())
+	p := tea.NewProgram(NewModel(*addr, logWriter, colorProfile), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
 	}

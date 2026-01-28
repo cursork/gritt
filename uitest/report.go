@@ -76,6 +76,19 @@ func ansiToHTML(s string) string {
 	// First escape HTML special chars (but not in a way that breaks our processing)
 	s = html.EscapeString(s)
 
+	// True color (24-bit) foreground: \x1b[38;2;R;G;Bm
+	reTrue := regexp.MustCompile(`\x1b\[38;2;(\d+);(\d+);(\d+)m`)
+	s = reTrue.ReplaceAllStringFunc(s, func(match string) string {
+		matches := reTrue.FindStringSubmatch(match)
+		if len(matches) < 4 {
+			return ""
+		}
+		r, _ := strconv.Atoi(matches[1])
+		g, _ := strconv.Atoi(matches[2])
+		b, _ := strconv.Atoi(matches[3])
+		return fmt.Sprintf(`<span style="color:#%02x%02x%02x">`, r, g, b)
+	})
+
 	// 256-color foreground: \x1b[38;5;Nm
 	re256 := regexp.MustCompile(`\x1b\[38;5;(\d+)m`)
 	s = re256.ReplaceAllStringFunc(s, func(match string) string {

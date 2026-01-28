@@ -50,6 +50,26 @@ var cursorStyle = lipgloss.NewStyle().
 
 const aplIndent = "      " // 6 spaces - APL convention
 
+const splash = `
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡄⣀⡰⡆⠖⠢⢌⠲⠙⠤⠀⠐⠀⡄⠀⠠⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣇⡒⠂⣈⠃⠀⠂⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠂⠀⠀⠀⠈⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠄⠉⠵⠉⠀⠀⠄⠀⠀⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠄⣀⣀⣀⣀⣀⣠⡤⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠂⢄⣔⠄⠐⠀⠈⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠠⢀⣈⣽⣿⣿⣿⣿⣿⣿⣿⣷⣄⠀⠀⠀⠀
+⠀⠀⠀⠀⢀⠬⠜⠦⠈⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠐⠒⠶⣶⣶⣿⣻⣿⣿⣿⣿⣿⣿⣿⣿⣦⡀⠀⠀
+⠀⠀⠀⠀⠈⢀⠈⠀⠀⠀⠄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⢛⣻⣿⣿⣿⣿⣿⣿⣿⡏⠀⠉⠉⠙⠿⠋⠀⠀
+⠀⠀⠈⢀⢁⠀⠀⠀⠀⠀⠀⣀⣠⡤⣠⣶⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⢄⣀⣀⣀⣀⣐⣲⣿⣿⣿⠛⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢿⣿⣦⣤⣀⡀⠀⠂⢀⡀⠀
+⠀⠀⡀⠉⢙⣛⣻⣿⠿⢛⠝⠁⢀⣿⣿⣿⣿⡿⢻⠿⣿⣿⣿⣿⣿⣿⣽⢿⣿⣿⣶⣬⡍⣿⡇⠀⠉⢢⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣶⣾⣿⡿⣿⣟⣯⣾⠿⠋⠀⠀⠀⠉⠉⠀⠀⣠⣄⣤⡾⢛⣡⣿⠀⢠⢤⢼⠀⠀
+⠀⠀⠀⠀⠐⠀⠂⠀⢠⣿⠋⠁⢠⣿⠟⠋⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⠛⠋⠉⠀⠞⠋⠁⢨⡤⣿⡇⠀⠀
+⠀⠀⠀⠀⠀⢀⣴⣶⠿⠁⣀⣠⡿⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⠀⢠⠂⠊⠖⣻⣟⡟⠀⠀⠀
+⠀⠀⠀⠀⡐⠈⠉⠀⠀⠔⠛⠋⠁⠀⠀⠠⠀⠀⠀⠐⠀⠀⠀⠀⠀⢀⠠⡈⣤⣤⣧⣿⣿⣿⣿⠍⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⢠⣠⡠⣆⡐⢀⢀⠄⢄⢀⢤⡀⣄⠀⢀⣀⡬⡠⣶⣶⣿⣿⣾⣾⣿⣿⡿⠋⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠈⠂⠚⠯⣻⡿⣿⣻⣾⣿⣿⣾⣿⣽⣷⣷⣟⣿⣿⣿⣿⣿⣿⣿⢿⡿⠋⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠻⢿⣟⣿⢿⣿⣿⣿⣿⣮⣿⣿⣿⣿⣿⣿⠿⠻⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠈⠈⠛⠞⠟⡻⠛⠛⠛⠛⠛⠉⠁⠠⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+`
+
 // Line is a single line in the session.
 type Line struct {
 	Text     string
@@ -63,8 +83,9 @@ type Model struct {
 	msgs   <-chan rideEvent
 
 	// Connection state
-	addr      string
-	connected bool
+	addr       string
+	connecting bool // True while initial connection is in progress
+	connected  bool
 
 	// Session state
 	lines        []Line
@@ -133,35 +154,42 @@ type rideEvent struct {
 	err error
 }
 
-// NewModel creates a Model connected to the given RIDE client.
-func NewModel(client *ride.Client, addr string, logFile io.Writer, profile colorprofile.Profile) Model {
+// connectResult is sent when the initial connection attempt completes.
+type connectResult struct {
+	client *ride.Client
+	err    error
+}
+
+// connectCmd returns a command that connects to the RIDE server.
+func connectCmd(addr string) tea.Cmd {
+	return func() tea.Msg {
+		client, err := ride.Connect(addr)
+		return connectResult{client: client, err: err}
+	}
+}
+
+// NewModel creates a Model that will connect to the given address.
+func NewModel(addr string, logFile io.Writer, profile colorprofile.Profile) Model {
 	cfg := LoadConfig()
 	initColors(profile, cfg.Accent)
 	m := Model{
-		client:    client,
-		addr:      addr,
-		connected: true,
-		ready:     true, // Handshake already completed
-		lines:     []Line{{Text: aplIndent}},
-		debugLog:  &LogBuffer{}, // Shared buffer survives Model copies
-		logFile:   logFile,
-		panes:     NewPaneManager(80, 24), // Will be updated on WindowSizeMsg
-		editors:   make(map[int]*EditorWindow),
-		config:    cfg,
-		help:      help.New(),
-		keys:      cfg.ToKeyMap(),
+		addr:       addr,
+		connecting: true,
+		lines:      []Line{{Text: aplIndent}},
+		debugLog:   &LogBuffer{},
+		logFile:    logFile,
+		panes:      NewPaneManager(80, 24),
+		editors:    make(map[int]*EditorWindow),
+		config:     cfg,
+		help:       help.New(),
+		keys:       cfg.ToKeyMap(),
 	}
-	m.cursorCol = len(aplIndent)
-	m.msgs = m.startRecvLoop()
-	m.log("Connected to %s", addr)
 
 	// Open docs database (optional — F1 help is unavailable without it)
 	dbPath := filepath.Join(os.Getenv("HOME"), ".config", "gritt", "dyalog-docs.db")
 	if db, err := sql.Open("sqlite3", dbPath+"?mode=ro"); err == nil {
-		// Verify the database is usable
 		if err := db.Ping(); err == nil {
 			m.docsDB = db
-			m.log("Docs database loaded: %s", dbPath)
 		} else {
 			db.Close()
 		}
@@ -267,6 +295,9 @@ func waitForRide(ch <-chan rideEvent) tea.Cmd {
 }
 
 func (m Model) Init() tea.Cmd {
+	if m.connecting {
+		return connectCmd(m.addr)
+	}
 	// Request any open windows from Dyalog (restores orphaned editors on reconnect)
 	m.send("GetWindowLayout", map[string]any{})
 	return waitForRide(m.msgs)
@@ -274,6 +305,21 @@ func (m Model) Init() tea.Cmd {
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case connectResult:
+		m.connecting = false
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		m.client = msg.client
+		m.connected = true
+		m.ready = true
+		m.cursorCol = len(aplIndent)
+		m.msgs = m.startRecvLoop()
+		m.log("Connected to %s", m.addr)
+		m.send("GetWindowLayout", map[string]any{})
+		return m, waitForRide(m.msgs)
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -2141,6 +2187,9 @@ func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) View() string {
+	if m.connecting {
+		return splash + fmt.Sprintf("\n  gritt - Go RIDE Terminal\n  Connecting to %s...\n", m.addr)
+	}
 	if m.err != nil {
 		return fmt.Sprintf("Error: %v\nPress any key to exit.\n", m.err)
 	}

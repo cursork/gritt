@@ -24,11 +24,15 @@ func NewSession(name string, width, height int, cmd string) (*Session, error) {
 	exec.Command("tmux", "kill-session", "-t", name).Run()
 
 	// Create new session (tmux may ignore -x/-y and inherit outer terminal size)
+	// Set COLORTERM=truecolor so gritt outputs ANSI colors
+	// Set HOME=/tmp to avoid loading user's personal config
 	args := []string{
 		"new-session", "-d",
 		"-s", name,
 		"-x", fmt.Sprintf("%d", width),
 		"-y", fmt.Sprintf("%d", height),
+		"-e", "COLORTERM=truecolor",
+		"-e", "HOME=/tmp",
 		cmd,
 	}
 	if err := exec.Command("tmux", args...).Run(); err != nil {

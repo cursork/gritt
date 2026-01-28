@@ -6,6 +6,12 @@ A terminal IDE for Dyalog APL.
 
 Pronounced like "grit" (G from Go + German "Ritt" = ride).
 
+## WARNING
+
+This is an *alpha* level project. I will promote it to 0.1.0 when I think it's ready for broad use. **Here be dragons**.
+
+I use it daily, but mostly for specific tasks. I revert to Ride otherwise, since it's complete.
+
 ## Features
 
 - Full TUI with floating panes for editors, tracer, debug info
