@@ -15,6 +15,7 @@
     "show_keys": ["?"],
     "autocomplete": ["tab"],
     "doc_help": ["f1"],
+    "doc_search": ["/"],
 
     "up": ["up"],
     "down": ["down"],

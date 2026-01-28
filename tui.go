@@ -520,6 +520,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Quit):
 			m.confirmQuit = true
 			return m, nil
+		case key.Matches(msg, m.keys.DocSearch):
+			return m.openDocSearch()
 		}
 		// Unknown leader sequence - ignore
 		return m, nil
@@ -624,6 +626,14 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.insertChar(r)
 			}
 			return m, nil
+		}
+
+		// Check if doc search selected a result
+		if ds, ok := fp.Content.(*DocSearch); ok && ds.SelectedResult != nil {
+			result := ds.SelectedResult
+			ds.SelectedResult = nil
+			m.panes.Remove("docsearch")
+			return m.openDocFromSearch(result)
 		}
 
 		// Check if variables pane needs refresh (after mode toggle)
@@ -1694,6 +1704,8 @@ func (m *Model) dispatchCommand(action string) (tea.Model, tea.Cmd) {
 		m.toggleKeysPane()
 	case "symbols":
 		m.openSymbolSearch()
+	case "docs":
+		return m.openDocSearch()
 	case "aplcart":
 		return m.openAPLcart()
 	case "reconnect":
@@ -1750,7 +1762,7 @@ func (m *Model) openDocHelp() (tea.Model, tea.Cmd) {
 	}
 
 	if m.docsDB == nil {
-		m.log("No docs database (run bundle-docs, copy to ~/.config/gritt/dyalog-docs.db)")
+		m.log("No docs database (download from https://github.com/xpqz/bundle-docs/releases)")
 		return *m, nil
 	}
 
@@ -1811,6 +1823,65 @@ func (m *Model) symbolAtCursor() string {
 	}
 
 	return ""
+}
+
+func (m *Model) openDocSearch() (tea.Model, tea.Cmd) {
+	// Toggle off if already open
+	if m.panes.Get("docsearch") != nil {
+		m.panes.Remove("docsearch")
+		return *m, nil
+	}
+
+	if m.docsDB == nil {
+		m.log("No docs database (download from https://github.com/xpqz/bundle-docs/releases)")
+		return *m, nil
+	}
+
+	ds := NewDocSearch(m.docsDB)
+
+	// Position: center, similar size to command palette
+	paneW := 60
+	paneH := min(20, m.height-4)
+	paneX := (m.width - paneW) / 2
+	paneY := 2
+
+	pane := NewPane("docsearch", ds, paneX, paneY, paneW, paneH)
+	m.panes.Add(pane)
+	m.panes.Focus("docsearch")
+
+	return *m, nil
+}
+
+func (m *Model) openDocFromSearch(result *DocSearchResult) (tea.Model, tea.Cmd) {
+	if m.docsDB == nil {
+		return *m, nil
+	}
+
+	// Fetch content by path
+	var file, content string
+	err := m.docsDB.QueryRow("SELECT file, content FROM docs WHERE path = ?", result.Path).Scan(&file, &content)
+	if err != nil {
+		m.log("Doc not found: %s", result.Path)
+		return *m, nil
+	}
+
+	// Remove existing docs pane if open
+	m.panes.Remove("docs")
+
+	// Open doc pane
+	paneW := min(90, m.width-4)
+	paneH := min(35, m.height-4)
+	paneX := (m.width - paneW) / 2
+	paneY := (m.height - paneH) / 2
+
+	processed, links := processLinks(content, file)
+	rendered := RenderMarkdown(processed, paneW-2)
+	doc := NewDocPane(result.Path, file, rendered, links, m.docsDB, paneW-2)
+	pane := NewPane("docs", doc, paneX, paneY, paneW, paneH)
+	m.panes.Add(pane)
+	m.panes.Focus("docs")
+
+	return *m, nil
 }
 
 func (m *Model) openAPLcart() (tea.Model, tea.Cmd) {
@@ -1880,6 +1951,7 @@ func (m *Model) openCommandPalette() {
 		{Name: "trace-forward", Help: "Tracer: move forward (f)"},
 		{Name: "keys", Help: "Show key bindings"},
 		{Name: "symbols", Help: "Search APL symbols"},
+		{Name: "docs", Help: "Search documentation"},
 		{Name: "aplcart", Help: "Search APLcart idioms"},
 		{Name: "reconnect", Help: "Reconnect to Dyalog"},
 		{Name: "close-all-windows", Help: "Close all editors/tracers (clear stuck state)"},
