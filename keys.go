@@ -22,6 +22,7 @@ type KeyMap struct {
 	ShowKeys         key.Binding // After leader
 	Autocomplete     key.Binding // Trigger code completion
 	DocHelp          key.Binding // Context-sensitive documentation
+	DocSearch        key.Binding // After leader - search documentation
 
 	// Navigation
 	Up    key.Binding
