@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -22,6 +23,25 @@ func TestTUI(t *testing.T) {
 	t.Log("Building gritt...")
 	if err := exec.Command("go", "build", "-o", "gritt", ".").Run(); err != nil {
 		t.Fatalf("Failed to build gritt: %v", err)
+	}
+
+	// Setup docs database for test environment (tmux runs with HOME=/tmp)
+	// Symlink the real docs DB to /tmp/.config/gritt/ if it exists
+	realHome := os.Getenv("HOME")
+	realDocsDB := filepath.Join(realHome, ".config", "gritt", "dyalog-docs.db")
+	testDocsDir := "/tmp/.config/gritt"
+	testDocsDB := filepath.Join(testDocsDir, "dyalog-docs.db")
+
+	if _, err := os.Stat(realDocsDB); err == nil {
+		os.MkdirAll(testDocsDir, 0755)
+		os.Remove(testDocsDB) // Remove old symlink if exists
+		if err := os.Symlink(realDocsDB, testDocsDB); err != nil {
+			t.Logf("Warning: could not symlink docs DB: %v", err)
+		} else {
+			t.Logf("Docs DB symlinked to %s", testDocsDB)
+		}
+	} else {
+		t.Logf("Docs DB not found at %s - docs tests will verify no-db behavior", realDocsDB)
 	}
 
 	// Check if Dyalog is running, if not try to start it
@@ -1083,6 +1103,100 @@ func TestTUI(t *testing.T) {
 	runner.Sleep(100 * time.Millisecond)
 	runner.SendLine(")erase alpha alphabet alpine zetaUnique")
 	runner.Sleep(500 * time.Millisecond)
+
+	// === DOCUMENTATION TESTS ===
+	// Open docs via command palette: C-] : then type "docs"
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys(":")
+	runner.Sleep(300 * time.Millisecond)
+	runner.SendText("docs")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Enter")
+	runner.Sleep(500 * time.Millisecond)
+	runner.Snapshot("After C-] : docs (doc search)")
+
+	// Check if doc search opened (means db is available)
+	docsAvailable := runner.Contains("Search Docs")
+
+	if docsAvailable {
+		runner.Test("Docs command opens doc search pane", func() bool {
+			return runner.Contains("Search Docs")
+		})
+
+		// Test: Type to search
+		runner.SendText("iota")
+		runner.Sleep(500 * time.Millisecond)
+		runner.Snapshot("Doc search filtered for 'iota'")
+
+		runner.Test("Doc search shows results for 'iota'", func() bool {
+			return runner.Contains("Index Generator") || runner.Contains("Iota")
+		})
+
+		// Test: Select a result with Enter
+		runner.SendKeys("Enter")
+		runner.Sleep(500 * time.Millisecond)
+		runner.Snapshot("Doc pane opened from search")
+
+		runner.Test("Selecting search result opens doc pane", func() bool {
+			// Doc pane should replace search pane
+			return !runner.Contains("Search Docs")
+		})
+
+		// Test: Navigate with j/k
+		runner.SendKeys("j", "j", "j")
+		runner.Sleep(200 * time.Millisecond)
+		runner.Snapshot("After scrolling doc with j")
+
+		// Test: Tab cycles through links
+		runner.SendKeys("Tab")
+		runner.Sleep(200 * time.Millisecond)
+		runner.Snapshot("After Tab in doc pane (link selected)")
+
+		// Test: Escape closes doc pane
+		runner.SendKeys("Escape")
+		runner.Sleep(300 * time.Millisecond)
+		runner.Snapshot("After closing doc pane")
+
+		runner.Test("Escape closes doc pane", func() bool {
+			return !runner.Contains("╔")
+		})
+
+		// Test: F1 context-sensitive help
+		runner.SendText("⍳")
+		runner.Sleep(100 * time.Millisecond)
+		runner.SendKeys("F1")
+		runner.Sleep(500 * time.Millisecond)
+		runner.Snapshot("After F1 with cursor on iota")
+
+		runner.Test("F1 opens context help for iota", func() bool {
+			return runner.Contains("Iota") || runner.Contains("Index Generator")
+		})
+
+		runner.SendKeys("Escape")
+		runner.Sleep(200 * time.Millisecond)
+
+		// Clean up input line
+		runner.SendKeys("Home")
+		for i := 0; i < 5; i++ {
+			runner.SendKeys("Delete")
+		}
+		runner.Sleep(100 * time.Millisecond)
+	} else {
+		// No docs database - check debug pane for message
+		runner.SendKeys("C-]")
+		runner.Sleep(100 * time.Millisecond)
+		runner.SendKeys("d")
+		runner.Sleep(300 * time.Millisecond)
+		runner.Snapshot("Debug pane after docs attempt (no db)")
+
+		runner.Test("No docs database message logged", func() bool {
+			return runner.Contains("No docs database")
+		})
+
+		runner.SendKeys("Escape")
+		runner.Sleep(200 * time.Millisecond)
+	}
 
 	// Final snapshot
 	runner.Snapshot("Final state")
