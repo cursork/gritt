@@ -70,11 +70,23 @@ func main() {
 		var port int
 		dyalogCmd, port = launchDyalog()
 		*addr = fmt.Sprintf("localhost:%d", port)
-		defer func() {
+
+		// Cleanup function to kill Dyalog process group
+		killDyalog := func() {
 			if dyalogCmd.Process != nil {
-				// Kill process group to clean up helper processes
 				syscall.Kill(-dyalogCmd.Process.Pid, syscall.SIGKILL)
+				dyalogCmd.Wait() // Reap zombie
 			}
+		}
+		defer killDyalog()
+
+		// Handle signals to ensure cleanup on Ctrl+C, etc.
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		go func() {
+			<-sigCh
+			killDyalog()
+			os.Exit(0)
 		}()
 	}
 
@@ -104,7 +116,13 @@ func main() {
 			runLink(client, *link)
 		}
 		for _, expr := range exprs {
-			runExpr(client, expr)
+			// Split multiline expressions and execute each line
+			for _, line := range strings.Split(expr, "\n") {
+				line = strings.TrimSpace(line)
+				if line != "" {
+					runExpr(client, line)
+				}
+			}
 		}
 		return
 	}
