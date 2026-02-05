@@ -59,7 +59,8 @@ func main() {
 	flag.Var(&exprs, "e", "Execute expression and exit (can be repeated)")
 	stdin := flag.Bool("stdin", false, "Read expressions from stdin")
 	sock := flag.String("sock", "", "Unix socket path for APL server")
-	link := flag.String("link", "", "Link directory (path or ns:path)")
+	var links multiFlag
+	flag.Var(&links, "link", "Link directory (path or ns:path, can be repeated)")
 	launch := flag.Bool("launch", false, "Launch Dyalog automatically (alias: -l)")
 	flag.BoolVar(launch, "l", false, "Launch Dyalog automatically")
 	flag.Parse()
@@ -112,9 +113,7 @@ func main() {
 			log.Fatal(err)
 		}
 		defer client.Close()
-		if *link != "" {
-			runLink(client, *link)
-		}
+		runLinks(client, links)
 		for _, expr := range exprs {
 			// Split multiline expressions and execute each line
 			for _, line := range strings.Split(expr, "\n") {
@@ -132,9 +131,7 @@ func main() {
 			log.Fatal(err)
 		}
 		defer client.Close()
-		if *link != "" {
-			runLink(client, *link)
-		}
+		runLinks(client, links)
 		scanner := bufio.NewScanner(os.Stdin)
 		for scanner.Scan() {
 			runExpr(client, scanner.Text())
@@ -150,9 +147,7 @@ func main() {
 			log.Fatal(err)
 		}
 		defer client.Close()
-		if *link != "" {
-			runLink(client, *link)
-		}
+		runLinks(client, links)
 		runSocket(client, *sock)
 		return
 	}
@@ -167,6 +162,13 @@ func main() {
 	p := tea.NewProgram(NewModel(*addr, logWriter, colorProfile), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
+	}
+}
+
+// runLinks runs ]link.create for each spec
+func runLinks(client *ride.Client, specs []string) {
+	for _, spec := range specs {
+		runLink(client, spec)
 	}
 }
 
