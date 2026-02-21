@@ -1,42 +1,25 @@
 # FACIENDA - Things to be done
 
-## Priority: Pane Interactivity
+## GitHub Issues (prioritized)
+
+1. **#15 History paging** — Ctrl-Shift-Backspace/Enter to step through session history (like RIDE)
+2. **#9 ctrl-l** — Clear screen
+3. **#7 Focus mode** — Fullscreen undecorated view of focused pane (or session) for copy-paste
+4. **#3 Multithreaded tracing** — Switch between suspended functions in different threads via tracer tabs
+5. **#4 Inline tracing** — `IT` command: left/right args, current fn, axis spec, previous result etc.
+6. **#5 Proper multiline mode** — Explicit multiline input with `[`, edit lines before send. Important for APLAN.
+7. **#6 Syntax highlighting** — `)` commands, `]` commands, `⎕` fns, `:Keywords`, glyph vs name distinction
+8. **#13 Docs follow-ups** — Fix highlighting, grab example code, compile into binary (check IP)
+
+## Pane Interactivity
 - [ ] Mouse drag edges to resize (partially broken)
 - [ ] Multiple interactive panes: all N panes should be interactive, not just focused one
 - [ ] Singleton panes (stack, debug, etc.) should persist position/size after dismiss/recreate
 - [ ] Tab should cycle focus back to session (not just between panes)
 
-
-## Testing Infrastructure
-- [ ] Attempts to use tmux send-keys to test backticks for eg comments failed
-
-## Future Enhancements
-- [ ] Protocol audit: evaluate all unsupported RIDE messages, prioritize by importance
-- [ ] Clipboard support (Ctrl+C copy, Ctrl+V paste)
-
-## Phase 3: Editors - DONE
-- [x] Handle OpenWindow/UpdateWindow messages
-- [x] Editor pane (floating, using pane system)
-- [x] Text editing for functions/operators
-- [x] SaveChanges message
-- [x] CloseWindow handling
-- [x] Tracer window support (debugger:1, SetHighlightLine, WindowTypeChanged)
-
-## Phase 4: Tracer (mostly complete)
-- [x] Stack trace pane (C-] s toggle, click to switch frames)
-- [x] Single tracer pane (not multiple overlapping windows like JS RIDE)
-- [x] Escape pops stack frame
-- [x] Step into/over/out commands (i, Enter/n, o keys)
-- [x] Continue, resume all (c, r keys)
-- [x] Trace backward/forward (p, f keys)
-- [x] Breakpoints (C-] b toggle, visual indicator, immediate effect)
-- [x] Edit mode in tracer (e to edit, Esc to return to tracing)
-- [x] Clear stuck state command (close-all-windows via command palette)
-- [x] Automatic window restoration (GetWindowLayout on connect)
-- [x] Variables pane (C-] l toggle, ~ for [local]/[all] mode, Enter to edit, • marks locals)
+## Tracer (remaining)
 - [ ] Test: popping stack frame in tracer should update variables pane
 - [ ] Test: large values in variables pane (e.g. `x←1000 1000⍴⍳1000×1000`) should truncate but still allow editing
-- [x] Tracer: bold the current line
 - [ ] Tracer-specific status bar (show tracer keys when focused)
 - [ ] Configurable tracer keys (currently hardcoded)
 
@@ -45,26 +28,22 @@
 - [ ] APLcart rendering cleanup (pink → standard gray)
 - [ ] Consistent gray pane colors
 
-## Phase 5: Dialogs
+## Dialogs
 - [ ] OptionsDialog (yes/no/cancel prompts)
 - [ ] StringDialog (text input)
 - [ ] ReplyOptionsDialog/ReplyStringDialog
 
-## Phase 6: APL Input - DONE
-- [x] Backtick prefix for APL symbols (`` `a `` → `⍺`, `` `r `` → `⍴`, etc.)
-- [x] Symbol search modal - search by name ("iota", "rho", "shape", "each")
-- [x] APLcart modal - search idioms from aplcart.info
-
-## Phase 7: Polish
-- [ ] Syntax highlighting for APL
+## Other
 - [ ] Input history (beyond session - persist across runs?)
+- [ ] Protocol audit: evaluate all unsupported RIDE messages, prioritize by importance
+- [ ] Clipboard support (Ctrl+C copy, Ctrl+V paste)
 - [ ] Status bar (connection info, workspace name from UpdateSessionCaption)
 - [ ] Better error display (HadError message handling)
 - [ ] Highlight ⍝« commands in session output
-
-## Future Ideas
-- [ ] Multiline input improvements (RIDE does this poorly)
 - [ ] Multiple workspace connections?
+
+## Testing Infrastructure
+- [ ] Attempts to use tmux send-keys to test backticks for eg comments failed
 
 ---
 
