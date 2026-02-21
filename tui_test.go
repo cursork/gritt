@@ -1202,49 +1202,59 @@ func TestTUI(t *testing.T) {
 	// Test: History paging (ctrl+shift+up/down)
 	// ==========================================
 
-	// Execute a few distinct expressions to populate history
-	runner.SendLine("'first'")
-	runner.WaitFor("first", 3*time.Second)
-	runner.SendLine("'second'")
-	runner.WaitFor("second", 3*time.Second)
-	runner.SendLine("'third'")
-	runner.WaitFor("third", 3*time.Second)
-	runner.Snapshot("After executing three expressions for history test")
+	// Execute expressions with unique markers that won't appear in output
+	runner.SendLine("hist1←101")
+	runner.WaitFor("101", 3*time.Second)
+	runner.SendLine("hist2←202")
+	runner.WaitFor("202", 3*time.Second)
+	runner.SendLine("hist3←303")
+	runner.WaitFor("303", 3*time.Second)
 
-	// ctrl+shift+up should recall 'third' (most recent)
+	// Clear screen so previous output is gone — only the input line remains
+	runner.SendKeys("C-l")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("Cleared screen before history test")
+
+	// Verify the executed text is gone
+	runner.Test("Screen cleared before history test", func() bool {
+		return !runner.Contains("hist3←303")
+	})
+
+	// ctrl+shift+up should recall hist3←303 (most recent)
 	runner.SendKeys(string([]byte{0x1b}), "[1;6A") // ESC[1;6A = ctrl+shift+up
 	runner.Sleep(300 * time.Millisecond)
-	runner.Snapshot("After ctrl+shift+up (should show 'third')")
+	runner.Snapshot("After ctrl+shift+up (should show hist3)")
 
 	runner.Test("History back recalls most recent command", func() bool {
-		return runner.Contains("'third'")
+		return runner.Contains("hist3")
 	})
 
-	// ctrl+shift+up again should recall 'second'
+	// ctrl+shift+up again should recall hist2←202
 	runner.SendKeys(string([]byte{0x1b}), "[1;6A")
 	runner.Sleep(300 * time.Millisecond)
-	runner.Snapshot("After second ctrl+shift+up (should show 'second')")
+	runner.Snapshot("After second ctrl+shift+up (should show hist2)")
 
 	runner.Test("History back again recalls second command", func() bool {
-		return runner.Contains("'second'")
+		// hist3 should be replaced by hist2 on the input line
+		return runner.Contains("hist2") && !runner.Contains("hist3")
 	})
 
-	// ctrl+shift+down should go forward to 'third'
+	// ctrl+shift+down should go forward to hist3
 	runner.SendKeys(string([]byte{0x1b}), "[1;6B") // ESC[1;6B = ctrl+shift+down
 	runner.Sleep(300 * time.Millisecond)
-	runner.Snapshot("After ctrl+shift+down (should show 'third')")
+	runner.Snapshot("After ctrl+shift+down (should show hist3)")
 
 	runner.Test("History forward returns to more recent command", func() bool {
-		return runner.Contains("'third'")
+		return runner.Contains("hist3") && !runner.Contains("hist2")
 	})
 
 	// ctrl+shift+down again should restore empty input
 	runner.SendKeys(string([]byte{0x1b}), "[1;6B")
 	runner.Sleep(300 * time.Millisecond)
 
-	// Execute to clear the input line
-	runner.SendKeys("Enter")
-	runner.Sleep(500 * time.Millisecond)
+	runner.Test("History forward to live input clears recalled text", func() bool {
+		return !runner.Contains("hist3")
+	})
 
 	// ==========================================
 	// Test: Focus mode (C-] f) — session
@@ -1322,17 +1332,24 @@ func TestTUI(t *testing.T) {
 	runner.Sleep(300 * time.Millisecond)
 
 	// ==========================================
-	// Test: Clear screen (ctrl+l) — last, since it wipes everything
+	// Test: Clear screen (ctrl+l)
 	// ==========================================
 
+	// Put some identifiable content on screen first
+	runner.SendLine("cleartest←999")
+	runner.WaitFor("999", 3*time.Second)
 	runner.Snapshot("Before clear screen")
+
+	runner.Test("Content visible before clear", func() bool {
+		return runner.Contains("cleartest←999")
+	})
 
 	runner.SendKeys("C-l")
 	runner.Sleep(300 * time.Millisecond)
 	runner.Snapshot("After ctrl+l (clear screen)")
 
 	runner.Test("Clear screen removes previous output", func() bool {
-		return !runner.Contains("1 2 3 4 5")
+		return !runner.Contains("cleartest←999")
 	})
 
 	// History should still work after clear
@@ -1341,8 +1358,7 @@ func TestTUI(t *testing.T) {
 	runner.Snapshot("History recall after clear screen")
 
 	runner.Test("History still works after clear screen", func() bool {
-		// Most recent command was )erase FocusTest
-		return runner.Contains(")erase FocusTest")
+		return runner.Contains("cleartest")
 	})
 
 	// Reset - go back to live input
