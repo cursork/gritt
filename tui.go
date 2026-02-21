@@ -95,6 +95,14 @@ type Model struct {
 	lastExecute  string // Last text we sent via Execute (to skip our own echo)
 	pendingQuit  bool   // True if last command was )off
 
+	// Command history (ctrl+shift+up/down to cycle)
+	history      []string // Previously executed commands (newest at index 0)
+	historyIdx   int      // 0 = live input, 1+ = history position
+	historySaved string   // Saved live input when navigating
+
+	// Focus mode
+	focusMode bool
+
 	// Debug log (shared with debug pane, survives Model copies)
 	debugLog *LogBuffer
 	logFile  io.Writer // Optional file for logging (shared across copies)
@@ -522,6 +530,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case key.Matches(msg, m.keys.DocSearch):
 			return m.openDocSearch()
+		case key.Matches(msg, m.keys.FocusMode):
+			m.focusMode = !m.focusMode
+			return m, nil
 		}
 		// Unknown leader sequence - ignore
 		return m, nil
@@ -547,8 +558,18 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.openDocHelp()
 	}
 
+	// Exit focus mode on ESC
+	if m.focusMode && msg.Type == tea.KeyEscape {
+		m.focusMode = false
+		return m, nil
+	}
+
 	// Global shortcuts (always work regardless of focus)
 	switch {
+
+	case key.Matches(msg, m.keys.ClearScreen):
+		m.clearScreen()
+		return m, nil
 
 	case key.Matches(msg, m.keys.Autocomplete):
 		// Trigger autocomplete request - works in session or editor (edit mode)
@@ -702,6 +723,16 @@ func (m *Model) toggleDebugPane() {
 }
 
 func (m Model) handleSessionKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// History navigation (before main switch - these are configurable bindings)
+	switch {
+	case key.Matches(msg, m.keys.HistoryBack):
+		m.historyBack()
+		return m, nil
+	case key.Matches(msg, m.keys.HistoryForward):
+		m.historyForward()
+		return m, nil
+	}
+
 	switch msg.Type {
 	case tea.KeyEnter:
 		return m.execute()
@@ -919,6 +950,47 @@ func (m *Model) clampCol() {
 	}
 }
 
+func (m *Model) historyBack() {
+	if len(m.history) == 0 || m.historyIdx >= len(m.history) {
+		return
+	}
+	// Move to last line first
+	m.cursorRow = len(m.lines) - 1
+	// Save current input when starting navigation
+	if m.historyIdx == 0 {
+		m.historySaved = m.currentLine()
+	}
+	m.historyIdx++
+	m.setCurrentLine(m.history[m.historyIdx-1])
+	// Position cursor at end of text
+	m.cursorCol = len(m.currentLineRunes())
+}
+
+func (m *Model) historyForward() {
+	if m.historyIdx <= 0 {
+		return
+	}
+	// Move to last line first
+	m.cursorRow = len(m.lines) - 1
+	m.historyIdx--
+	if m.historyIdx == 0 {
+		// Restore saved live input
+		m.setCurrentLine(m.historySaved)
+		m.historySaved = ""
+	} else {
+		m.setCurrentLine(m.history[m.historyIdx-1])
+	}
+	m.cursorCol = len(m.currentLineRunes())
+}
+
+func (m *Model) clearScreen() {
+	m.lines = []Line{{Text: aplIndent}}
+	m.cursorRow = 0
+	m.cursorCol = len(aplIndent)
+	m.historyIdx = 0
+	m.historySaved = ""
+}
+
 func (m Model) execute() (tea.Model, tea.Cmd) {
 	if !m.ready {
 		m.log("Execute blocked: not ready")
@@ -965,6 +1037,16 @@ func (m Model) execute() (tea.Model, tea.Cmd) {
 	m.ready = false
 	m.lastExecute = editedText + "\n" // Track what we sent to skip our own echo
 	m.pendingQuit = strings.TrimSpace(editedText) == ")off"
+
+	// Push to command history (skip duplicates, cap at 500)
+	if len(m.history) == 0 || m.history[0] != editedText {
+		m.history = append([]string{editedText}, m.history...)
+		if len(m.history) > 500 {
+			m.history = m.history[:500]
+		}
+	}
+	m.historyIdx = 0
+	m.historySaved = ""
 	m.log("→ Execute %q", editedText)
 
 	// Send to interpreter
@@ -1708,6 +1790,14 @@ func (m *Model) dispatchCommand(action string) (tea.Model, tea.Cmd) {
 		return m.openDocSearch()
 	case "aplcart":
 		return m.openAPLcart()
+	case "history-back":
+		m.historyBack()
+	case "history-forward":
+		m.historyForward()
+	case "clear":
+		m.clearScreen()
+	case "focus":
+		m.focusMode = !m.focusMode
 	case "reconnect":
 		return m.reconnect()
 	case "save":
@@ -1937,7 +2027,19 @@ func (m *Model) openCommandPalette() {
 	}
 
 	// Build command list
+	hint := func(b key.Binding) string {
+		h := b.Help()
+		if h.Key != "" {
+			return " (" + h.Key + ")"
+		}
+		return ""
+	}
+
 	commands := []Command{
+		{Name: "history-back", Help: "Previous command" + hint(m.keys.HistoryBack)},
+		{Name: "history-forward", Help: "Next command" + hint(m.keys.HistoryForward)},
+		{Name: "clear", Help: "Clear session screen" + hint(m.keys.ClearScreen)},
+		{Name: "focus", Help: "Toggle focus mode" + hint(m.keys.FocusMode)},
 		{Name: "debug", Help: "Toggle debug pane"},
 		{Name: "stack", Help: "Toggle stack pane"},
 		{Name: "variables", Help: "Toggle variables pane (tracer)"},
@@ -2274,6 +2376,10 @@ func (m Model) View() string {
 		h = 24
 	}
 
+	if m.focusMode {
+		return m.viewFocusMode(w, h)
+	}
+
 	// Reserve space for help line
 	helpHeight := 1
 	if m.help.ShowAll {
@@ -2323,6 +2429,33 @@ func (m Model) View() string {
 	}
 
 	return base + "\n" + helpView
+}
+
+func (m Model) viewFocusMode(w, h int) string {
+	contentH := h - 1 // Reserve 1 line for hint bar
+
+	var content string
+	if fp := m.panes.FocusedPane(); fp != nil && fp.Content != nil {
+		// Render focused pane content without borders
+		content = fp.Content.Render(w, contentH)
+	} else {
+		// Session view without borders
+		content = m.renderSession(w, contentH)
+	}
+
+	// Pad to height
+	lines := strings.Split(content, "\n")
+	for len(lines) < contentH {
+		lines = append(lines, strings.Repeat(" ", w))
+	}
+	if len(lines) > contentH {
+		lines = lines[:contentH]
+	}
+
+	hintStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	hint := hintStyle.Render("C-] f or ESC to exit focus mode")
+
+	return strings.Join(lines, "\n") + "\n" + hint
 }
 
 func (m Model) viewSession(w, h int) string {

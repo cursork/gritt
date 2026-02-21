@@ -49,6 +49,10 @@ type KeyMapConfig struct {
 	Autocomplete     []string `json:"autocomplete"`
 	DocHelp          []string `json:"doc_help"`
 	DocSearch        []string `json:"doc_search"`
+	HistoryBack      []string `json:"history_back"`
+	HistoryForward   []string `json:"history_forward"`
+	ClearScreen      []string `json:"clear_screen"`
+	FocusMode        []string `json:"focus_mode"`
 
 	Up    []string `json:"up"`
 	Down  []string `json:"down"`
@@ -118,6 +122,10 @@ func (c *Config) ToKeyMap() KeyMap {
 		Autocomplete:     c.binding(c.Keys.Autocomplete, "", "autocomplete"),
 		DocHelp:          c.binding(c.Keys.DocHelp, "", "doc help"),
 		DocSearch:        c.bindingWithLeader(c.Keys.DocSearch, "search docs"),
+		HistoryBack:      c.binding(c.Keys.HistoryBack, "", "history back"),
+		HistoryForward:   c.binding(c.Keys.HistoryForward, "", "history forward"),
+		ClearScreen:      c.binding(c.Keys.ClearScreen, "", "clear screen"),
+		FocusMode:        c.bindingWithLeader(c.Keys.FocusMode, "focus mode"),
 		Up:          c.binding(c.Keys.Up, "", "up"),
 		Down:        c.binding(c.Keys.Down, "", "down"),
 		Left:        c.binding(c.Keys.Left, "", "left"),

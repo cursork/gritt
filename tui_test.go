@@ -1198,6 +1198,157 @@ func TestTUI(t *testing.T) {
 		runner.Sleep(200 * time.Millisecond)
 	}
 
+	// ==========================================
+	// Test: History paging (ctrl+shift+up/down)
+	// ==========================================
+
+	// Execute a few distinct expressions to populate history
+	runner.SendLine("'first'")
+	runner.WaitFor("first", 3*time.Second)
+	runner.SendLine("'second'")
+	runner.WaitFor("second", 3*time.Second)
+	runner.SendLine("'third'")
+	runner.WaitFor("third", 3*time.Second)
+	runner.Snapshot("After executing three expressions for history test")
+
+	// ctrl+shift+up should recall 'third' (most recent)
+	runner.SendKeys(string([]byte{0x1b}), "[1;6A") // ESC[1;6A = ctrl+shift+up
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("After ctrl+shift+up (should show 'third')")
+
+	runner.Test("History back recalls most recent command", func() bool {
+		return runner.Contains("'third'")
+	})
+
+	// ctrl+shift+up again should recall 'second'
+	runner.SendKeys(string([]byte{0x1b}), "[1;6A")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("After second ctrl+shift+up (should show 'second')")
+
+	runner.Test("History back again recalls second command", func() bool {
+		return runner.Contains("'second'")
+	})
+
+	// ctrl+shift+down should go forward to 'third'
+	runner.SendKeys(string([]byte{0x1b}), "[1;6B") // ESC[1;6B = ctrl+shift+down
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("After ctrl+shift+down (should show 'third')")
+
+	runner.Test("History forward returns to more recent command", func() bool {
+		return runner.Contains("'third'")
+	})
+
+	// ctrl+shift+down again should restore empty input
+	runner.SendKeys(string([]byte{0x1b}), "[1;6B")
+	runner.Sleep(300 * time.Millisecond)
+
+	// Execute to clear the input line
+	runner.SendKeys("Enter")
+	runner.Sleep(500 * time.Millisecond)
+
+	// ==========================================
+	// Test: Focus mode (C-] f) — session
+	// ==========================================
+
+	// Session has content from previous tests — good for visual check
+	runner.Snapshot("Before focus mode (session with content)")
+
+	// Enter focus mode on session
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys("f")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("Focus mode (session)")
+
+	runner.Test("Focus mode removes border", func() bool {
+		return !runner.Contains("╭─")
+	})
+
+	runner.Test("Focus mode shows exit hint", func() bool {
+		return runner.Contains("focus mode")
+	})
+
+	// ESC exits focus mode
+	runner.SendKeys("Escape")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("After exiting focus mode")
+
+	runner.Test("ESC exits focus mode", func() bool {
+		return runner.Contains("╭─")
+	})
+
+	// ==========================================
+	// Test: Focus mode — editor pane
+	// ==========================================
+
+	// Open an editor
+	runner.SendLine(")erase FocusTest")
+	runner.Sleep(300 * time.Millisecond)
+	runner.SendLine(")ed FocusTest")
+	runner.WaitFor("FocusTest", 3*time.Second)
+	runner.Sleep(300 * time.Millisecond)
+
+	// Type some content so the editor isn't empty
+	runner.SendKeys("End", "Enter", "Enter")
+	runner.SendText("r←42")
+	runner.Sleep(200 * time.Millisecond)
+	runner.Snapshot("Editor open before focus mode")
+
+	// Enter focus mode with editor focused
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys("f")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("Focus mode (editor)")
+
+	runner.Test("Focus mode on editor removes border", func() bool {
+		return !runner.Contains("╭─")
+	})
+
+	runner.Test("Focus mode on editor shows content", func() bool {
+		return runner.Contains("r←42")
+	})
+
+	// Exit focus mode
+	runner.SendKeys("Escape")
+	runner.Sleep(300 * time.Millisecond)
+
+	// Close the editor
+	runner.SendKeys("Escape")
+	runner.Sleep(300 * time.Millisecond)
+
+	// Clean up
+	runner.SendLine(")erase FocusTest")
+	runner.Sleep(300 * time.Millisecond)
+
+	// ==========================================
+	// Test: Clear screen (ctrl+l) — last, since it wipes everything
+	// ==========================================
+
+	runner.Snapshot("Before clear screen")
+
+	runner.SendKeys("C-l")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("After ctrl+l (clear screen)")
+
+	runner.Test("Clear screen removes previous output", func() bool {
+		return !runner.Contains("1 2 3 4 5")
+	})
+
+	// History should still work after clear
+	runner.SendKeys(string([]byte{0x1b}), "[1;6A")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("History recall after clear screen")
+
+	runner.Test("History still works after clear screen", func() bool {
+		// Most recent command was )erase FocusTest
+		return runner.Contains(")erase FocusTest")
+	})
+
+	// Reset - go back to live input
+	runner.SendKeys(string([]byte{0x1b}), "[1;6B")
+	runner.Sleep(200 * time.Millisecond)
+
 	// Final snapshot
 	runner.Snapshot("Final state")
 

@@ -23,6 +23,10 @@ type KeyMap struct {
 	Autocomplete     key.Binding // Trigger code completion
 	DocHelp          key.Binding // Context-sensitive documentation
 	DocSearch        key.Binding // After leader - search documentation
+	HistoryBack      key.Binding // Cycle to previous command
+	HistoryForward   key.Binding // Cycle to next command
+	ClearScreen      key.Binding // Clear session screen
+	FocusMode        key.Binding // After leader - toggle focus mode
 
 	// Navigation
 	Up    key.Binding

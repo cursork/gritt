@@ -16,6 +16,10 @@
     "autocomplete": ["tab"],
     "doc_help": ["f1"],
     "doc_search": ["/"],
+    "history_back": ["ctrl+shift+up"],
+    "history_forward": ["ctrl+shift+down"],
+    "clear_screen": ["ctrl+l"],
+    "focus_mode": ["f"],
 
     "up": ["up"],
     "down": ["down"],
