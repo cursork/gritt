@@ -1365,6 +1365,79 @@ func TestTUI(t *testing.T) {
 	runner.SendKeys(string([]byte{0x1b}), "[1;6B")
 	runner.Sleep(200 * time.Millisecond)
 
+	// ==========================================
+	// Test: Save and load session
+	// ==========================================
+
+	// Put identifiable content on screen
+	runner.SendLine("loadmarker←777")
+	runner.WaitFor("777", 3*time.Second)
+	runner.Snapshot("Before save for load test")
+
+	// Save session via command palette
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys(":")
+	runner.Sleep(300 * time.Millisecond)
+	runner.SendText("save")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Enter")
+	runner.Sleep(300 * time.Millisecond)
+
+	// Clear the default filename and type our own
+	for i := 0; i < 30; i++ {
+		runner.SendKeys("BSpace")
+	}
+	runner.SendText("test-session-load")
+	runner.Sleep(200 * time.Millisecond)
+	runner.Snapshot("Save prompt with custom filename")
+
+	runner.Test("Save prompt shows custom filename", func() bool {
+		return runner.Contains("test-session-load")
+	})
+
+	runner.SendKeys("Enter") // Accept save
+	runner.Sleep(500 * time.Millisecond)
+
+	// Clear screen so loadmarker is gone
+	runner.SendKeys("C-l")
+	runner.Sleep(300 * time.Millisecond)
+
+	runner.Test("Screen cleared after save", func() bool {
+		return !runner.Contains("loadmarker")
+	})
+
+	// Open load command from palette
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys(":")
+	runner.Sleep(300 * time.Millisecond)
+	runner.SendText("load")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Enter")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("Load prompt showing")
+
+	runner.Test("Load prompt shows default filename", func() bool {
+		return runner.Contains("Load:")
+	})
+
+	// Type custom filename to load
+	runner.SendText("test-session-load")
+	runner.Sleep(200 * time.Millisecond)
+	runner.Snapshot("Load prompt with custom filename")
+
+	runner.SendKeys("Enter") // Accept load
+	runner.Sleep(500 * time.Millisecond)
+	runner.Snapshot("After loading session")
+
+	runner.Test("Loaded session contains saved content", func() bool {
+		return runner.Contains("loadmarker") || runner.Contains("777")
+	})
+
+	// Clean up test file
+	os.Remove("test-session-load")
+
 	// Final snapshot
 	runner.Snapshot("Final state")
 

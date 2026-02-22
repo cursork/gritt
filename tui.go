@@ -129,9 +129,13 @@ type Model struct {
 	confirmQuit  bool
 	paneMoveMode bool // Arrow keys move/resize focused pane
 
-	// Save prompt state
+	// Save/Load prompt state
 	savePromptActive   bool
 	savePromptFilename string
+	loadPromptActive   bool
+	loadPromptFilename string
+	loadPromptDefault  string // most recent session-* file
+	loadPromptCustom   bool   // true once user starts typing
 
 	// Backtick mode for APL symbol input
 	backtickActive bool
@@ -444,6 +448,38 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		default:
 			if len(msg.Runes) > 0 {
 				m.savePromptFilename += string(msg.Runes)
+			}
+			return m, nil
+		}
+	}
+
+	// Handle load prompt
+	if m.loadPromptActive {
+		switch msg.Type {
+		case tea.KeyEscape:
+			m.loadPromptActive = false
+			m.log("Load cancelled")
+			return m, nil
+		case tea.KeyEnter:
+			m.loadPromptActive = false
+			m.doLoadSession()
+			return m, nil
+		case tea.KeyBackspace:
+			if m.loadPromptCustom {
+				if len(m.loadPromptFilename) > 0 {
+					m.loadPromptFilename = m.loadPromptFilename[:len(m.loadPromptFilename)-1]
+				} else {
+					m.loadPromptCustom = false
+				}
+			}
+			return m, nil
+		default:
+			if len(msg.Runes) > 0 {
+				if !m.loadPromptCustom {
+					m.loadPromptCustom = true
+					m.loadPromptFilename = ""
+				}
+				m.loadPromptFilename += string(msg.Runes)
 			}
 			return m, nil
 		}
@@ -1802,6 +1838,8 @@ func (m *Model) dispatchCommand(action string) (tea.Model, tea.Cmd) {
 		return m.reconnect()
 	case "save":
 		m.saveSession()
+	case "load":
+		m.loadSession()
 	case "quit":
 		m.confirmQuit = true
 	// Tracer controls
@@ -2019,6 +2057,42 @@ func (m *Model) doSaveSession() {
 	}
 }
 
+func (m *Model) loadSession() {
+	// Find most recent session-* file
+	matches, _ := filepath.Glob("session-*")
+	sort.Strings(matches)
+	m.loadPromptDefault = ""
+	if len(matches) > 0 {
+		m.loadPromptDefault = matches[len(matches)-1]
+	}
+	m.loadPromptFilename = ""
+	m.loadPromptCustom = false
+	m.loadPromptActive = true
+}
+
+func (m *Model) doLoadSession() {
+	filename := m.loadPromptDefault
+	if m.loadPromptCustom {
+		filename = m.loadPromptFilename
+	}
+	if filename == "" {
+		m.log("Load cancelled (no file)")
+		return
+	}
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		m.log("Failed to load session: %v", err)
+		return
+	}
+	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
+	for _, line := range lines {
+		m.lines = append(m.lines, Line{Text: line})
+	}
+	m.cursorRow = len(m.lines) - 1
+	m.cursorCol = 0
+	m.log("Loaded %d lines from %s", len(lines), filename)
+}
+
 func (m *Model) openCommandPalette() {
 	// Remove existing palette if open
 	if m.panes.Get("commands") != nil {
@@ -2058,6 +2132,7 @@ func (m *Model) openCommandPalette() {
 		{Name: "reconnect", Help: "Reconnect to Dyalog"},
 		{Name: "close-all-windows", Help: "Close all editors/tracers (clear stuck state)"},
 		{Name: "save", Help: "Save session to file"},
+		{Name: "load", Help: "Load session from file"},
 		{Name: "quit", Help: "Quit gritt"},
 	}
 
@@ -2418,6 +2493,16 @@ func (m Model) View() string {
 	} else if m.savePromptActive {
 		promptStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("82")).Bold(true)
 		helpView = promptStyle.Render("Save as: ") + m.savePromptFilename + cursorStyle.Render(" ")
+	} else if m.loadPromptActive {
+		promptStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("82")).Bold(true)
+		dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+		if m.loadPromptCustom {
+			helpView = promptStyle.Render("Load: ") + m.loadPromptFilename + cursorStyle.Render(" ")
+		} else if m.loadPromptDefault != "" {
+			helpView = promptStyle.Render("Load: ") + dimStyle.Render(m.loadPromptDefault) + dimStyle.Render(" (enter)")
+		} else {
+			helpView = promptStyle.Render("Load: ") + dimStyle.Render("no session files found")
+		}
 	} else if m.backtickActive {
 		backtickStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("207")).Bold(true)
 		helpView = backtickStyle.Render("` APL symbol...")
