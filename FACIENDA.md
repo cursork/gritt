@@ -1,10 +1,14 @@
 # FACIENDA - Things to be done
 
+## Priority
+
+- [x] **Variable editing** — Resolved: Dyalog sends `readOnly=1` for numeric arrays (entityType 4), `readOnly=0` for char vectors (entityType 128). Matches RIDE behavior. Title now shows `[read-only]` vs `[edit]`.
+
 ## GitHub Issues (prioritized)
 
-1. **#15 History paging** — Ctrl-Shift-Backspace/Enter to step through session history (like RIDE)
-2. **#9 ctrl-l** — Clear screen
-3. **#7 Focus mode** — Fullscreen undecorated view of focused pane (or session) for copy-paste
+1. ~~**#15 History paging**~~ — Done
+2. ~~**#9 ctrl-l**~~ — Done
+3. ~~**#7 Focus mode**~~ — Done
 4. **#3 Multithreaded tracing** — Switch between suspended functions in different threads via tracer tabs
 5. **#4 Inline tracing** — `IT` command: left/right args, current fn, axis spec, previous result etc.
 6. **#5 Proper multiline mode** — Explicit multiline input with `[`, edit lines before send. Important for APLAN.
@@ -15,15 +19,17 @@
 - [ ] Mouse drag edges to resize (partially broken)
 - [ ] Multiple interactive panes: all N panes should be interactive, not just focused one
 - [ ] Singleton panes (stack, debug, etc.) should persist position/size after dismiss/recreate
-- [ ] Tab should cycle focus back to session (not just between panes)
+- [ ] C-] n should cycle focus back to session (not just between panes)
 
 ## Tracer (remaining)
 - [ ] Test: popping stack frame in tracer should update variables pane
 - [ ] Test: large values in variables pane (e.g. `x←1000 1000⍴⍳1000×1000`) should truncate but still allow editing
-- [ ] Tracer-specific status bar (show tracer keys when focused)
+- [x] Tracer-specific status bar (show tracer keys when focused) — done via context-sensitive bottom bar
 - [ ] Configurable tracer keys (currently hardcoded)
 
 ## Polish
+- [ ] Update key mappings pane (C-] ?) — missing entries like C-] m (move/resize), C-] l (variables), etc.
+- [x] Context-sensitive bottom bar hints for focused panes (variables, editor, read-only editor, tracer)
 - [ ] Symbol search rendering cleanup
 - [ ] APLcart rendering cleanup (pink → standard gray)
 - [ ] Consistent gray pane colors
@@ -34,7 +40,8 @@
 - [ ] ReplyOptionsDialog/ReplyStringDialog
 
 ## Other
-- [ ] Input history (beyond session - persist across runs?)
+- [x] Dyalog discovery: search known install paths when `dyalog` not in `$PATH` (macOS, Linux, Windows, Pi)
+- [ ] APL keycode aliases (BK, FD, SR etc. — see OPERANDA)
 - [ ] Protocol audit: evaluate all unsupported RIDE messages, prioritize by importance
 - [ ] Clipboard support (Ctrl+C copy, Ctrl+V paste)
 - [ ] Status bar (connection info, workspace name from UpdateSessionCaption)
@@ -71,11 +78,12 @@ RIDE handles multiline poorly. Research needed on:
 - SetLineAttributes (→) - breakpoints
 - StepInto, RunCurrentLine, ContinueTrace, Continue, RestartThreads (→) - stepping
 - TraceBackward, TraceForward (→) - trace navigation
+- ShowAsArrayNotation (→) - convert readOnly variables to editable APLAN
+- Edit (→) - open editor without session pollution
 
 **Not yet implemented:**
 - OptionsDialog, StringDialog, Reply* (dialogs)
 - HadError (error handling)
-- GetAutoComplete, ReplyGetAutoComplete (autocomplete)
 
 ---
 
@@ -195,8 +203,31 @@ RIDE handles multiline poorly. Research needed on:
 - [x] Command palette (C-] :) - searchable command list
 - [x] Pane move mode (C-] m) - arrows move, shift+arrows resize
 - [x] Save session command (via command palette, prompts for filename)
+- [x] Load session command (via command palette, smart default to most recent file)
 
 ### APL Input
 - [x] Backtick prefix for APL symbols (`` `i `` → `⍳`, `` `r `` → `⍴`, etc.)
 - [x] Symbol search (C-] : → symbols) - search by name
 - [x] APLcart integration (C-] : → aplcart) - search 3000+ idioms
+
+### Autocomplete
+- [x] GetAutoComplete / ReplyGetAutoComplete protocol support
+- [x] Tab triggers popup in session and editor (edit mode)
+- [x] Single match auto-inserts, multiple shows popup
+- [x] Navigate with Tab/Down, Shift+Tab/Up; Enter selects; Esc cancels
+
+### Documentation
+- [x] F1 context-sensitive help (symbol at cursor → docs pane)
+- [x] Doc search (C-] /) — fuzzy search docs database
+- [x] Markdown rendering in doc pane with link navigation
+
+### Session Features
+- [x] Command history paging (ctrl+shift+up/down)
+- [x] Clear screen (ctrl+l)
+- [x] Focus mode (C-] f) — fullscreen undecorated view, ESC to exit
+
+### Variable Editing
+- [x] Variables pane auto-refresh on SetPromptType
+- [x] Variable open via Edit protocol message (no session pollution)
+- [x] Read-only editors show `[read-only]`, Enter converts to APLAN for editing
+- [x] Context-sensitive bottom bar hints per pane type

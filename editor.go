@@ -41,9 +41,11 @@ func NewEditorWindow(args map[string]any) *EditorWindow {
 	if debugger, ok := args["debugger"].(float64); ok {
 		w.Debugger = debugger != 0
 	}
-	// readOnly is 0/1 integer, not boolean
+	// readOnly can be 0/1 integer or true/false boolean depending on Dyalog version
 	if readOnly, ok := args["readOnly"].(float64); ok {
 		w.ReadOnly = readOnly != 0
+	} else if readOnly, ok := args["readOnly"].(bool); ok {
+		w.ReadOnly = readOnly
 	}
 
 	// Parse text array
@@ -102,8 +104,16 @@ func (w *EditorWindow) Update(args map[string]any) {
 	if currentRow, ok := args["currentRow"].(float64); ok {
 		w.CurrentRow = int(currentRow)
 	}
+	if entityType, ok := args["entityType"].(float64); ok {
+		w.EntityType = int(entityType)
+	}
 	if debugger, ok := args["debugger"].(float64); ok {
 		w.Debugger = debugger != 0
+	}
+	if readOnly, ok := args["readOnly"].(float64); ok {
+		w.ReadOnly = readOnly != 0
+	} else if readOnly, ok := args["readOnly"].(bool); ok {
+		w.ReadOnly = readOnly
 	}
 	if stop, ok := args["stop"].([]any); ok {
 		w.Stop = make([]int, len(stop))

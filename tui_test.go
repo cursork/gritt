@@ -854,6 +854,35 @@ func TestTUI(t *testing.T) {
 	runner.SendLine(")erase sessionVar")
 	runner.Sleep(300 * time.Millisecond)
 
+	// === TEST 5b: VARIABLE EDITING VIA ARRAY NOTATION ===
+	// Create a numeric variable and open it via )ed (opens readOnly)
+	runner.SendLine("aplanVar←42")
+	runner.Sleep(500 * time.Millisecond)
+	runner.SendLine(")ed aplanVar")
+	runner.Sleep(1000 * time.Millisecond)
+	runner.Snapshot("Numeric variable editor (read-only)")
+
+	runner.Test("Variable opens read-only", func() bool {
+		return runner.Contains("[read-only]")
+	})
+
+	// Press Enter to convert to array notation
+	runner.SendKeys("Enter")
+	runner.Sleep(1000 * time.Millisecond)
+	runner.Snapshot("Variable in array notation (editable)")
+
+	runner.Test("Converted to editable APLAN", func() bool {
+		return runner.Contains("[edit]") && !runner.Contains("[read-only]")
+	})
+
+	// Close the editor
+	runner.SendKeys("Escape")
+	runner.Sleep(500 * time.Millisecond)
+
+	// Clean up
+	runner.SendLine(")erase aplanVar")
+	runner.Sleep(300 * time.Millisecond)
+
 	// === AUTOCOMPLETE TEST ===
 	// Define some variables with similar prefixes
 	runner.SendLine("alpha←1")

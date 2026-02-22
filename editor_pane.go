@@ -20,8 +20,9 @@ type EditorPane struct {
 	tracerKeys TracerKeysConfig
 
 	// Callbacks
-	onSave  func()
-	onClose func()
+	onSave            func()
+	onClose           func()
+	onArrayNotation   func() // Convert to APLAN for editing
 
 	// Tracer control callbacks (only used when window.Debugger is true)
 	onStepInto   func()
@@ -82,6 +83,8 @@ func (e *EditorPane) Title() string {
 		} else {
 			suffix = " [tracer]"
 		}
+	} else if e.window.ReadOnly {
+		suffix = " [read-only]"
 	} else {
 		suffix = " [edit]"
 	}
@@ -304,6 +307,11 @@ func (e *EditorPane) HandleKey(msg tea.KeyMsg) bool {
 			e.window.CursorCol = 0
 		case tea.KeyEnd:
 			e.window.CursorCol = len([]rune(e.currentLine()))
+		case tea.KeyEnter:
+			// Enter in read-only = convert to array notation for editing
+			if e.onArrayNotation != nil {
+				e.onArrayNotation()
+			}
 		case tea.KeyEscape:
 			if e.onClose != nil {
 				e.onClose()

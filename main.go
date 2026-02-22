@@ -20,14 +20,18 @@ import (
 	"github.com/cursork/gritt/ride"
 )
 
-// launchDyalog starts Dyalog APL with RIDE on a random port
-func launchDyalog() (*exec.Cmd, int) {
+// launchDyalog starts Dyalog APL with RIDE on a random port.
+// version constrains which installed version to use (empty = highest available).
+func launchDyalog(version string) (*exec.Cmd, int) {
+	exe := resolveDyalog(version)
+
 	port := 10000 + rand.Intn(50000)
-	cmd := exec.Command("dyalog", "+s", "-q")
+	cmd := exec.Command(exe, "+s", "-q")
 	cmd.Env = append(os.Environ(), fmt.Sprintf("RIDE_INIT=SERVE:*:%d", port))
+	cmd.Env = append(cmd.Env, dyalogEnv(exe)...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
-		log.Fatalf("Failed to start Dyalog: %v", err)
+		log.Fatalf("Failed to start Dyalog (%s): %v", exe, err)
 	}
 	// Poll for RIDE to be ready
 	addr := fmt.Sprintf("localhost:%d", port)
@@ -41,6 +45,40 @@ func launchDyalog() (*exec.Cmd, int) {
 	}
 	log.Fatalf("Dyalog did not start on port %d", port)
 	return nil, 0
+}
+
+// resolveDyalog finds the Dyalog binary to use.
+// If version is empty, tries PATH first then discovery.
+// If version contains a path separator, treats it as a direct path to the binary.
+// Otherwise, uses discovery to find that specific version.
+func resolveDyalog(version string) string {
+	// Direct path (contains / or \)
+	if strings.ContainsAny(version, `/\`) {
+		if _, err := os.Stat(version); err != nil {
+			log.Fatalf("Dyalog binary not found: %s", version)
+		}
+		return version
+	}
+
+	// If no version requested, try PATH first
+	if version == "" {
+		if path, err := exec.LookPath("dyalog"); err == nil {
+			return path
+		}
+	}
+
+	// Discovery
+	if exe := findDyalog(version); exe != "" {
+		return exe
+	}
+
+	// Helpful error
+	if version != "" {
+		log.Fatalf("Dyalog version %s not found.\nSearched:\n  %s", version, searchedPaths())
+	}
+	log.Fatalf("Dyalog not found in PATH or standard install locations.\nSearched:\n  %s\n  %s",
+		"$PATH", searchedPaths())
+	return ""
 }
 
 // multiFlag allows a flag to be specified multiple times, collecting all values
@@ -63,13 +101,14 @@ func main() {
 	flag.Var(&links, "link", "Link directory (path or ns:path, can be repeated)")
 	launch := flag.Bool("launch", false, "Launch Dyalog automatically (alias: -l)")
 	flag.BoolVar(launch, "l", false, "Launch Dyalog automatically")
+	version := flag.String("version", "", "Dyalog version (e.g. 20.0) or path to binary")
 	flag.Parse()
 
 	// Launch Dyalog if requested
 	var dyalogCmd *exec.Cmd
 	if *launch {
 		var port int
-		dyalogCmd, port = launchDyalog()
+		dyalogCmd, port = launchDyalog(*version)
 		*addr = fmt.Sprintf("localhost:%d", port)
 
 		// Cleanup function to kill Dyalog process group

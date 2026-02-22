@@ -59,9 +59,11 @@ go build -o gritt .
 
 ### Interactive TUI
 
-Auto-launch Dyalog and connect:
+Auto-launch Dyalog and connect (discovers installed versions automatically):
 ```bash
-./gritt -l
+./gritt -l                          # Launch highest installed version
+./gritt -l -version 20.0            # Launch specific version
+./gritt -l -version /path/to/dyalog # Launch specific binary
 ```
 
 Or connect to an existing Dyalog instance:

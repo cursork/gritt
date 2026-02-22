@@ -1411,8 +1411,8 @@ func (m *Model) toggleVariablesPane() {
 	var varsPane *VariablesPane
 	varsPane = NewVariablesPane(
 		func(name string) {
-			// Open variable with )ed - use send not Execute to avoid race
-			m.send("Execute", map[string]any{"text": ")ed " + name + "\n", "trace": 0})
+			// Use Edit protocol message (not )ed) to avoid session pollution
+			m.send("Edit", map[string]any{"win": 0, "text": name, "pos": 0})
 		},
 		func(mode VarsMode) {
 			// Re-fetch when mode changes
@@ -1521,8 +1521,8 @@ func (m *Model) fetchVariables(pane *VariablesPane) {
 	}
 
 	// Single query: get names and values in one shot
-	// {⎕←⍵,'=',⍕⍎⍵}¨↓⎕NL 2 - for each name from ⎕NL 2, print name=value
-	m.executeInternal("{⎕←⍵,'=',⍕⍎⍵}¨↓⎕NL 2", func(outputs []string) {
+	// Guard handles empty ⎕NL 2 (VALUE ERROR if no variables)
+	m.executeInternal("{0=⍴⍵:⍬ ⋄ {⎕←⍵,'=',⍕⍎⍵}¨⍵}↓⎕NL 2", func(outputs []string) {
 		var vars []LocalVar
 		for _, output := range outputs {
 			for _, line := range strings.Split(output, "\n") {
@@ -1787,6 +1787,25 @@ func (m *Model) isTracerFocused() bool {
 		return false
 	}
 	return ep.InTracerMode()
+}
+
+// focusedPaneHint returns context-sensitive hint text for the focused pane, or "" for default
+func (m *Model) focusedPaneHint() string {
+	fp := m.panes.FocusedPane()
+	if fp == nil {
+		return ""
+	}
+	switch c := fp.Content.(type) {
+	case *EditorPane:
+		if c.window.ReadOnly {
+			return "enter array notation • esc close"
+		}
+		return "ctrl+s save • esc close"
+	case *VariablesPane:
+		return "~ toggle local/all • enter edit • esc close"
+	default:
+		return ""
+	}
 }
 
 // toggleBreakpoint toggles a breakpoint on the current line in the focused editor/tracer
@@ -2236,7 +2255,8 @@ func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
 			m.log("  ready: %v → %v", wasReady, m.ready)
 
 			// Complete internal query if one was pending
-			if m.ready && m.internalQuery != "" {
+			// Only on not-ready→ready transition (type=0→1), not duplicate type=1→1
+			if m.ready && !wasReady && m.internalQuery != "" {
 				m.log("  internal query complete: %d outputs", len(m.internalOutputs))
 				oldQuery := m.internalQuery
 				if m.internalCallback != nil {
@@ -2252,11 +2272,18 @@ func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
 				return m, waitForRide(m.msgs)
 			}
 
-			if m.ready {
+			if m.ready && !wasReady {
 				// Add new input line with APL indent
 				m.lines = append(m.lines, Line{Text: aplIndent})
 				m.cursorRow = len(m.lines) - 1
 				m.cursorCol = len(aplIndent)
+
+				// Refresh variables pane if open
+				if pane := m.panes.Get("variables"); pane != nil {
+					if vp, ok := pane.Content.(*VariablesPane); ok {
+						m.fetchVariables(vp)
+					}
+				}
 			}
 		}
 
@@ -2276,6 +2303,10 @@ func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
 				func() { m.saveEditor(token) },
 				func() { m.closeEditor(token) },
 			)
+			editorPane.onArrayNotation = func() {
+				m.log("→ ShowAsArrayNotation win=%d", token)
+				m.send("ShowAsArrayNotation", map[string]any{"win": token})
+			}
 
 			// Position: center of screen
 			paneW := min(m.width-4, 60)
@@ -2293,14 +2324,24 @@ func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
 			pane := NewPane(paneID, editorPane, paneX, paneY, paneW, paneH)
 			m.panes.Add(pane)
 			m.panes.Focus(paneID)
-			m.log("  opened editor: %s (token=%d)", w.Name, w.Token)
+			m.log("  opened editor: %s (token=%d, entityType=%d, readOnly=%v)", w.Name, w.Token, w.EntityType, w.ReadOnly)
 		}
 
 	case "UpdateWindow":
 		token := int(msg.Args["token"].(float64))
 		if w, exists := m.editors[token]; exists {
 			w.Update(msg.Args)
-			m.log("  updated: %s (token=%d)", w.Name, token)
+			// Clamp cursor to new text bounds
+			if w.CursorRow >= len(w.Text) {
+				w.CursorRow = max(len(w.Text)-1, 0)
+			}
+			if w.CursorRow >= 0 && w.CursorRow < len(w.Text) {
+				lineLen := len([]rune(w.Text[w.CursorRow]))
+				if w.CursorCol > lineLen {
+					w.CursorCol = lineLen
+				}
+			}
+			m.log("  updated: %s (token=%d, entityType=%d, readOnly=%v)", w.Name, token, w.EntityType, w.ReadOnly)
 		}
 
 	case "CloseWindow":
@@ -2317,6 +2358,13 @@ func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
 			m.log("  closed editor: token=%d", win)
 		}
 		delete(m.editors, win)
+
+		// Refresh variables pane if open (editor close may have changed values)
+		if pane := m.panes.Get("variables"); pane != nil {
+			if vp, ok := pane.Content.(*VariablesPane); ok {
+				m.fetchVariables(vp)
+			}
+		}
 
 	case "ReplySaveChanges":
 		win := int(msg.Args["win"].(float64))
@@ -2509,6 +2557,9 @@ func (m Model) View() string {
 	} else if m.isTracerFocused() {
 		tracerStyle := lipgloss.NewStyle().Foreground(AccentColor)
 		helpView = tracerStyle.Render("n next • i into • o out • c continue • p back • f forward • e edit • esc close")
+	} else if hint := m.focusedPaneHint(); hint != "" {
+		hintStyle := lipgloss.NewStyle().Foreground(AccentColor)
+		helpView = hintStyle.Render(hint)
 	} else {
 		helpView = m.help.View(m.keys)
 	}

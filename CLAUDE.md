@@ -151,8 +151,10 @@ Use the **text reports** for debugging test failures - they contain the same sna
 ./gritt
 
 # Launch Dyalog automatically (-l or -launch)
-./gritt -l              # Interactive TUI with auto-launched Dyalog
-./gritt -l -e "⍳5"      # Execute and exit
+./gritt -l                          # Auto-discover highest installed version
+./gritt -l -version 20.0            # Launch specific version
+./gritt -l -version /path/to/dyalog # Launch specific binary
+./gritt -l -e "⍳5"                  # Execute and exit
 
 # Execute single expression
 ./gritt -e "⍳5"
