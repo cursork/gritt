@@ -2139,8 +2139,8 @@ func (m *Model) openCommandPalette() {
 	palette := NewCommandPalette(commands)
 
 	// Position: center top
-	paneW := 40
-	paneH := min(len(commands)+3, 15)
+	paneW := min(60, m.width-4)
+	paneH := min(len(commands)+3, m.height-4)
 	paneX := (m.width - paneW) / 2
 	paneY := 2
 

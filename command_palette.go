@@ -93,7 +93,7 @@ func (c *CommandPalette) Render(w, h int) string {
 		name := cmd.Name
 		help := cmd.Help
 
-		// Truncate name if needed (rune-aware)
+		// Truncate name if needed
 		maxName := w / 3
 		if maxName < 10 {
 			maxName = 10
@@ -103,21 +103,23 @@ func (c *CommandPalette) Render(w, h int) string {
 			name = string(nameRunes[:maxName-1]) + "…"
 		}
 
-		var line string
-		if i == c.selected {
-			// Render selected line with highlight
-			line = selectedStyle.Render(padRight(name, maxName)) + " " + helpStyle.Render(help)
+		// Truncate help to fit remaining space (before styling)
+		helpSpace := w - maxName - 1 // 1 for separator space
+		if helpSpace > 0 {
+			helpRunes := []rune(help)
+			if len(helpRunes) > helpSpace {
+				help = string(helpRunes[:helpSpace])
+			}
 		} else {
-			line = padRight(name, maxName) + " " + helpStyle.Render(help)
+			help = ""
 		}
 
-		// Truncate whole line to width
-		if lipgloss.Width(line) > w {
-			// Simple truncation - could be improved for ANSI awareness
-			lineRunes := []rune(line)
-			if len(lineRunes) > w {
-				line = string(lineRunes[:w])
-			}
+		paddedName := padRight(name, maxName)
+		var line string
+		if i == c.selected {
+			line = selectedStyle.Render(paddedName) + " " + helpStyle.Render(help)
+		} else {
+			line = paddedName + " " + helpStyle.Render(help)
 		}
 
 		sb.WriteString(line)
