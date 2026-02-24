@@ -118,16 +118,16 @@ func TestTUI(t *testing.T) {
 
 	// Test 6: Execute 1+1
 	runner.SendLine("1+1")
-	runner.Sleep(1 * time.Second)
+	runner.WaitForIdle(3 * time.Second)
 	runner.Snapshot("After executing 1+1")
 
 	runner.Test("Execute 1+1 returns 2", func() bool {
-		return runner.Contains("2")
+		return runner.Contains("1+1") && runner.Contains("2")
 	})
 
 	// Test 7: Execute iota
 	runner.SendLine("⍳5")
-	runner.Sleep(1 * time.Second)
+	runner.WaitFor("1 2 3 4 5", 3*time.Second)
 	runner.Snapshot("After executing ⍳5")
 
 	runner.Test("Execute ⍳5 returns sequence", func() bool {
@@ -144,11 +144,11 @@ func TestTUI(t *testing.T) {
 	runner.Snapshot("After editing 1+1 to 1+2")
 
 	runner.SendKeys("Enter")
-	runner.Sleep(1 * time.Second)
+	runner.WaitForIdle(3 * time.Second)
 	runner.Snapshot("After executing edited line")
 
 	runner.Test("Edit and re-execute works", func() bool {
-		return runner.Contains("3")
+		return runner.Contains("1+2") && runner.Contains("3")
 	})
 
 	// Test 9: Debug pane shows protocol
@@ -212,8 +212,8 @@ func TestTUI(t *testing.T) {
 	runner.Snapshot("Command palette filtered to 'deb'")
 
 	runner.Test("Typing filters commands", func() bool {
-		// Should still show debug but not quit
-		return runner.Contains("debug")
+		// Should still show debug; "quit" appears in status bar so can't negative-assert on it
+		return runner.Contains("debug") && !runner.Contains("save")
 	})
 
 	// Test: Execute command from palette
@@ -424,11 +424,11 @@ func TestTUI(t *testing.T) {
 
 	// Erase B if it exists from previous runs
 	runner.SendLine(")erase B")
-	runner.Sleep(300 * time.Millisecond)
+	runner.WaitForIdle(3 * time.Second)
 
 	// Define function B with multiple lines
 	runner.SendLine(")ed B")
-	runner.Sleep(500 * time.Millisecond)
+	runner.WaitFor("╔", 3*time.Second)
 
 	runner.Test("Editor opens for B", func() bool {
 		return runner.Contains("B")
@@ -467,7 +467,7 @@ func TestTUI(t *testing.T) {
 
 	// Run B - should stop at breakpoint
 	runner.SendLine("B")
-	runner.Sleep(1 * time.Second)
+	runner.WaitFor("tracer", 3*time.Second)
 	runner.Snapshot("Stopped at breakpoint in B")
 
 	runner.Test("Tracer opens at breakpoint", func() bool {
@@ -545,7 +545,7 @@ func TestTUI(t *testing.T) {
 
 	// Step with 'n' - execute line 2
 	runner.SendKeys("n")
-	runner.Sleep(500 * time.Millisecond)
+	runner.WaitFor("before", 3*time.Second)
 	runner.Snapshot("After first step (before printed)")
 
 	runner.Test("Step executes line - 'before' printed", func() bool {
@@ -563,7 +563,7 @@ func TestTUI(t *testing.T) {
 
 	// Step again - execute ⎕←'after'
 	runner.SendKeys("n")
-	runner.Sleep(500 * time.Millisecond)
+	runner.WaitFor("after", 3*time.Second)
 	runner.Snapshot("After third step (after printed)")
 
 	runner.Test("Step executes - 'after' printed", func() bool {
@@ -581,16 +581,16 @@ func TestTUI(t *testing.T) {
 
 	// Clean up B
 	runner.SendLine(")erase B")
-	runner.Sleep(300 * time.Millisecond)
+	runner.WaitForIdle(3 * time.Second)
 
 	// === ERROR STACK TEST - nested functions X→Y→Z ===
 	// Clean up any existing functions from previous runs
 	runner.SendLine(")erase X Y Z")
-	runner.Sleep(500 * time.Millisecond)
+	runner.WaitForIdle(3 * time.Second)
 
 	// Define Z (will error) - with LOCAL variables a and b declared in header
 	runner.SendLine(")ed Z")
-	runner.Sleep(500 * time.Millisecond)
+	runner.WaitFor("╔", 3*time.Second)
 	runner.Snapshot("Editor opened for Z")
 
 	runner.Test("Editor opens for Z", func() bool {
@@ -621,7 +621,7 @@ func TestTUI(t *testing.T) {
 
 	// Define Y (calls Z)
 	runner.SendLine(")ed Y")
-	runner.Sleep(1 * time.Second)
+	runner.WaitFor("╔", 3*time.Second)
 	runner.Snapshot("Y editor opened")
 
 	runner.Test("Y editor opens", func() bool {
@@ -642,7 +642,7 @@ func TestTUI(t *testing.T) {
 
 	// Define X (calls Y)
 	runner.SendLine(")ed X")
-	runner.Sleep(1 * time.Second)
+	runner.WaitFor("╔", 3*time.Second)
 	runner.Snapshot("X editor opened")
 
 	runner.Test("X editor opens", func() bool {
@@ -662,7 +662,7 @@ func TestTUI(t *testing.T) {
 
 	// Execute X - triggers nested error
 	runner.SendLine("X")
-	runner.Sleep(2 * time.Second) // Give time for error and tracer to open
+	runner.WaitFor("DOMAIN ERROR", 3*time.Second)
 	runner.Snapshot("After X errors - tracer opens")
 
 	runner.Test("Tracer opens on error", func() bool {
@@ -832,7 +832,7 @@ func TestTUI(t *testing.T) {
 	// === TEST 5: SESSION VARIABLES (main window, not tracer) ===
 	// Create a global variable in the session
 	runner.SendLine("sessionVar←999")
-	runner.Sleep(500 * time.Millisecond)
+	runner.WaitForIdle(3 * time.Second)
 	runner.Snapshot("After creating sessionVar")
 
 	// Open variables pane in main session context
@@ -852,14 +852,14 @@ func TestTUI(t *testing.T) {
 
 	// Clean up the test variable
 	runner.SendLine(")erase sessionVar")
-	runner.Sleep(300 * time.Millisecond)
+	runner.WaitForIdle(3 * time.Second)
 
 	// === TEST 5b: VARIABLE EDITING VIA ARRAY NOTATION ===
 	// Create a numeric variable and open it via )ed (opens readOnly)
 	runner.SendLine("aplanVar←42")
-	runner.Sleep(500 * time.Millisecond)
+	runner.WaitForIdle(3 * time.Second)
 	runner.SendLine(")ed aplanVar")
-	runner.Sleep(1000 * time.Millisecond)
+	runner.WaitFor("[read-only]", 3*time.Second)
 	runner.Snapshot("Numeric variable editor (read-only)")
 
 	runner.Test("Variable opens read-only", func() bool {
@@ -881,16 +881,16 @@ func TestTUI(t *testing.T) {
 
 	// Clean up
 	runner.SendLine(")erase aplanVar")
-	runner.Sleep(300 * time.Millisecond)
+	runner.WaitForIdle(3 * time.Second)
 
 	// === AUTOCOMPLETE TEST ===
 	// Define some variables with similar prefixes
 	runner.SendLine("alpha←1")
-	runner.Sleep(500 * time.Millisecond)
+	runner.WaitForIdle(3 * time.Second)
 	runner.SendLine("alphabet←2")
-	runner.Sleep(500 * time.Millisecond)
+	runner.WaitForIdle(3 * time.Second)
 	runner.SendLine("alpine←3")
-	runner.Sleep(500 * time.Millisecond)
+	runner.WaitForIdle(3 * time.Second)
 	runner.Snapshot("After defining alpha, alphabet, alpine")
 
 	// Test 1: Tab triggers autocomplete popup with multiple options
@@ -1015,7 +1015,7 @@ func TestTUI(t *testing.T) {
 	// Test 7: Scrolling with 50 options
 	// Create 50 variables: scr1←1, scr2←2, ..., scr50←50
 	runner.SendLine("{⍎'scr',(⍕⍵),'←',⍕⍵}¨⍳50")
-	runner.Sleep(1000 * time.Millisecond)
+	runner.WaitForIdle(5 * time.Second)
 	runner.Snapshot("After creating 50 scr variables")
 
 	// Trigger autocomplete - should show scr1, scr10, scr11, etc. (sorted)
@@ -1043,8 +1043,8 @@ func TestTUI(t *testing.T) {
 
 	// The selection should have worked (not crashed, inserted something)
 	runner.Test("Scrolling works - option was selected", func() bool {
-		// Should have 'scr' followed by some number on the line
-		return runner.Contains("scr")
+		// Should have inserted a scr variable name (popup gone, text on input line)
+		return runner.Contains("scr") && !runner.Contains("┌──────────")
 	})
 
 	runner.SendKeys("Enter") // Execute
@@ -1072,7 +1072,7 @@ func TestTUI(t *testing.T) {
 
 	// Test 9: Single completion auto-inserts without popup
 	runner.SendLine("zetaUnique←42")
-	runner.Sleep(500 * time.Millisecond)
+	runner.WaitForIdle(3 * time.Second)
 	runner.SendText("zeta")
 	runner.Sleep(200 * time.Millisecond)
 	runner.SendKeys("Tab")
@@ -1131,7 +1131,7 @@ func TestTUI(t *testing.T) {
 	}
 	runner.Sleep(100 * time.Millisecond)
 	runner.SendLine(")erase alpha alphabet alpine zetaUnique")
-	runner.Sleep(500 * time.Millisecond)
+	runner.WaitForIdle(3 * time.Second)
 
 	// === DOCUMENTATION TESTS ===
 	// Open docs via command palette: C-] : then type "docs"
@@ -1233,11 +1233,11 @@ func TestTUI(t *testing.T) {
 
 	// Execute expressions with unique markers that won't appear in output
 	runner.SendLine("hist1←101")
-	runner.WaitFor("101", 3*time.Second)
+	runner.WaitForIdle(3 * time.Second)
 	runner.SendLine("hist2←202")
-	runner.WaitFor("202", 3*time.Second)
+	runner.WaitForIdle(3 * time.Second)
 	runner.SendLine("hist3←303")
-	runner.WaitFor("303", 3*time.Second)
+	runner.WaitForIdle(3 * time.Second)
 
 	// Clear screen so previous output is gone — only the input line remains
 	runner.SendKeys("C-l")
@@ -1322,7 +1322,7 @@ func TestTUI(t *testing.T) {
 
 	// Open an editor
 	runner.SendLine(")erase FocusTest")
-	runner.Sleep(300 * time.Millisecond)
+	runner.WaitForIdle(3 * time.Second)
 	runner.SendLine(")ed FocusTest")
 	runner.WaitFor("FocusTest", 3*time.Second)
 	runner.Sleep(300 * time.Millisecond)
@@ -1358,7 +1358,7 @@ func TestTUI(t *testing.T) {
 
 	// Clean up
 	runner.SendLine(")erase FocusTest")
-	runner.Sleep(300 * time.Millisecond)
+	runner.WaitForIdle(3 * time.Second)
 
 	// ==========================================
 	// Test: Clear screen (ctrl+l)
@@ -1366,7 +1366,7 @@ func TestTUI(t *testing.T) {
 
 	// Put some identifiable content on screen first
 	runner.SendLine("cleartest←999")
-	runner.WaitFor("999", 3*time.Second)
+	runner.WaitForIdle(3 * time.Second)
 	runner.Snapshot("Before clear screen")
 
 	runner.Test("Content visible before clear", func() bool {
@@ -1400,7 +1400,7 @@ func TestTUI(t *testing.T) {
 
 	// Put identifiable content on screen
 	runner.SendLine("loadmarker←777")
-	runner.WaitFor("777", 3*time.Second)
+	runner.WaitForIdle(3 * time.Second)
 	runner.Snapshot("Before save for load test")
 
 	// Save session via command palette

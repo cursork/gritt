@@ -99,11 +99,11 @@ func (v *VariablesPane) Render(w, h int) string {
 
 	var lines []string
 
-	// Calculate max name width for alignment
+	// Calculate max name width for alignment (rune-safe for APL characters)
 	maxNameWidth := 0
 	for _, vr := range v.vars {
-		if len(vr.Name) > maxNameWidth {
-			maxNameWidth = len(vr.Name)
+		if len([]rune(vr.Name)) > maxNameWidth {
+			maxNameWidth = len([]rune(vr.Name))
 		}
 	}
 	if maxNameWidth > w/3 {
@@ -118,23 +118,25 @@ func (v *VariablesPane) Render(w, h int) string {
 		}
 
 		name := vr.Name
-		if len(name) > maxNameWidth {
-			name = name[:maxNameWidth]
+		nameRunes := []rune(name)
+		if len(nameRunes) > maxNameWidth {
+			name = string(nameRunes[:maxNameWidth])
 		}
 
-		// Pad name for alignment
-		namePadded := name + strings.Repeat(" ", maxNameWidth-len(name))
+		// Pad name for alignment (rune-safe)
+		namePadded := name + strings.Repeat(" ", maxNameWidth-len([]rune(name)))
 
 		// Calculate available space for value (account for prefix)
 		valueWidth := w - maxNameWidth - 3 - len(prefix) // prefix + " = "
 		value := vr.Value
-		if len(value) > valueWidth && valueWidth > 3 {
-			value = value[:valueWidth-3] + "..."
+		valueRunes := []rune(value)
+		if len(valueRunes) > valueWidth && valueWidth > 3 {
+			value = string(valueRunes[:valueWidth-3]) + "..."
 		}
 
 		// Build plain text line
 		plainLine := prefix + namePadded + " = " + value
-		plainLen := len(plainLine)
+		plainLen := len([]rune(plainLine))
 		if plainLen < w {
 			plainLine = plainLine + strings.Repeat(" ", w-plainLen)
 		}

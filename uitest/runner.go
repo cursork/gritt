@@ -123,6 +123,28 @@ func (r *Runner) WaitForNoFocusedPane(timeout time.Duration) bool {
 	return false
 }
 
+// WaitForIdle waits until the interpreter is no longer busy.
+// Detects absence of all spinner braille frames from the screen.
+func (r *Runner) WaitForIdle(timeout time.Duration) bool {
+	spinnerFrames := []rune{'⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'}
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		busy := false
+		for _, frame := range spinnerFrames {
+			if r.Contains(string(frame)) {
+				busy = true
+				break
+			}
+		}
+		if !busy {
+			return true
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	r.T.Logf("Timeout waiting for idle")
+	return false
+}
+
 // Sleep pauses execution
 func (r *Runner) Sleep(d time.Duration) {
 	time.Sleep(d)

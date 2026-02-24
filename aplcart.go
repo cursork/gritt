@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -50,6 +51,10 @@ func FetchAPLcart() tea.Msg {
 		return APLcartLoaded{Err: err}
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return APLcartLoaded{Err: fmt.Errorf("HTTP %d", resp.StatusCode)}
+	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

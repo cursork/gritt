@@ -92,6 +92,7 @@ type Model struct {
 	cursorRow    int
 	cursorCol    int
 	ready        bool   // Interpreter ready for input
+	spinnerFrame int    // Current spinner animation frame
 	lastExecute  string // Last text we sent via Execute (to skip our own echo)
 	pendingQuit  bool   // True if last command was )off
 
@@ -160,6 +161,13 @@ type Model struct {
 }
 
 // rideEvent wraps messages from the RIDE reader goroutine.
+// spinnerTickMsg advances the busy spinner animation.
+type spinnerTickMsg struct{}
+
+var spinnerFrames = []rune{'⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'}
+
+const spinnerInterval = 80 * time.Millisecond
+
 type rideEvent struct {
 	msg *ride.Message
 	raw string
@@ -349,6 +357,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if ac, ok := pane.Content.(*APLcart); ok {
 				ac.SetData(msg.Entries, msg.Err)
 			}
+		}
+		return m, nil
+
+	case spinnerTickMsg:
+		if !m.ready {
+			m.spinnerFrame = (m.spinnerFrame + 1) % len(spinnerFrames)
+			return m, tea.Tick(spinnerInterval, func(time.Time) tea.Msg { return spinnerTickMsg{} })
 		}
 		return m, nil
 
@@ -1071,6 +1086,7 @@ func (m Model) execute() (tea.Model, tea.Cmd) {
 	m.cursorCol = len([]rune(editedText))
 
 	m.ready = false
+	m.spinnerFrame = 0
 	m.lastExecute = editedText + "\n" // Track what we sent to skip our own echo
 	m.pendingQuit = strings.TrimSpace(editedText) == ")off"
 
@@ -1091,7 +1107,7 @@ func (m Model) execute() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	return m, nil
+	return m, tea.Tick(spinnerInterval, func(time.Time) tea.Msg { return spinnerTickMsg{} })
 }
 
 func (m *Model) saveEditor(token int) {
@@ -2605,6 +2621,8 @@ func (m Model) viewSession(w, h int) string {
 	if !m.connected {
 		title = "gritt [disconnected]"
 		borderColor = lipgloss.Color("196") // Red
+	} else if !m.ready {
+		title = "gritt " + string(spinnerFrames[m.spinnerFrame])
 	}
 
 	return m.renderBox(title, content, contentW, contentH, borderColor)
@@ -2612,7 +2630,8 @@ func (m Model) viewSession(w, h int) string {
 
 func (m Model) renderBox(title, content string, w, h int, borderColor color.Color) string {
 	// Build box manually with title in top border
-	topBorder := "╭─ " + title + " " + strings.Repeat("─", w-len(title)-3) + "╮"
+	titleWidth := len([]rune(title))
+	topBorder := "╭─ " + title + " " + strings.Repeat("─", w-titleWidth-3) + "╮"
 	bottomBorder := "╰" + strings.Repeat("─", w) + "╯"
 
 	// Style the borders
@@ -2620,7 +2639,7 @@ func (m Model) renderBox(title, content string, w, h int, borderColor color.Colo
 	titleStyle := lipgloss.NewStyle().Foreground(borderColor).Bold(true)
 
 	// Build top border with styled title
-	topBorder = borderStyle.Render("╭─ ") + titleStyle.Render(title) + borderStyle.Render(" "+strings.Repeat("─", w-len(title)-3)+"╮")
+	topBorder = borderStyle.Render("╭─ ") + titleStyle.Render(title) + borderStyle.Render(" "+strings.Repeat("─", w-titleWidth-3)+"╮")
 
 	// Split content into lines and pad to height
 	contentLines := strings.Split(content, "\n")

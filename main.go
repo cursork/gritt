@@ -271,9 +271,8 @@ func runSocket(client *ride.Client, sockPath string) {
 				// Serialize execution (RIDE is single-threaded)
 				mu.Lock()
 				result := execCapture(client, expr)
-				mu.Unlock()
-
 				c.Write([]byte(result))
+				mu.Unlock()
 			}
 		}(conn)
 	}
