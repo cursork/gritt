@@ -102,6 +102,7 @@ func main() {
 	launch := flag.Bool("launch", false, "Launch Dyalog automatically (alias: -l)")
 	flag.BoolVar(launch, "l", false, "Launch Dyalog automatically")
 	version := flag.String("version", "", "Dyalog version (e.g. 20.0) or path to binary")
+	fmtMode := flag.Bool("fmt", false, "Format APL files in place")
 	flag.Parse()
 
 	// Launch Dyalog if requested
@@ -140,6 +141,21 @@ func main() {
 		}
 		defer logWriter.Close()
 		ride.Logger = logWriter
+	}
+
+	// Format mode
+	if *fmtMode {
+		files := flag.Args()
+		if len(files) == 0 {
+			log.Fatal("-fmt requires at least one file")
+		}
+		client, err := ride.Connect(*addr)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer client.Close()
+		runFormat(client, files)
+		return
 	}
 
 	// Non-interactive mode
@@ -311,6 +327,101 @@ func execCapture(client *ride.Client, expr string) string {
 			// - type 0: no prompt (processing) - keep waiting
 			if t, ok := msg.Args["type"].(float64); ok && t > 0 {
 				return buf.String()
+			}
+		}
+	}
+}
+
+// runFormat formats APL files in place using FormatCode
+func runFormat(client *ride.Client, files []string) {
+	token := openDummyEditor(client)
+
+	for _, file := range files {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			log.Fatalf("Failed to read %s: %v", file, err)
+		}
+		content := string(data)
+		// Strip trailing newline for splitting, we'll add it back
+		content = strings.TrimRight(content, "\n")
+		lines := strings.Split(content, "\n")
+
+		formatted := formatCode(client, token, lines)
+
+		// Check if anything changed
+		changed := len(lines) != len(formatted)
+		if !changed {
+			for i := range lines {
+				if lines[i] != formatted[i] {
+					changed = true
+					break
+				}
+			}
+		}
+
+		if changed {
+			out := strings.Join(formatted, "\n") + "\n"
+			if err := os.WriteFile(file, []byte(out), 0644); err != nil {
+				log.Fatalf("Failed to write %s: %v", file, err)
+			}
+			fmt.Println(file)
+		}
+	}
+
+	// Close the dummy editor
+	client.Send("CloseWindow", map[string]any{"win": token})
+}
+
+// openDummyEditor opens a dummy editor window and returns its token.
+// FormatCode requires a valid window token that the interpreter knows about.
+func openDummyEditor(client *ride.Client) int {
+	if err := client.Send("Edit", map[string]any{
+		"win":  0,
+		"text": "gritt∆fmt",
+		"pos":  0,
+	}); err != nil {
+		log.Fatalf("Failed to send Edit: %v", err)
+	}
+
+	for {
+		msg, _, err := client.Recv()
+		if err != nil {
+			log.Fatalf("Recv failed waiting for OpenWindow: %v", err)
+		}
+		if msg != nil && msg.Command == "OpenWindow" {
+			if t, ok := msg.Args["token"].(float64); ok {
+				return int(t)
+			}
+		}
+	}
+}
+
+// formatCode sends FormatCode and waits for ReplyFormatCode
+func formatCode(client *ride.Client, win int, lines []string) []string {
+	text := make([]any, len(lines))
+	for i, l := range lines {
+		text[i] = l
+	}
+
+	if err := client.Send("FormatCode", map[string]any{
+		"win":  win,
+		"text": text,
+	}); err != nil {
+		log.Fatalf("FormatCode failed: %v", err)
+	}
+
+	for {
+		msg, _, err := client.Recv()
+		if err != nil {
+			log.Fatalf("Recv failed waiting for ReplyFormatCode: %v", err)
+		}
+		if msg != nil && msg.Command == "ReplyFormatCode" {
+			if result, ok := msg.Args["text"].([]any); ok {
+				out := make([]string, len(result))
+				for i, l := range result {
+					out[i], _ = l.(string)
+				}
+				return out
 			}
 		}
 	}

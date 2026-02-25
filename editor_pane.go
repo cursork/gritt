@@ -23,6 +23,7 @@ type EditorPane struct {
 	onSave            func()
 	onClose           func()
 	onArrayNotation   func() // Convert to APLAN for editing
+	onFormat          func() // Format code via FormatCode message
 
 	// Tracer control callbacks (only used when window.Debugger is true)
 	onStepInto   func()
