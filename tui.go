@@ -1151,6 +1151,50 @@ func (m *Model) saveEditor(token int) {
 	})
 }
 
+// formatEditor sends FormatCode for the given editor window
+func (m *Model) formatEditor(token int) {
+	w, exists := m.editors[token]
+	if !exists {
+		return
+	}
+	text := make([]any, len(w.Text))
+	for i, line := range w.Text {
+		text[i] = line
+	}
+	m.log("→ FormatCode win=%d", token)
+	m.send("FormatCode", map[string]any{"win": token, "text": text})
+}
+
+// formatFocusedEditor formats the code in the active editor/tracer pane.
+// Checks focused pane first, then falls back to tracer or any editor pane
+// (needed when called from command palette, which clears focus on dismiss).
+func (m *Model) formatFocusedEditor() {
+	// Try focused pane first
+	if fp := m.panes.FocusedPane(); fp != nil {
+		if ep, ok := fp.Content.(*EditorPane); ok && ep.onFormat != nil {
+			ep.onFormat()
+			return
+		}
+	}
+	// Fall back: tracer pane
+	if pane := m.panes.Get("tracer"); pane != nil {
+		if ep, ok := pane.Content.(*EditorPane); ok && ep.onFormat != nil {
+			ep.onFormat()
+			return
+		}
+	}
+	// Fall back: any editor pane
+	for token := range m.editors {
+		paneID := fmt.Sprintf("editor:%d", token)
+		if pane := m.panes.Get(paneID); pane != nil {
+			if ep, ok := pane.Content.(*EditorPane); ok && ep.onFormat != nil {
+				ep.onFormat()
+				return
+			}
+		}
+	}
+}
+
 // sendSetLineAttributes sends breakpoint state for tracer windows (immediate update)
 func (m *Model) sendSetLineAttributes(token int) {
 	w, exists := m.editors[token]
@@ -1336,6 +1380,10 @@ func (m *Model) showTracer(token int) {
 			func() { m.saveEditor(m.tracerCurrent) },
 			func() { m.closeEditor(m.tracerCurrent) },
 		)
+
+		editorPane.onFormat = func() {
+			m.formatEditor(m.tracerCurrent)
+		}
 
 		// Set tracer control callbacks
 		editorPane.SetTracerCallbacks(TracerCallbacks{
@@ -1892,6 +1940,8 @@ func (m *Model) dispatchCommand(action string) (tea.Model, tea.Cmd) {
 		m.tracerBackward()
 	case "trace-forward":
 		m.tracerForward()
+	case "format":
+		m.formatFocusedEditor()
 	case "close-all-windows":
 		m.closeAllWindows()
 	}
@@ -2164,6 +2214,7 @@ func (m *Model) openCommandPalette() {
 		{Name: "symbols", Help: "Search APL symbols"},
 		{Name: "docs", Help: "Search documentation"},
 		{Name: "aplcart", Help: "Search APLcart idioms"},
+		{Name: "format", Help: "Format code in focused editor"},
 		{Name: "reconnect", Help: "Reconnect to Dyalog"},
 		{Name: "close-all-windows", Help: "Close all editors/tracers (clear stuck state)"},
 		{Name: "save", Help: "Save session to file"},
@@ -2323,6 +2374,9 @@ func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
 				m.log("→ ShowAsArrayNotation win=%d", token)
 				m.send("ShowAsArrayNotation", map[string]any{"win": token})
 			}
+			editorPane.onFormat = func() {
+				m.formatEditor(token)
+			}
 
 			// Position: center of screen
 			paneW := min(m.width-4, 60)
@@ -2404,6 +2458,29 @@ func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
 			// Clear pending close on failure
 			if w, exists := m.editors[win]; exists {
 				w.PendingClose = false
+			}
+		}
+
+	case "ReplyFormatCode":
+		win := int(msg.Args["win"].(float64))
+		if w, exists := m.editors[win]; exists {
+			if lines, ok := msg.Args["text"].([]any); ok {
+				text := make([]string, len(lines))
+				for i, l := range lines {
+					text[i], _ = l.(string)
+				}
+				w.Text = text
+				// Clamp cursor
+				if w.CursorRow >= len(w.Text) {
+					w.CursorRow = max(len(w.Text)-1, 0)
+				}
+				if w.CursorRow >= 0 && w.CursorRow < len(w.Text) {
+					lineLen := len([]rune(w.Text[w.CursorRow]))
+					if w.CursorCol > lineLen {
+						w.CursorCol = lineLen
+					}
+				}
+				m.log("  formatted: token=%d, lines=%d", win, len(text))
 			}
 		}
 

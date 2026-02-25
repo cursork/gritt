@@ -1467,6 +1467,71 @@ func TestTUI(t *testing.T) {
 	// Clean up test file
 	os.Remove("test-session-load")
 
+	// === FORMAT CODE TEST ===
+	// Define a function with messy whitespace, then format it
+	runner.SendLine(")erase FMT")
+	runner.WaitForIdle(3 * time.Second)
+
+	// Define the function first so it's valid, with messy whitespace
+	runner.SendLine(")ed FMT")
+	runner.WaitFor("╔", 3*time.Second)
+
+	runner.Test("Editor opens for FMT", func() bool {
+		return runner.Contains("FMT")
+	})
+
+	// Make it a proper function: r←FMT a / r←  a +   1
+	// Cursor starts on line [0] "FMT" — replace with "r←FMT a"
+	runner.SendKeys("Home")
+	runner.SendText("r←")
+	runner.SendKeys("End")
+	runner.SendText(" a")
+	runner.SendKeys("Enter", "Enter")
+	runner.SendText("r←  a +   1")
+	runner.Sleep(200 * time.Millisecond)
+	runner.Snapshot("FMT before format (messy whitespace)")
+
+	// Save first so Dyalog knows the function, then reopen to format
+	runner.SendKeys("Escape")
+	runner.Sleep(500 * time.Millisecond)
+
+	runner.Test("FMT editor closes after save", func() bool {
+		return runner.WaitForNoFocusedPane(3 * time.Second)
+	})
+
+	// Reopen editor
+	runner.SendLine(")ed FMT")
+	runner.WaitFor("╔", 3*time.Second)
+	runner.Snapshot("FMT reopened for formatting")
+
+	// Format via command palette
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys(":")
+	runner.Sleep(300 * time.Millisecond)
+	runner.SendText("format")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Enter")
+	runner.Sleep(500 * time.Millisecond)
+	runner.Snapshot("FMT after format")
+
+	runner.Test("Format normalizes whitespace", func() bool {
+		// Dyalog normalizes "r←  a +   1" to "r←a+1"
+		return runner.Contains("r←a+1")
+	})
+
+	// Close editor
+	runner.SendKeys("Escape")
+	runner.Sleep(500 * time.Millisecond)
+
+	runner.Test("FMT editor closes", func() bool {
+		return runner.WaitForNoFocusedPane(3 * time.Second)
+	})
+
+	// Clean up
+	runner.SendLine(")erase FMT")
+	runner.WaitForIdle(3 * time.Second)
+
 	// Final snapshot
 	runner.Snapshot("Final state")
 
