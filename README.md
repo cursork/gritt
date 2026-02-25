@@ -88,6 +88,15 @@ echo "1+1" | ./gritt -l -stdin
 ./gritt -l -link /path/to/src -e "MyFn 42"
 ```
 
+### Format APL files
+
+```bash
+# Format files in place (prints changed filenames)
+./gritt -l -fmt file1.aplf file2.aplf
+```
+
+Uses Dyalog's `FormatCode` to normalize whitespace and indentation. Also available in the TUI via the command palette (`Ctrl+]` `:` → `format`).
+
 ## Key Bindings
 
 Leader key: `Ctrl+]` (keeps other keys free for APL input, and I figured it wouldn't interfere with muscle memory)
