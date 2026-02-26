@@ -403,11 +403,15 @@ func runFormat(client *ride.Client, files []string) {
 	}
 }
 
+var fmtCounter int
+
 // openDummyEditor opens a dummy function editor and returns its token.
 func openDummyEditor(client *ride.Client) int {
+	fmtCounter++
+	name := fmt.Sprintf("gritt∆fmt%d", fmtCounter)
 	if err := client.Send("Edit", map[string]any{
 		"win":  0,
-		"text": "gritt∆fmt",
+		"text": name,
 		"pos":  0,
 	}); err != nil {
 		log.Fatalf("Failed to send Edit: %v", err)
@@ -417,10 +421,12 @@ func openDummyEditor(client *ride.Client) int {
 
 // openDummyNamespace creates a dummy namespace via ⎕FIX and opens its editor.
 func openDummyNamespace(client *ride.Client) int {
-	runExpr(client, "⎕FIX ':Namespace gritt∆fmt' ':EndNamespace'")
+	fmtCounter++
+	name := fmt.Sprintf("gritt∆fmt%d", fmtCounter)
+	runExpr(client, fmt.Sprintf("⎕FIX ':Namespace %s' ':EndNamespace'", name))
 	if err := client.Send("Edit", map[string]any{
 		"win":  0,
-		"text": "gritt∆fmt",
+		"text": name,
 		"pos":  0,
 	}); err != nil {
 		log.Fatalf("Failed to send Edit: %v", err)
