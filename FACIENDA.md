@@ -11,7 +11,7 @@
 3. ~~**#7 Focus mode**~~ — Done
 4. **#3 Multithreaded tracing** — Switch between suspended functions in different threads via tracer tabs
 5. **#4 Inline tracing** — `IT` command: left/right args, current fn, axis spec, previous result etc.
-6. **#5 Proper multiline mode** — Explicit multiline input with `[`, edit lines before send. Important for APLAN.
+6. **#5 Proper multiline mode** — Explicit multiline input with `[`, edit lines before send. Important for APLAN, and required for creating namespaces/classes interactively (`:Namespace`/`:EndNamespace`). Reference: ~/dev/ride `src/` for how RIDE handles multiline.
 7. **#6 Syntax highlighting** — `)` commands, `]` commands, `⎕` fns, `:Keywords`, glyph vs name distinction
 8. **#13 Docs follow-ups** — Fix highlighting, grab example code, compile into binary (check IP)
 
@@ -50,6 +50,7 @@
 - [ ] Multiple workspace connections?
 
 ## Testing Infrastructure
+- [x] Busy spinner enables deterministic test waits (`WaitForIdle` replaces `Sleep` after all `SendLine` calls)
 - [ ] Attempts to use tmux send-keys to test backticks for eg comments failed
 
 ---
@@ -80,6 +81,7 @@ RIDE handles multiline poorly. Research needed on:
 - TraceBackward, TraceForward (→) - trace navigation
 - ShowAsArrayNotation (→) - convert readOnly variables to editable APLAN
 - Edit (→) - open editor without session pollution
+- FormatCode (→), ReplyFormatCode (←) - code formatting
 
 **Not yet implemented:**
 - OptionsDialog, StringDialog, Reply* (dialogs)
@@ -185,6 +187,7 @@ RIDE handles multiline poorly. Research needed on:
 - [x] Socket mode: -sock /path for Unix socket server (APL as a service)
   - Works: expressions, `⎕` input, workspace persistence across connections
   - Broken: `⍞` input (NONCE ERROR, root cause unknown - see adnotata/0008)
+- [x] Format mode: -fmt formats APL files in place via FormatCode protocol (functions and namespaces)
 
 ### Connection Resilience
 - [x] Detect disconnection (EOF, connection reset) - show [disconnected] state with red border
@@ -231,3 +234,9 @@ RIDE handles multiline poorly. Research needed on:
 - [x] Variable open via Edit protocol message (no session pollution)
 - [x] Read-only editors show `[read-only]`, Enter converts to APLAN for editing
 - [x] Context-sensitive bottom bar hints per pane type
+
+### Code Formatting
+- [x] FormatCode / ReplyFormatCode protocol support
+- [x] "format" command in command palette — formats focused editor/tracer
+- [x] CLI `-fmt` flag — batch format `.aplf` and `.apln`/`:Class`/`:Interface` files in place
+- [x] Namespace support via `⎕FIX` to create dummy namespace window for FormatCode

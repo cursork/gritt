@@ -167,6 +167,9 @@ printf "x←5\nx×2\n" | ./gritt -l -stdin   # With auto-launch
 ./gritt -link /path/to/src -e "MyFn 42"
 ./gritt -link "#:." -e "⎕nl -3"    # Link root ns to current dir
 
+# Format APL files in place (functions and namespaces)
+./gritt -l -fmt file1.aplf file2.aplf src/utils.apln
+
 # Protocol logging (for debugging)
 ./gritt -log debug.log
 ```

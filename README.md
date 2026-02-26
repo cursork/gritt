@@ -92,10 +92,10 @@ echo "1+1" | ./gritt -l -stdin
 
 ```bash
 # Format files in place (prints changed filenames)
-./gritt -l -fmt file1.aplf file2.aplf
+./gritt -l -fmt file1.aplf file2.aplf utils.apln
 ```
 
-Uses Dyalog's `FormatCode` to normalize whitespace and indentation. Also available in the TUI via the command palette (`Ctrl+]` `:` → `format`).
+Works on function files (`.aplf`) and namespace/class files (`.apln`). Uses Dyalog's `FormatCode` to normalize whitespace and indentation. Also available in the TUI via the command palette (`Ctrl+]` `:` → `format`).
 
 ## Key Bindings
 

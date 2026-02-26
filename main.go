@@ -334,7 +334,9 @@ func execCapture(client *ride.Client, expr string) string {
 
 // runFormat formats APL files in place using FormatCode
 func runFormat(client *ride.Client, files []string) {
-	token := openDummyEditor(client)
+	// Lazily opened windows — one for functions, one for namespaces
+	fnToken := -1
+	nsToken := -1
 
 	for _, file := range files {
 		data, err := os.ReadFile(file)
@@ -342,9 +344,33 @@ func runFormat(client *ride.Client, files []string) {
 			log.Fatalf("Failed to read %s: %v", file, err)
 		}
 		content := string(data)
-		// Strip trailing newline for splitting, we'll add it back
 		content = strings.TrimRight(content, "\n")
 		lines := strings.Split(content, "\n")
+
+		// Detect namespace files by first non-blank line
+		isNamespace := false
+		for _, l := range lines {
+			trimmed := strings.TrimSpace(l)
+			if trimmed != "" {
+				isNamespace = strings.HasPrefix(trimmed, ":Namespace") ||
+					strings.HasPrefix(trimmed, ":Class") ||
+					strings.HasPrefix(trimmed, ":Interface")
+				break
+			}
+		}
+
+		var token int
+		if isNamespace {
+			if nsToken < 0 {
+				nsToken = openDummyNamespace(client)
+			}
+			token = nsToken
+		} else {
+			if fnToken < 0 {
+				fnToken = openDummyEditor(client)
+			}
+			token = fnToken
+		}
 
 		formatted := formatCode(client, token, lines)
 
@@ -368,12 +394,16 @@ func runFormat(client *ride.Client, files []string) {
 		}
 	}
 
-	// Close the dummy editor
-	client.Send("CloseWindow", map[string]any{"win": token})
+	// Close dummy windows
+	if fnToken >= 0 {
+		client.Send("CloseWindow", map[string]any{"win": fnToken})
+	}
+	if nsToken >= 0 {
+		client.Send("CloseWindow", map[string]any{"win": nsToken})
+	}
 }
 
-// openDummyEditor opens a dummy editor window and returns its token.
-// FormatCode requires a valid window token that the interpreter knows about.
+// openDummyEditor opens a dummy function editor and returns its token.
 func openDummyEditor(client *ride.Client) int {
 	if err := client.Send("Edit", map[string]any{
 		"win":  0,
@@ -382,7 +412,24 @@ func openDummyEditor(client *ride.Client) int {
 	}); err != nil {
 		log.Fatalf("Failed to send Edit: %v", err)
 	}
+	return waitForOpenWindow(client)
+}
 
+// openDummyNamespace creates a dummy namespace via ⎕FIX and opens its editor.
+func openDummyNamespace(client *ride.Client) int {
+	runExpr(client, "⎕FIX ':Namespace gritt∆fmt' ':EndNamespace'")
+	if err := client.Send("Edit", map[string]any{
+		"win":  0,
+		"text": "gritt∆fmt",
+		"pos":  0,
+	}); err != nil {
+		log.Fatalf("Failed to send Edit: %v", err)
+	}
+	return waitForOpenWindow(client)
+}
+
+// waitForOpenWindow reads messages until OpenWindow arrives and returns its token.
+func waitForOpenWindow(client *ride.Client) int {
 	for {
 		msg, _, err := client.Recv()
 		if err != nil {

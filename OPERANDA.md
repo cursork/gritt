@@ -10,8 +10,9 @@ Terminal limitation: ctrl+shift+backspace and ctrl+shift+enter (BK/FD defaults) 
 
 ## Recent
 
-- **Dyalog discovery**: `-l` flag now auto-discovers Dyalog from standard install paths when not in `$PATH`. New `-version` flag to target specific version (e.g. `-version 20.0`). Searches macOS `/Applications/Dyalog-*.app/`, Linux `/opt/mdyalog/`, Windows `Program Files` + `%LOCALAPPDATA%`. Implementation in `dyalog.go`, tests in `dyalog_test.go`.
-- Variable editing: read-only numeric arrays convert to editable APLAN via Enter (ShowAsArrayNotation protocol message)
-- Load session: command palette `load` with smart default to most recent `session-*` file
+- **FormatCode**: CLI `-fmt` flag for batch formatting APL files in place — works on both `.aplf` (functions) and `.apln` (namespaces/classes). TUI "format" command in command palette formats the focused editor/tracer. Uses RIDE `FormatCode`/`ReplyFormatCode` protocol messages. CLI opens a dummy editor window (function or namespace via `⎕FIX`) for the required window token. Multiline input (#5) is a prerequisite for creating namespaces interactively in the TUI.
+- **Busy spinner**: Animated braille spinner in title bar (`gritt ⠋`) when interpreter is executing. Driven by `m.ready` / SetPromptType. Spinner tick via `tea.Tick` at 80ms. Also fixed Unicode width bug in `renderBox()` (`len(title)` → `len([]rune(title))`).
+- **WaitForIdle**: New test helper in `uitest/runner.go` — checks for absence of all spinner braille frames. Replaced all `Sleep` calls after `SendLine` in `tui_test.go` with `WaitForIdle` (deterministic, ~3s faster).
+- **Code review fixes**: Rune-safe truncation in `locals_pane.go`, HTTP status check in `aplcart.go`, mutex scope fix in `main.go`, tighter test assertions with negative checks.
 
 See FACIENDA.md for what's next.
