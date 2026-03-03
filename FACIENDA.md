@@ -2,6 +2,7 @@
 
 ## Priority
 
+- [ ] **Bindable commands** — Unify key dispatch and command palette dispatch. Let users bind any command palette name as a key in config (e.g. `"toggle_local": ["t"]` → routes through `dispatchCommand("toggle-local")`). Currently two separate code paths with inconsistent naming (`focus_mode` config vs `focus` command, `toggle_debug` vs `debug`, etc.). Would eliminate per-command boilerplate in KeyMap struct, config struct, and key switch.
 - [x] **Variable editing** — Resolved: Dyalog sends `readOnly=1` for numeric arrays (entityType 4), `readOnly=0` for char vectors (entityType 128). Matches RIDE behavior. Title now shows `[read-only]` vs `[edit]`.
 
 ## GitHub Issues (prioritized)
@@ -240,3 +241,16 @@ RIDE handles multiline poorly. Research needed on:
 - [x] "format" command in command palette — formats focused editor/tracer
 - [x] CLI `-fmt` flag — batch format `.aplf` and `.apln`/`:Class`/`:Interface` files in place
 - [x] Namespace support via `⎕FIX` to create dummy namespace window for FormatCode
+
+### Autolocalise
+- [x] `autolocalise` mode — auto-add locals to tradfn headers on Enter and save
+- [x] `toggle-local` command — toggle word under cursor in/out of header (RIDE TL equivalent)
+- [x] `localise` command — on-demand cleanup: add missing, remove stale locals
+- [x] `⍝ GLOBALS: foo bar` comment to exclude intentional globals
+- [x] Config option `"autolocalise": true` to default on (per-session, toggle doesn't persist)
+- [x] Title bar `[AL]` indicator
+
+### Overlay Focus Restoration
+- [x] All overlay panes save/restore pre-overlay focus (command palette, symbol search, APLcart, doc search)
+- [x] Symbol search and APLcart insert into focused editor, not always session
+- [x] `insertAtFocus()` method replaces duplicated routing logic
