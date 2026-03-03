@@ -1532,6 +1532,178 @@ func TestTUI(t *testing.T) {
 	runner.SendLine(")erase FMT")
 	runner.WaitForIdle(3 * time.Second)
 
+	// === AUTOLOCALISE TESTS ===
+	// Enable autolocalise via command palette
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys(":")
+	runner.Sleep(300 * time.Millisecond)
+	runner.SendText("autoloc")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Enter")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("After enabling autolocalise")
+
+	runner.Test("Autolocalise mode enabled (title shows AL)", func() bool {
+		return runner.Contains("[AL]")
+	})
+
+	// Define a function WITHOUT locals in header, save with autolocalise on
+	runner.SendLine(")ed AL1")
+	runner.WaitFor("╔", 3*time.Second)
+	runner.Snapshot("AL1 editor opened")
+
+	// Type function body with assignments but no locals declared
+	runner.SendKeys("End")   // End of "AL1" header
+	runner.SendKeys("Enter") // New line
+	runner.SendText("x←42")
+	runner.SendKeys("Enter")
+	runner.SendText("y←x+1")
+	runner.Sleep(200 * time.Millisecond)
+	runner.Snapshot("AL1 with unlocalized vars x y")
+
+	// Save - autolocalise should add ;x;y to header
+	runner.SendKeys("Escape")
+	runner.Sleep(500 * time.Millisecond)
+
+	runner.Test("AL1 editor closes", func() bool {
+		return runner.WaitForNoFocusedPane(3 * time.Second)
+	})
+
+	// Reopen to verify header was updated
+	runner.SendLine(")ed AL1")
+	runner.WaitFor("╔", 3*time.Second)
+	runner.Sleep(500 * time.Millisecond)
+	runner.Snapshot("AL1 reopened after autolocalise")
+
+	runner.Test("Autolocalise added x and y to header", func() bool {
+		return runner.Contains(";x;y")
+	})
+
+	// Close editor
+	runner.SendKeys("Escape")
+	runner.Sleep(500 * time.Millisecond)
+	runner.WaitForNoFocusedPane(3 * time.Second)
+
+	// Test with GLOBALS comment
+	runner.SendLine(")erase AL1")
+	runner.WaitForIdle(3 * time.Second)
+
+	runner.SendLine(")ed AL2")
+	runner.WaitFor("╔", 3*time.Second)
+
+	runner.SendKeys("End")   // End of "AL2" header
+	runner.SendKeys("Enter") // New line
+	// Note: ⍝ is tricky to send via tmux. Use backtick approach if available,
+	// or test the globals exclusion via unit tests only.
+	runner.SendText("x←1")
+	runner.SendKeys("Enter")
+	runner.SendText("y←2")
+	runner.Sleep(200 * time.Millisecond)
+
+	// Save
+	runner.SendKeys("Escape")
+	runner.Sleep(500 * time.Millisecond)
+	runner.WaitForNoFocusedPane(3 * time.Second)
+
+	// Reopen to verify both x and y localised
+	runner.SendLine(")ed AL2")
+	runner.WaitFor("╔", 3*time.Second)
+	runner.Snapshot("AL2 with autolocalised x y")
+
+	runner.Test("AL2 has both locals", func() bool {
+		return runner.Contains(";x;y")
+	})
+
+	runner.SendKeys("Escape")
+	runner.Sleep(500 * time.Millisecond)
+	runner.WaitForNoFocusedPane(3 * time.Second)
+
+	// === TOGGLE LOCAL TEST ===
+	// Create a function TL1 with a local z, then toggle it off, then toggle it back
+	runner.SendLine(")ed TL1")
+	runner.WaitFor("╔", 3*time.Second)
+
+	// Add a local manually: TL1;z
+	runner.SendKeys("End")
+	runner.SendText(";z")
+	runner.SendKeys("Enter")
+	runner.SendText("z←99")
+	runner.Sleep(200 * time.Millisecond)
+
+	// Save with autolocalise still on
+	runner.SendKeys("Escape")
+	runner.Sleep(500 * time.Millisecond)
+	runner.WaitForNoFocusedPane(3 * time.Second)
+
+	// Reopen — z should be in header
+	runner.SendLine(")ed TL1")
+	runner.WaitFor("╔", 3*time.Second)
+	runner.Sleep(500 * time.Millisecond)
+
+	runner.Test("TL1 has z in header", func() bool {
+		return runner.Contains(";z")
+	})
+
+	// Move cursor to line [1] where z←99 is, position on 'z'
+	runner.SendKeys("Down")   // Move to line [1]
+	runner.SendKeys("Home")   // Start of line
+	runner.Sleep(200 * time.Millisecond)
+
+	// Toggle localisation via command palette
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys(":")
+	runner.Sleep(300 * time.Millisecond)
+	runner.SendText("toggle-l")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Enter")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("After toggle-local on z (should remove)")
+
+	// z should now be removed from header (toggled off)
+	runner.Test("Toggle-local removed z from header", func() bool {
+		return !runner.Contains(";z")
+	})
+
+	// Toggle it back on
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys(":")
+	runner.Sleep(300 * time.Millisecond)
+	runner.SendText("toggle-l")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Enter")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("After toggle-local on z again (should add)")
+
+	runner.Test("Toggle-local re-added z to header", func() bool {
+		return runner.Contains(";z")
+	})
+
+	// Close editor
+	runner.SendKeys("Escape")
+	runner.Sleep(500 * time.Millisecond)
+	runner.WaitForNoFocusedPane(3 * time.Second)
+
+	// Clean up
+	runner.SendLine(")erase AL1 AL2 TL1")
+	runner.WaitForIdle(3 * time.Second)
+
+	// Disable autolocalise
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys(":")
+	runner.Sleep(300 * time.Millisecond)
+	runner.SendText("autoloc")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Enter")
+	runner.Sleep(300 * time.Millisecond)
+
+	runner.Test("Autolocalise mode disabled", func() bool {
+		return !runner.Contains("[AL]")
+	})
+
 	// Final snapshot
 	runner.Snapshot("Final state")
 

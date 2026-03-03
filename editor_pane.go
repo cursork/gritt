@@ -24,6 +24,7 @@ type EditorPane struct {
 	onClose           func()
 	onArrayNotation   func() // Convert to APLAN for editing
 	onFormat          func() // Format code via FormatCode message
+	onNewline         func() // Called after Enter in edit mode (for autolocalise)
 
 	// Tracer control callbacks (only used when window.Debugger is true)
 	onStepInto   func()
@@ -339,6 +340,9 @@ func (e *EditorPane) HandleKey(msg tea.KeyMsg) bool {
 		e.window.CursorCol = len([]rune(e.currentLine()))
 	case tea.KeyEnter:
 		e.insertNewline()
+		if e.onNewline != nil {
+			e.onNewline()
+		}
 	case tea.KeyBackspace:
 		e.deleteCharBack()
 	case tea.KeyDelete:

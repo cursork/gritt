@@ -151,3 +151,35 @@ func (w *EditorWindow) ToggleStop(line int) {
 	w.Stop = append(w.Stop, line)
 	w.Modified = true
 }
+
+// WordAtCursor returns the APL identifier at the current cursor position.
+// Returns empty string if the cursor is not on an identifier.
+func (w *EditorWindow) WordAtCursor() string {
+	if w.CursorRow < 0 || w.CursorRow >= len(w.Text) {
+		return ""
+	}
+	runes := []rune(w.Text[w.CursorRow])
+	col := w.CursorCol
+	if col < 0 || col >= len(runes) {
+		// Try one before (cursor at end of word)
+		col = len(runes) - 1
+		if col < 0 {
+			return ""
+		}
+	}
+	if !isIdentRune(runes[col]) {
+		return ""
+	}
+
+	// Expand left
+	start := col
+	for start > 0 && isIdentRune(runes[start-1]) {
+		start--
+	}
+	// Expand right
+	end := col + 1
+	for end < len(runes) && isIdentRune(runes[end]) {
+		end++
+	}
+	return string(runes[start:end])
+}

@@ -141,6 +141,12 @@ type Model struct {
 	// Backtick mode for APL symbol input
 	backtickActive bool
 
+	// Autolocalise: auto-add locals to tradfn headers on save
+	autolocalise bool
+
+	// Focus restoration: save focused pane ID before opening overlay panes
+	preOverlayFocus string
+
 	// Documentation database
 	docsDB *sql.DB
 
@@ -193,16 +199,17 @@ func NewModel(addr string, logFile io.Writer, profile colorprofile.Profile) Mode
 	cfg := LoadConfig()
 	initColors(profile, cfg.Accent)
 	m := Model{
-		addr:       addr,
-		connecting: true,
-		lines:      []Line{{Text: aplIndent}},
-		debugLog:   &LogBuffer{},
-		logFile:    logFile,
-		panes:      NewPaneManager(80, 24),
-		editors:    make(map[int]*EditorWindow),
-		config:     cfg,
-		help:       help.New(),
-		keys:       cfg.ToKeyMap(),
+		addr:         addr,
+		connecting:   true,
+		lines:        []Line{{Text: aplIndent}},
+		debugLog:     &LogBuffer{},
+		logFile:      logFile,
+		panes:        NewPaneManager(80, 24),
+		editors:      make(map[int]*EditorWindow),
+		config:       cfg,
+		help:         help.New(),
+		keys:         cfg.ToKeyMap(),
+		autolocalise: cfg.Autolocalise,
 	}
 
 	// Open docs database (optional — F1 help is unavailable without it)
@@ -399,33 +406,22 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Handle backtick mode - insert APL symbol
-	// insertTarget routes to focused editor if one exists, otherwise session
-	insertTarget := func(r rune) {
-		if fp := m.panes.FocusedPane(); fp != nil {
-			if ep, ok := fp.Content.(*EditorPane); ok && !ep.InTracerMode() {
-				ep.insertChar(r)
-				return
-			}
-		}
-		m.insertChar(r)
-	}
-
 	if m.backtickActive {
 		m.backtickActive = false
 		if len(msg.Runes) > 0 {
 			r := msg.Runes[0]
 			if sym, ok := backtickMap[r]; ok {
 				// Insert symbol at cursor
-				insertTarget(sym)
+				m.insertAtFocus(sym)
 				return m, nil
 			}
 			// Unknown key - insert the backtick and the key
-			insertTarget('`')
-			insertTarget(r)
+			m.insertAtFocus('`')
+			m.insertAtFocus(r)
 			return m, nil
 		}
 		// Special key after backtick - just insert backtick
-		insertTarget('`')
+		m.insertAtFocus('`')
 		return m, nil
 	}
 
@@ -670,12 +666,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			action := cp.SelectedAction
 			cp.SelectedAction = ""
 			m.panes.Remove("commands")
-			// For breakpoint action, focus the tracer/editor pane first
-			if action == "breakpoint" {
-				if m.panes.Get("tracer") != nil {
-					m.panes.Focus("tracer")
-				}
-			}
+			m.restoreOverlayFocus()
 			return (&m).dispatchCommand(action)
 		}
 
@@ -684,7 +675,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			sym := ss.SelectedSymbol
 			ss.SelectedSymbol = 0
 			m.panes.Remove("symbols")
-			m.insertChar(sym)
+			m.restoreOverlayFocus()
+			m.insertAtFocus(sym)
 			return m, nil
 		}
 
@@ -693,9 +685,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			syntax := ac.SelectedSyntax
 			ac.SelectedSyntax = ""
 			m.panes.Remove("aplcart")
-			// Insert the syntax
+			m.restoreOverlayFocus()
 			for _, r := range syntax {
-				m.insertChar(r)
+				m.insertAtFocus(r)
 			}
 			return m, nil
 		}
@@ -705,6 +697,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			result := ds.SelectedResult
 			ds.SelectedResult = nil
 			m.panes.Remove("docsearch")
+			m.restoreOverlayFocus()
 			return m.openDocFromSearch(result)
 		}
 
@@ -963,6 +956,33 @@ func (m *Model) setCurrentLine(text string) {
 	m.lines[m.cursorRow].Text = text
 }
 
+// insertAtFocus inserts a rune into the focused editor pane if one exists,
+// otherwise into the session input line.
+func (m *Model) insertAtFocus(r rune) {
+	if fp := m.panes.FocusedPane(); fp != nil {
+		if ep, ok := fp.Content.(*EditorPane); ok && !ep.InTracerMode() {
+			ep.insertChar(r)
+			return
+		}
+	}
+	m.insertChar(r)
+}
+
+// saveOverlayFocus saves the currently focused pane ID before opening an overlay.
+func (m *Model) saveOverlayFocus() {
+	if fp := m.panes.FocusedPane(); fp != nil {
+		m.preOverlayFocus = fp.ID
+	}
+}
+
+// restoreOverlayFocus restores focus to the pane that was focused before the overlay opened.
+func (m *Model) restoreOverlayFocus() {
+	if m.preOverlayFocus != "" {
+		m.panes.Focus(m.preOverlayFocus)
+		m.preOverlayFocus = ""
+	}
+}
+
 func (m *Model) insertChar(r rune) {
 	runes := m.currentLineRunes()
 	newRunes := make([]rune, 0, len(runes)+1)
@@ -1116,6 +1136,9 @@ func (m *Model) saveEditor(token int) {
 		return
 	}
 
+	// Autolocalise: update header with new locals before saving
+	m.autolocaliseEditor(token)
+
 	// Build text array
 	text := make([]any, len(w.Text))
 	for i, line := range w.Text {
@@ -1165,6 +1188,59 @@ func (m *Model) formatEditor(token int) {
 	m.send("FormatCode", map[string]any{"win": token, "text": text})
 }
 
+// autolocaliseEditor runs autolocalise on the given editor window if enabled.
+func (m *Model) autolocaliseEditor(token int) {
+	if !m.autolocalise {
+		return
+	}
+	w, exists := m.editors[token]
+	if !exists || len(w.Text) == 0 {
+		return
+	}
+	// Only for tradfn types (1=function, 2=monadic op, 3=dyadic op)
+	if w.EntityType < 1 || w.EntityType > 3 {
+		return
+	}
+	w.Text = autolocaliseText(w.Text, w.Name)
+}
+
+// localiseEditor runs on-demand localise cleanup on the focused editor.
+// Adds missing locals and removes stale ones.
+func (m *Model) localiseEditor() {
+	var w *EditorWindow
+	if fp := m.panes.FocusedPane(); fp != nil {
+		if ep, ok := fp.Content.(*EditorPane); ok {
+			w = ep.window
+		}
+	}
+	if w == nil {
+		if pane := m.panes.Get("tracer"); pane != nil {
+			if ep, ok := pane.Content.(*EditorPane); ok {
+				w = ep.window
+			}
+		}
+	}
+	if w == nil {
+		for token := range m.editors {
+			paneID := fmt.Sprintf("editor:%d", token)
+			if pane := m.panes.Get(paneID); pane != nil {
+				if ep, ok := pane.Content.(*EditorPane); ok {
+					w = ep.window
+					break
+				}
+			}
+		}
+	}
+	if w == nil {
+		return
+	}
+	if w.EntityType < 1 || w.EntityType > 3 {
+		return
+	}
+	w.Text = localiseText(w.Text, w.Name)
+	w.Modified = true
+}
+
 // formatFocusedEditor formats the code in the active editor/tracer pane.
 // Checks focused pane first, then falls back to tracer or any editor pane
 // (needed when called from command palette, which clears focus on dismiss).
@@ -1191,6 +1267,63 @@ func (m *Model) formatFocusedEditor() {
 				ep.onFormat()
 				return
 			}
+		}
+	}
+}
+
+// toggleLocalisation toggles the word under cursor in/out of the function header's
+// local variable list (like RIDE's TL / Ctrl+Up command).
+func (m *Model) toggleLocalisation() {
+	// Find the editor to operate on: focused pane, tracer, or any editor
+	var w *EditorWindow
+	if fp := m.panes.FocusedPane(); fp != nil {
+		if ep, ok := fp.Content.(*EditorPane); ok {
+			w = ep.window
+		}
+	}
+	if w == nil {
+		if pane := m.panes.Get("tracer"); pane != nil {
+			if ep, ok := pane.Content.(*EditorPane); ok {
+				w = ep.window
+			}
+		}
+	}
+	// Fall back: any editor pane (needed when called from command palette,
+	// which clears focus on dismiss)
+	if w == nil {
+		for token := range m.editors {
+			paneID := fmt.Sprintf("editor:%d", token)
+			if pane := m.panes.Get(paneID); pane != nil {
+				if ep, ok := pane.Content.(*EditorPane); ok {
+					w = ep.window
+					break
+				}
+			}
+		}
+	}
+	if w == nil {
+		return
+	}
+
+	// Only for tradfn types (1=function, 2=monadic op, 3=dyadic op)
+	if w.EntityType < 1 || w.EntityType > 3 {
+		return
+	}
+
+	varName := w.WordAtCursor()
+	if varName == "" {
+		return
+	}
+
+	oldLen := len(w.Text)
+	w.Text = toggleLocal(w.Text, w.Name, varName, m.autolocalise)
+	w.Modified = true
+
+	// Adjust cursor when GLOBALS line is inserted/removed
+	if delta := len(w.Text) - oldLen; delta != 0 && w.CursorRow > 0 {
+		w.CursorRow += delta
+		if w.CursorRow < 1 {
+			w.CursorRow = 1
 		}
 	}
 }
@@ -1383,6 +1516,9 @@ func (m *Model) showTracer(token int) {
 
 		editorPane.onFormat = func() {
 			m.formatEditor(m.tracerCurrent)
+		}
+		editorPane.onNewline = func() {
+			m.autolocaliseEditor(m.tracerCurrent)
 		}
 
 		// Set tracer control callbacks
@@ -1942,6 +2078,12 @@ func (m *Model) dispatchCommand(action string) (tea.Model, tea.Cmd) {
 		m.tracerForward()
 	case "format":
 		m.formatFocusedEditor()
+	case "toggle-local":
+		m.toggleLocalisation()
+	case "localise":
+		m.localiseEditor()
+	case "autolocalise":
+		m.autolocalise = !m.autolocalise
 	case "close-all-windows":
 		m.closeAllWindows()
 	}
@@ -1954,6 +2096,7 @@ func (m *Model) openSymbolSearch() {
 		return
 	}
 
+	m.saveOverlayFocus()
 	ss := NewSymbolSearch()
 
 	// Position: center
@@ -2045,6 +2188,8 @@ func (m *Model) openDocSearch() (tea.Model, tea.Cmd) {
 		return *m, nil
 	}
 
+	m.saveOverlayFocus()
+
 	if m.docsDB == nil {
 		m.log("No docs database (download from https://github.com/xpqz/bundle-docs/releases)")
 		return *m, nil
@@ -2103,6 +2248,7 @@ func (m *Model) openAPLcart() (tea.Model, tea.Cmd) {
 		return *m, nil
 	}
 
+	m.saveOverlayFocus()
 	ac := NewAPLcart()
 
 	// Position: center, larger
@@ -2185,6 +2331,9 @@ func (m *Model) openCommandPalette() {
 		return
 	}
 
+	// Save focused pane so we can restore it after the overlay dismisses
+	m.saveOverlayFocus()
+
 	// Build command list
 	hint := func(b key.Binding) string {
 		h := b.Help()
@@ -2192,6 +2341,11 @@ func (m *Model) openCommandPalette() {
 			return " (" + h.Key + ")"
 		}
 		return ""
+	}
+
+	autolocaliseLabel := " [off]"
+	if m.autolocalise {
+		autolocaliseLabel = " [on]"
 	}
 
 	commands := []Command{
@@ -2215,6 +2369,9 @@ func (m *Model) openCommandPalette() {
 		{Name: "docs", Help: "Search documentation"},
 		{Name: "aplcart", Help: "Search APLcart idioms"},
 		{Name: "format", Help: "Format code in focused editor"},
+		{Name: "toggle-local", Help: "Toggle localisation of word under cursor"},
+		{Name: "localise", Help: "Clean up locals: add missing, remove stale"},
+		{Name: "autolocalise", Help: "Toggle autolocalise mode" + autolocaliseLabel},
 		{Name: "reconnect", Help: "Reconnect to Dyalog"},
 		{Name: "close-all-windows", Help: "Close all editors/tracers (clear stuck state)"},
 		{Name: "save", Help: "Save session to file"},
@@ -2376,6 +2533,9 @@ func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
 			}
 			editorPane.onFormat = func() {
 				m.formatEditor(token)
+			}
+			editorPane.onNewline = func() {
+				m.autolocaliseEditor(token)
 			}
 
 			// Position: center of screen
@@ -2700,6 +2860,9 @@ func (m Model) viewSession(w, h int) string {
 		borderColor = lipgloss.Color("196") // Red
 	} else if !m.ready {
 		title = "gritt " + string(spinnerFrames[m.spinnerFrame])
+	}
+	if m.autolocalise {
+		title += " [AL]"
 	}
 
 	return m.renderBox(title, content, contentW, contentH, borderColor)
