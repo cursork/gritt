@@ -1704,6 +1704,91 @@ func TestTUI(t *testing.T) {
 		return !runner.Contains("[AL]")
 	})
 
+	// === DATA BROWSER TESTS ===
+	// Create a namespace with various data types for structured browsing
+	runner.SendLine("dbTest←⎕NS⍬")
+	runner.WaitForIdle(3 * time.Second)
+	runner.SendLine("dbTest.name←'Alice'")
+	runner.WaitForIdle(3 * time.Second)
+	runner.SendLine("dbTest.age←42")
+	runner.WaitForIdle(3 * time.Second)
+	runner.SendLine("dbTest.scores←2 3⍴⍳6")
+	runner.WaitForIdle(3 * time.Second)
+	runner.SendLine("dbTest.tags←'alpha' 'beta' 'gamma'")
+	runner.WaitForIdle(3 * time.Second)
+
+	// Open namespace via )ed → opens read-only editor initially
+	runner.SendLine(")ed dbTest")
+	runner.WaitFor("[read-only]", 3*time.Second)
+	runner.Snapshot("Data browser: namespace read-only")
+
+	runner.Test("Namespace opens read-only", func() bool {
+		return runner.Contains("[read-only]")
+	})
+
+	// Press Enter to convert to array notation → data browser pane
+	runner.SendKeys("Enter")
+	runner.Sleep(1500 * time.Millisecond)
+	runner.Snapshot("Data browser: namespace view")
+
+	// Data browser should show namespace keys
+	runner.Test("Data browser shows namespace keys", func() bool {
+		return runner.Contains("name") && runner.Contains("age")
+	})
+
+	runner.Test("Data browser shows scores and tags keys", func() bool {
+		return runner.Contains("scores") && runner.Contains("tags")
+	})
+
+	// Navigate down to scores (keys are ordered: age, name, scores, tags by Dyalog)
+	// We check for matrix glyph ⊞ which indicates a matrix value
+	runner.Test("Data browser shows type glyphs", func() bool {
+		return runner.Contains("⊞") || runner.Contains("≡")
+	})
+
+	// Navigate: find scores by going down and checking for ⊞ in the row
+	// Dyalog may reorder keys; navigate to a compound value and drill in
+	runner.SendKeys("Down")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Down")
+	runner.Sleep(200 * time.Millisecond)
+	runner.Snapshot("Data browser: navigated down")
+
+	// Press Enter to drill into the selected compound value
+	runner.SendKeys("Enter")
+	runner.Sleep(500 * time.Millisecond)
+	runner.Snapshot("Data browser: drilled in")
+
+	// After drill-in, title should show breadcrumb path with " > "
+	runner.Test("Breadcrumb path shows after drill-in", func() bool {
+		return runner.Contains(" > ")
+	})
+
+	// Esc pops the stack back to root namespace view
+	runner.SendKeys("Escape")
+	runner.Sleep(500 * time.Millisecond)
+	runner.Snapshot("Data browser: back to namespace root")
+
+	runner.Test("Esc pops back to namespace view", func() bool {
+		return runner.Contains("name") && runner.Contains("age")
+	})
+
+	// Esc at root closes the data browser pane
+	runner.SendKeys("Escape")
+	runner.Sleep(1000 * time.Millisecond)
+	runner.Snapshot("Data browser: closed")
+
+	runner.Test("Data browser closed after Esc at root", func() bool {
+		return !runner.Contains("╔")
+	})
+
+	// Wait for interpreter to settle (ShowAsArrayNotation may leave it busy)
+	runner.WaitForIdle(5 * time.Second)
+
+	// Clean up
+	runner.SendLine(")erase dbTest")
+	runner.WaitForIdle(3 * time.Second)
+
 	// Final snapshot
 	runner.Snapshot("Final state")
 
