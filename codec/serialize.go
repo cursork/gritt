@@ -139,8 +139,7 @@ func serializeVector(arr []any, depth int, opt *SerializeOptions) string {
 		return "(" + strings.Join(items, " ⋄ ") + ")"
 	}
 
-	indent := strings.Repeat(" ", opt.Indent)
-	return "(\n" + indent + strings.Join(items, "\n"+indent) + "\n)"
+	return applyIndent("(", ")", items, depth, opt)
 }
 
 func serializeMatrix(m *Array, depth int, opt *SerializeOptions) string {
@@ -179,8 +178,7 @@ func serializeMatrix(m *Array, depth int, opt *SerializeOptions) string {
 		return "[" + strings.Join(rows, " ⋄ ") + "]"
 	}
 
-	indent := strings.Repeat(" ", opt.Indent)
-	return "[\n" + indent + strings.Join(rows, "\n"+indent) + "\n]"
+	return applyIndent("[", "]", rows, depth, opt)
 }
 
 func serializeNamespace(ns *Namespace, depth int, opt *SerializeOptions) string {
@@ -197,8 +195,13 @@ func serializeNamespace(ns *Namespace, depth int, opt *SerializeOptions) string 
 		return "(" + strings.Join(items, " ⋄ ") + ")"
 	}
 
-	indent := strings.Repeat(" ", opt.Indent)
-	return "(\n" + indent + strings.Join(items, "\n"+indent) + "\n)"
+	return applyIndent("(", ")", items, depth, opt)
+}
+
+func applyIndent(open, close string, items []string, depth int, opt *SerializeOptions) string {
+	inner := strings.Repeat(" ", (depth+1)*opt.Indent)
+	outer := strings.Repeat(" ", depth*opt.Indent)
+	return open + "\n" + inner + strings.Join(items, "\n"+inner) + "\n" + outer + close
 }
 
 func allNumbers(arr []any) bool {

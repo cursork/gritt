@@ -14,6 +14,31 @@ APLAN parser+serializer ported from dapple/parse (Go) and japlan (JS) into `code
 
 See FACIENDA "codec package" section for planned uses (structured variable viewer/editor, .apla formatting, -json output).
 
+## Structured Data Browser
+
+New `DataBrowserPane` in `data_browser.go` implements `PaneContent` for structured viewing and editing of APLAN data. When an editor window has entityType 262144, the APLAN text is parsed via `codec.APLAN()` and shown in a type-specific view instead of raw text:
+
+- **Namespace**: key-value list with type-glyph-prefixed previews
+- **Matrix**: grid with row/column headers, 2D cell navigation, selected column header highlighted
+- **Vector**: indexed list with 1-based APL indices
+- **Scalars**: simple display (leaf nodes, no drill-down)
+
+View stack with breadcrumb title bar for drill-down navigation. Enter drills in, Esc/Backspace pops out. Type glyphs: `#` namespace, `⊞` matrix, `≡` vector.
+
+**v1 editing** (implemented, not yet tested): Enter on scalar starts inline edit with cursor. Type validation maintains original type (int→int, string→string, etc.). Red error on invalid input. Save serializes modified root back to APLAN via SaveChanges on close.
+
+Integration in `tui.go`: OpenWindow and UpdateWindow both check for entityType 262144 and swap to DataBrowserPane. ClosePane (Esc) handler has special data browser path: cancel edit → pop stack → save-if-modified → close. Design doc in `deliberanda/structured-editing.md`.
+
+### KNOWN BUG: Interpreter stuck after ShowAsArrayNotation
+
+**Symptoms**: Spinner in title bar after opening data browser via `)ed data` + Enter (ShowAsArrayNotation). Interpreter becomes unresponsive — session commands show spinner too. Esc at data browser root calls `sendCloseWindow(token)` but pane stays because it waits for Dyalog's CloseWindow response which never comes (interpreter stuck).
+
+**Suspicion**: ShowAsArrayNotation (or the UpdateWindow response changing entityType to 262144) may leave the interpreter in a busy state — SetPromptType type=1 may not be sent after the conversion. Need to check protocol logs (`-log debug.log`) to see what messages flow during ShowAsArrayNotation and whether we get a SetPromptType back.
+
+**Possible fix**: For unmodified data browser close, remove the pane locally immediately instead of waiting for Dyalog's CloseWindow response. For the stuck interpreter, may need to investigate the ShowAsArrayNotation protocol flow — check if RIDE does anything extra after receiving the UpdateWindow.
+
+**Not yet done**: testing editing, adding/removing elements, pagination.
+
 ## Recent
 
 - **Autolocalise**: Three commands for tradfn variable localisation (`autolocalise.go`):

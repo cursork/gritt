@@ -18,6 +18,7 @@ import (
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/charmbracelet/x/cellbuf"
+	"github.com/cursork/gritt/codec"
 	"github.com/cursork/gritt/ride"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -646,6 +647,38 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.closeEditor(m.tracerCurrent)
 				}
 			} else if strings.HasPrefix(fp.ID, "editor:") {
+				// Data browser: handle Esc for editing, stack popping, or close
+				if db, ok := fp.Content.(*DataBrowserPane); ok {
+					if db.editing {
+						db.cancelEdit()
+						return m, nil
+					}
+					if len(db.stack) > 1 {
+						db.drillOut()
+						return m, nil
+					}
+					// At root — close the data browser
+					var token int
+					fmt.Sscanf(fp.ID, "editor:%d", &token)
+					if db.modified {
+						w, exists := m.editors[token]
+						if exists && w.PendingClose {
+							return m, nil // already saving
+						}
+						if exists {
+							serialized := codec.Serialize(db.root)
+							w.Text = strings.Split(serialized, "\n")
+							w.Modified = true
+						}
+						m.closeEditor(token) // save then close
+					} else {
+						// Unmodified: remove pane locally and send close
+						m.panes.Remove(fp.ID)
+						delete(m.editors, token)
+						m.sendCloseWindow(token)
+					}
+					return m, nil
+				}
 				// Regular editor pane
 				var token int
 				fmt.Sscanf(fp.ID, "editor:%d", &token)
@@ -1449,6 +1482,28 @@ func (m *Model) closeEditor(token int) {
 
 	// Not modified - close immediately
 	m.sendCloseWindow(token)
+}
+
+// tryDataBrowser attempts to create a DataBrowserPane for an APLAN editor window.
+// Returns nil if the window isn't APLAN or doesn't parse as a compound value.
+func (m *Model) tryDataBrowser(w *EditorWindow) *DataBrowserPane {
+	if w.EntityType != 262144 {
+		return nil
+	}
+	text := strings.Join(w.Text, "\n")
+	parsed, err := codec.APLAN(text)
+	if err != nil {
+		m.log("  APLAN parse failed for %s: %v", w.Name, err)
+		return nil
+	}
+	switch parsed.(type) {
+	case *codec.Namespace, *codec.Array, []any:
+		token := w.Token
+		return NewDataBrowserPane(w.Name, parsed, func() {
+			m.sendCloseWindow(token)
+		})
+	}
+	return nil
 }
 
 func (m *Model) sendCloseWindow(token int) {
@@ -2520,8 +2575,26 @@ func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
 			m.tracerStack = append(m.tracerStack, w.Token)
 			m.showTracer(w.Token)
 			m.log("  opened tracer: %s (token=%d, stack depth=%d)", w.Name, w.Token, len(m.tracerStack))
+		} else if browser := m.tryDataBrowser(w); browser != nil {
+			// APLAN compound value - open structured data browser
+			paneW := min(m.width-4, 60)
+			paneH := min(m.height-6, 20)
+			if paneW < 30 {
+				paneW = 30
+			}
+			if paneH < 10 {
+				paneH = 10
+			}
+			paneX := (m.width - paneW) / 2
+			paneY := (m.height - paneH) / 2
+
+			paneID := fmt.Sprintf("editor:%d", w.Token)
+			pane := NewPane(paneID, browser, paneX, paneY, paneW, paneH)
+			m.panes.Add(pane)
+			m.panes.Focus(paneID)
+			m.log("  opened data browser: %s (token=%d)", w.Name, w.Token)
 		} else {
-			// Regular editor - create pane as before
+			// Regular editor
 			token := w.Token
 			editorPane := NewEditorPane(w, m.config.TracerKeys,
 				func() { m.saveEditor(token) },
@@ -2569,6 +2642,18 @@ func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
 				lineLen := len([]rune(w.Text[w.CursorRow]))
 				if w.CursorCol > lineLen {
 					w.CursorCol = lineLen
+				}
+			}
+			// If entityType changed to APLAN, swap to data browser
+			if w.EntityType == 262144 {
+				paneID := fmt.Sprintf("editor:%d", token)
+				if p := m.panes.Get(paneID); p != nil {
+					if _, isBrowser := p.Content.(*DataBrowserPane); !isBrowser {
+						if browser := m.tryDataBrowser(w); browser != nil {
+							p.Content = browser
+							m.log("  swapped to data browser: %s (token=%d)", w.Name, token)
+						}
+					}
 				}
 			}
 			m.log("  updated: %s (token=%d, entityType=%d, readOnly=%v)", w.Name, token, w.EntityType, w.ReadOnly)
@@ -2690,6 +2775,22 @@ func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
 			w.Debugger = tracer != 0
 			m.log("  window type changed: token=%d, tracer=%v", win, w.Debugger)
 		}
+
+	case "OptionsDialog":
+		token := 0
+		if t, ok := msg.Args["token"].(float64); ok {
+			token = int(t)
+		}
+		title := ""
+		if t, ok := msg.Args["title"].(string); ok {
+			title = t
+		}
+		m.log("  OptionsDialog: token=%d, title=%q", token, title)
+
+		// Auto-reply "No" (replace only the name being edited) for APLAN namespace saves
+		// TODO: Show actual dialog UI for user choice
+		m.log("→ ReplyOptionsDialog token=%d, index=1 (No)", token)
+		m.send("ReplyOptionsDialog", map[string]any{"token": token, "index": 1})
 
 	case "ReplyGetAutocomplete":
 		token := int(msg.Args["token"].(float64))

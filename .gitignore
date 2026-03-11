@@ -5,3 +5,4 @@ test-reports
 /session-*
 /cmd/explore*
 *.swp
+.earwig
