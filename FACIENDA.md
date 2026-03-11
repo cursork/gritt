@@ -40,6 +40,11 @@
 - [ ] StringDialog (text input)
 - [ ] ReplyOptionsDialog/ReplyStringDialog
 
+## codec package (APLAN roundtrip)
+- [ ] **Structured variable viewer** — Parse APLAN (`ShowAsArrayNotation`) in variables pane to render matrices as tables, namespaces as trees, nested structures with expandable nodes
+- [ ] **Structured variable editing** — Parse APLAN in editor (entityType 262144) for cell-level navigation/editing of matrices rather than raw text
+- [ ] **`-json` output for `-e`** — `gritt -l -e "⍳5" -json` parses session output and emits JSON for piping to jq etc.
+
 ## Other
 - [x] Dyalog discovery: search known install paths when `dyalog` not in `$PATH` (macOS, Linux, Windows, Pi)
 - [ ] APL keycode aliases (BK, FD, SR etc. — see OPERANDA)

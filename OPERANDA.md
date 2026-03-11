@@ -8,6 +8,12 @@ APLers expect standard keycodes like BK (Back), FD (Forward), SR (Redraw Screen)
 
 Terminal limitation: ctrl+shift+backspace and ctrl+shift+enter (BK/FD defaults) are not possible — backspace/enter are raw ASCII control chars that can't carry modifier info via escape sequences. We use ctrl+shift+up/down instead.
 
+## codec package (new)
+
+APLAN parser+serializer ported from dapple/parse (Go) and japlan (JS) into `codec/`. Supports full roundtripping: parse APLAN → Go values → serialize back to APLAN. Handles scalars, vectors, matrices (arbitrary rank), namespaces, complex numbers, zilde. 97 tests. Also includes display-form parser (`Auto()`, `Int()`, etc.) for raw session output. Plus `Equal()` and `Get()` utilities.
+
+See FACIENDA "codec package" section for planned uses (structured variable viewer/editor, .apla formatting, -json output).
+
 ## Recent
 
 - **Autolocalise**: Three commands for tradfn variable localisation (`autolocalise.go`):
