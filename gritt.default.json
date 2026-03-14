@@ -29,6 +29,7 @@
     "localise":        {},
     "autolocalise":    {},
     "close-all-windows": {},
+    "rebind":           {},
     "step-into":       { "keys": ["i"], "context": "tracer" },
     "step-over":       { "keys": ["n"], "context": "tracer" },
     "step-out":        { "keys": ["o"], "context": "tracer" },

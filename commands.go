@@ -321,6 +321,10 @@ func buildCommands(cfg *Config) *CommandRegistry {
 		m.closeAllWindows()
 		return *m, nil
 	})
+	reg.add("rebind", "Change key bindings", false, "", func(m *Model) (tea.Model, tea.Cmd) {
+		m.openRebindPane()
+		return *m, nil
+	})
 
 	// --- Tracer commands ---
 	reg.add("step-into", "Tracer: step into", false, "tracer", func(m *Model) (tea.Model, tea.Cmd) {

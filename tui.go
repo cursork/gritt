@@ -691,6 +691,12 @@ routeToPane:
 			return m.openDocFromSearch(result)
 		}
 
+		// Check if rebind pane has a pending change
+		if rp, ok := fp.Content.(*RebindPane); ok && rp.PendingApply {
+			rp.PendingApply = false
+			m.applyRebind(rp.PendingName, rp.PendingBinding)
+		}
+
 		// Check if variables pane needs refresh (after mode toggle)
 		if vp, ok := fp.Content.(*VariablesPane); ok && vp.loading {
 			m.fetchVariables(vp)
@@ -2393,6 +2399,34 @@ func (m *Model) openCommandPalette() {
 	pane := NewPane("commands", palette, paneX, paneY, paneW, paneH)
 	m.panes.Add(pane)
 	m.panes.Focus("commands")
+}
+
+func (m *Model) openRebindPane() {
+	if m.panes.Get("rebind") != nil {
+		m.panes.Remove("rebind")
+		return
+	}
+
+	m.saveOverlayFocus()
+
+	rp := NewRebindPane(m.commands, m.config.Bindings)
+
+	paneW := min(60, m.width-4)
+	paneH := min(len(rp.entries)+3, m.height-4)
+	paneX := (m.width - paneW) / 2
+	paneY := 2
+
+	pane := NewPane("rebind", rp, paneX, paneY, paneW, paneH)
+	m.panes.Add(pane)
+	m.panes.Focus("rebind")
+}
+
+// applyRebind updates a single binding in the config and rebuilds the registry indexes.
+func (m *Model) applyRebind(name string, bd BindingDef) {
+	m.config.Bindings[name] = bd
+	m.commands.applyBindings(m.config.Bindings)
+	m.commands.buildIndexes()
+	m.log("Rebound %s → %v (leader=%v)", name, bd.Keys, bd.Leader)
 }
 
 func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
