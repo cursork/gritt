@@ -50,6 +50,18 @@ APLcart and docs now use `os.UserCacheDir()/gritt/` (`~/Library/Caches/gritt/` o
 
 Also fixed: `cmd/explore-locals/main.go` had wrong import path (`"gritt/ride"` → `"github.com/cursork/gritt/ride"`).
 
+## Bindable Commands (new)
+
+Unified key dispatch via `CommandRegistry` in `commands.go`. Three separate dispatch systems (leader switch, direct switch, command palette switch) replaced by one registry.
+
+**Architecture**: `buildCommands()` registers all ~30 commands with name, help text, leader/direct/tracer classification, and action closure. `applyBindings()` applies config. `buildIndexes()` partitions into leader/direct/tracer slices. Matching functions: `MatchLeader`, `MatchDirect`, `MatchTracer`, `ByName`.
+
+**Config format**: `bindings` map (command name → `{keys, leader, context}`) + `navigation` map (input primitives). Old `keys` + `tracer_keys` format auto-migrates in `config.go:migrateFromLegacy()`.
+
+**Files changed**: `commands.go` (new), `config.go` (rewritten), `gritt.default.json` (new format), `tui.go` (wired registry), `editor_pane.go` (tracer bindings use `key.Matches`), `keys_pane.go` (auto-generated from registry), `keys.go` (deleted).
+
+**Special cases**: `close-pane` stays inline in `tui.go` due to context-dependent logic (tracer edit mode fallthrough, data browser stack). `edit-mode` tracer binding has nil callback — EditorPane handles it locally by setting `editMode = true`.
+
 ## Recent
 
 - **Autolocalise**: Three commands for tradfn variable localisation (`autolocalise.go`):

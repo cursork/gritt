@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss/v2"
 )
@@ -16,8 +17,8 @@ type EditorPane struct {
 	scrollY  int  // First visible line
 	editMode bool // True when tracer is in edit mode (Shift+Enter to enable)
 
-	// Tracer key bindings (single characters)
-	tracerKeys TracerKeysConfig
+	// Tracer key bindings (from command registry)
+	tracerBindings []tracerBinding
 
 	// Callbacks
 	onSave            func()
@@ -43,13 +44,18 @@ type EditorPane struct {
 	highlightLine    int            // -1 = none, otherwise 0-based line for tracer highlight
 }
 
+// tracerBinding pairs a key.Binding with a callback for tracer mode dispatch.
+type tracerBinding struct {
+	binding  key.Binding
+	callback func()
+}
+
 // NewEditorPane creates an editor pane for the given window
-func NewEditorPane(w *EditorWindow, tracerKeys TracerKeysConfig, onSave, onClose func()) *EditorPane {
+func NewEditorPane(w *EditorWindow, onSave, onClose func()) *EditorPane {
 	return &EditorPane{
-		window:     w,
-		tracerKeys: tracerKeys,
-		onSave:     onSave,
-		onClose:    onClose,
+		window:  w,
+		onSave:  onSave,
+		onClose: onClose,
 		cursorStyle: lipgloss.NewStyle().
 			Background(lipgloss.Color("255")).
 			Foreground(lipgloss.Color("0")),
@@ -248,47 +254,18 @@ func (e *EditorPane) HandleKey(msg tea.KeyMsg) bool {
 			if e.onClose != nil {
 				e.onClose()
 			}
-		case tea.KeyRunes:
-			if len(msg.Runes) == 1 {
-				r := msg.Runes[0]
-				switch {
-				case e.matchKey(r, e.tracerKeys.StepInto):
-					if e.onStepInto != nil {
-						e.onStepInto()
-					}
-				case e.matchKey(r, e.tracerKeys.StepOver):
-					if e.onStepOver != nil {
-						e.onStepOver()
-					}
-				case e.matchKey(r, e.tracerKeys.StepOut):
-					if e.onStepOut != nil {
-						e.onStepOut()
-					}
-				case e.matchKey(r, e.tracerKeys.Continue):
-					if e.onContinue != nil {
-						e.onContinue()
-					}
-				case e.matchKey(r, e.tracerKeys.ResumeAll):
-					if e.onResumeAll != nil {
-						e.onResumeAll()
-					}
-				case e.matchKey(r, e.tracerKeys.Backward):
-					if e.onBackward != nil {
-						e.onBackward()
-					}
-				case e.matchKey(r, e.tracerKeys.Forward):
-					if e.onForward != nil {
-						e.onForward()
-					}
-				case e.matchKey(r, e.tracerKeys.EditMode):
-					e.editMode = true
-				default:
-					return false
-				}
-			} else {
-				return false
-			}
 		default:
+			for _, tb := range e.tracerBindings {
+				if key.Matches(msg, tb.binding) {
+					if tb.callback != nil {
+						tb.callback()
+					} else {
+						// nil callback = edit-mode toggle (handled locally)
+						e.editMode = true
+					}
+					return true
+				}
+			}
 			return false
 		}
 		return true
@@ -585,11 +562,3 @@ func (e *EditorPane) SetTracerCallbacks(cb TracerCallbacks) {
 	e.onForward = cb.Forward
 }
 
-
-// matchKey checks if a rune matches a single-character config key
-func (e *EditorPane) matchKey(r rune, configKey string) bool {
-	if configKey == "" {
-		return false
-	}
-	return string(r) == configKey
-}

@@ -132,6 +132,25 @@ The `accent` field sets the UI accent color (borders, highlights, selections). D
 
 Any `#RRGGBB` hex color works. Omit or leave empty for the default.
 
+Key bindings are configured via `bindings` (commands) and `navigation` (input primitives). Any command can be bound as leader-prefixed or direct:
+
+```json
+{
+  "bindings": {
+    "leader":    { "keys": ["ctrl+]"] },
+    "debug":     { "keys": ["d"], "leader": true },
+    "doc-help":  { "keys": ["f1"] },
+    "step-into": { "keys": ["i"], "context": "tracer" },
+    "symbols":   {}
+  },
+  "navigation": {
+    "up": ["up"], "down": ["down"], "execute": ["enter"]
+  }
+}
+```
+
+The old `keys` + `tracer_keys` format is automatically migrated on load. See [KEYBINDINGS.md](KEYBINDINGS.md) for full details.
+
 ## Testing
 
 ```bash

@@ -121,9 +121,10 @@ type Model struct {
 	tracerCurrent int   // Currently displayed tracer token (0 = none)
 
 	// Help
-	help   help.Model
-	keys   KeyMap
-	config Config
+	help     help.Model
+	commands *CommandRegistry
+	nav      NavKeys
+	config   Config
 
 	// Leader key state
 	leaderActive bool
@@ -209,7 +210,8 @@ func NewModel(addr string, logFile io.Writer, profile colorprofile.Profile) Mode
 		editors:      make(map[int]*EditorWindow),
 		config:       cfg,
 		help:         help.New(),
-		keys:         cfg.ToKeyMap(),
+		commands:     buildCommands(&cfg),
+		nav:          cfg.ToNavKeys(),
 		autolocalise: cfg.Autolocalise,
 	}
 
@@ -551,53 +553,15 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Handle leader key sequences
 	if m.leaderActive {
-		m.leaderActive = false // Reset on any key
-		switch {
-		case key.Matches(msg, m.keys.ToggleDebug):
-			m.toggleDebugPane()
-			return m, nil
-		case key.Matches(msg, m.keys.ToggleStack):
-			m.toggleStackPane()
-			return m, nil
-		case key.Matches(msg, m.keys.ToggleLocals):
-			m.toggleVariablesPane()
-			return m, nil
-		case key.Matches(msg, m.keys.ToggleBreakpoint):
-			m.toggleBreakpoint()
-			return m, nil
-		case key.Matches(msg, m.keys.Reconnect):
-			return m.reconnect()
-		case key.Matches(msg, m.keys.CommandPalette):
-			m.openCommandPalette()
-			return m, nil
-		case key.Matches(msg, m.keys.PaneMoveMode):
-			if m.panes.FocusedPane() != nil {
-				m.paneMoveMode = true
-			}
-			return m, nil
-		case key.Matches(msg, m.keys.ShowKeys):
-			m.toggleKeysPane()
-			return m, nil
-		case key.Matches(msg, m.keys.CyclePane):
-			if m.panes.HasPanes() {
-				m.panes.FocusNext()
-			}
-			return m, nil
-		case key.Matches(msg, m.keys.Quit):
-			m.confirmQuit = true
-			return m, nil
-		case key.Matches(msg, m.keys.DocSearch):
-			return m.openDocSearch()
-		case key.Matches(msg, m.keys.FocusMode):
-			m.focusMode = !m.focusMode
-			return m, nil
+		m.leaderActive = false
+		if cmd := m.commands.MatchLeader(msg); cmd != nil {
+			return cmd.Action(&m)
 		}
-		// Unknown leader sequence - ignore
 		return m, nil
 	}
 
 	// Check for leader key
-	if key.Matches(msg, m.keys.Leader) {
+	if key.Matches(msg, m.commands.Leader()) {
 		m.leaderActive = true
 		return m, nil
 	}
@@ -611,46 +575,20 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Context-sensitive documentation
-	if key.Matches(msg, m.keys.DocHelp) {
-		return m.openDocHelp()
-	}
-
 	// Exit focus mode on ESC
 	if m.focusMode && msg.Type == tea.KeyEscape {
 		m.focusMode = false
 		return m, nil
 	}
 
-	// Global shortcuts (always work regardless of focus)
-	switch {
-
-	case key.Matches(msg, m.keys.ClearScreen):
-		m.clearScreen()
-		return m, nil
-
-	case key.Matches(msg, m.keys.Autocomplete):
-		// Trigger autocomplete request - works in session or editor (edit mode)
-		if fp := m.panes.FocusedPane(); fp != nil {
-			// Editor in edit mode - trigger autocomplete
-			if ep, ok := fp.Content.(*EditorPane); ok && !ep.InTracerMode() {
-				m.requestAutocomplete(ep.window.Token)
-				return m, nil
-			}
-			// Other pane focused - autocomplete not applicable
-		} else {
-			// Session context - no panes focused
-			m.requestAutocomplete(0)
-			return m, nil
-		}
-
-	case key.Matches(msg, m.keys.ClosePane):
+	// Close pane — complex context-dependent logic, handled inline
+	if closePaneCmd := m.commands.ByName("close-pane"); closePaneCmd != nil && closePaneCmd.Binding.Enabled() && key.Matches(msg, closePaneCmd.Binding) {
 		if fp := m.panes.FocusedPane(); fp != nil {
 			if fp.ID == "tracer" {
 				// Check if tracer is in edit mode - if so, let the pane handle it
 				if ep, ok := fp.Content.(*EditorPane); ok && ep.editMode {
 					// Don't close - fall through to pane's HandleKey
-					break
+					goto routeToPane
 				}
 				// Close current tracer - pops the stack
 				if m.tracerCurrent != 0 {
@@ -700,6 +638,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Direct command dispatch (non-leader, non-close-pane)
+	if cmd := m.commands.MatchDirect(msg); cmd != nil {
+		return cmd.Action(&m)
+	}
+
+routeToPane:
 	// Route to focused pane - pane gets ALL keys when focused
 	if fp := m.panes.FocusedPane(); fp != nil && fp.Content != nil {
 		fp.Content.HandleKey(msg)
@@ -710,7 +654,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			cp.SelectedAction = ""
 			m.panes.Remove("commands")
 			m.restoreOverlayFocus()
-			return (&m).dispatchCommand(action)
+			if cmd := m.commands.ByName(action); cmd != nil && cmd.Action != nil {
+				return cmd.Action(&m)
+			}
+			return m, nil
 		}
 
 		// Check if symbol search selected a symbol
@@ -773,7 +720,7 @@ func (m *Model) toggleKeysPane() {
 			paneY = 0
 		}
 
-		keysPane := NewKeysPane(m.keys)
+		keysPane := NewKeysPane(m.commands, m.nav)
 		pane := NewPane("keys", keysPane, paneX, paneY, paneW, paneH)
 		m.panes.Add(pane)
 		m.panes.Focus("keys")
@@ -811,11 +758,11 @@ func (m *Model) toggleDebugPane() {
 
 func (m Model) handleSessionKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// History navigation (before main switch - these are configurable bindings)
-	switch {
-	case key.Matches(msg, m.keys.HistoryBack):
+	if hb := m.commands.ByName("history-back"); hb != nil && hb.Binding.Enabled() && key.Matches(msg, hb.Binding) {
 		m.historyBack()
 		return m, nil
-	case key.Matches(msg, m.keys.HistoryForward):
+	}
+	if hf := m.commands.ByName("history-forward"); hf != nil && hf.Binding.Enabled() && key.Matches(msg, hf.Binding) {
 		m.historyForward()
 		return m, nil
 	}
@@ -1574,7 +1521,7 @@ func (m *Model) showTracer(token int) {
 		}
 	} else {
 		// Create tracer pane
-		editorPane := NewEditorPane(w, m.config.TracerKeys,
+		editorPane := NewEditorPane(w,
 			func() { m.saveEditor(m.tracerCurrent) },
 			func() { m.closeEditor(m.tracerCurrent) },
 		)
@@ -1585,6 +1532,9 @@ func (m *Model) showTracer(token int) {
 		editorPane.onNewline = func() {
 			m.autolocaliseEditor(m.tracerCurrent)
 		}
+
+		// Set tracer bindings from command registry
+		editorPane.tracerBindings = m.buildTracerBindings()
 
 		// Set tracer control callbacks
 		editorPane.SetTracerCallbacks(TracerCallbacks{
@@ -2092,70 +2042,47 @@ func (m *Model) toggleBreakpoint() {
 	m.sendSetLineAttributes(ep.window.Token)
 }
 
+// dispatchCommand is kept for any callers that still use string-based dispatch.
+// It delegates to the command registry.
 func (m *Model) dispatchCommand(action string) (tea.Model, tea.Cmd) {
-	switch action {
-	case "debug":
-		m.toggleDebugPane()
-	case "stack":
-		m.toggleStackPane()
-	case "variables":
-		m.toggleVariablesPane()
-	case "breakpoint":
-		m.toggleBreakpoint()
-	case "keys":
-		m.toggleKeysPane()
-	case "symbols":
-		m.openSymbolSearch()
-	case "docs":
-		return m.openDocSearch()
-	case "aplcart":
-		return m.openAPLcart()
-	case "history-back":
-		m.historyBack()
-	case "history-forward":
-		m.historyForward()
-	case "clear":
-		m.clearScreen()
-	case "focus":
-		m.focusMode = !m.focusMode
-	case "cache-refresh":
-		m.log("Refreshing caches...")
-		return *m, tea.Batch(RefreshAPLcartCache, RefreshDocsCache)
-	case "reconnect":
-		return m.reconnect()
-	case "save":
-		m.saveSession()
-	case "load":
-		m.loadSession()
-	case "quit":
-		m.confirmQuit = true
-	// Tracer controls
-	case "step-into":
-		m.tracerStepInto()
-	case "step-over":
-		m.tracerStepOver()
-	case "step-out":
-		m.tracerStepOut()
-	case "continue":
-		m.tracerContinue()
-	case "resume-all":
-		m.tracerResumeAll()
-	case "trace-back":
-		m.tracerBackward()
-	case "trace-forward":
-		m.tracerForward()
-	case "format":
-		m.formatFocusedEditor()
-	case "toggle-local":
-		m.toggleLocalisation()
-	case "localise":
-		m.localiseEditor()
-	case "autolocalise":
-		m.autolocalise = !m.autolocalise
-	case "close-all-windows":
-		m.closeAllWindows()
+	if cmd := m.commands.ByName(action); cmd != nil && cmd.Action != nil {
+		return cmd.Action(m)
 	}
 	return *m, nil
+}
+
+// buildTracerBindings creates tracer key bindings from the command registry for EditorPane.
+func (m *Model) buildTracerBindings() []tracerBinding {
+	type tbDef struct {
+		name     string
+		callback func()
+	}
+	defs := []tbDef{
+		{"step-into", func() { m.tracerStepInto() }},
+		{"step-over", func() { m.tracerStepOver() }},
+		{"step-out", func() { m.tracerStepOut() }},
+		{"continue", func() { m.tracerContinue() }},
+		{"resume-all", func() { m.tracerResumeAll() }},
+		{"trace-back", func() { m.tracerBackward() }},
+		{"trace-forward", func() { m.tracerForward() }},
+		{"edit-mode", nil}, // handled specially in EditorPane
+	}
+	var bindings []tracerBinding
+	for _, d := range defs {
+		cmd := m.commands.ByName(d.name)
+		if cmd != nil && cmd.Binding.Enabled() {
+			cb := d.callback
+			if d.name == "edit-mode" {
+				// Special: toggle edit mode on the editor pane, not a model method
+				// Will be handled by returning true with nil callback
+			}
+			bindings = append(bindings, tracerBinding{
+				binding:  cmd.Binding,
+				callback: cb,
+			})
+		}
+	}
+	return bindings
 }
 
 func (m *Model) openSymbolSearch() {
@@ -2454,52 +2381,7 @@ func (m *Model) openCommandPalette() {
 	// Save focused pane so we can restore it after the overlay dismisses
 	m.saveOverlayFocus()
 
-	// Build command list
-	hint := func(b key.Binding) string {
-		h := b.Help()
-		if h.Key != "" {
-			return " (" + h.Key + ")"
-		}
-		return ""
-	}
-
-	autolocaliseLabel := " [off]"
-	if m.autolocalise {
-		autolocaliseLabel = " [on]"
-	}
-
-	commands := []Command{
-		{Name: "history-back", Help: "Previous command" + hint(m.keys.HistoryBack)},
-		{Name: "history-forward", Help: "Next command" + hint(m.keys.HistoryForward)},
-		{Name: "clear", Help: "Clear session screen" + hint(m.keys.ClearScreen)},
-		{Name: "focus", Help: "Toggle focus mode" + hint(m.keys.FocusMode)},
-		{Name: "debug", Help: "Toggle debug pane"},
-		{Name: "stack", Help: "Toggle stack pane"},
-		{Name: "variables", Help: "Toggle variables pane (tracer)"},
-		{Name: "breakpoint", Help: "Toggle breakpoint on current line"},
-		{Name: "step-into", Help: "Tracer: step into (Enter)"},
-		{Name: "step-over", Help: "Tracer: step over (n)"},
-		{Name: "step-out", Help: "Tracer: step out (o)"},
-		{Name: "continue", Help: "Tracer: continue (c)"},
-		{Name: "resume-all", Help: "Tracer: resume all threads (r)"},
-		{Name: "trace-back", Help: "Tracer: move back (p)"},
-		{Name: "trace-forward", Help: "Tracer: move forward (f)"},
-		{Name: "keys", Help: "Show key bindings"},
-		{Name: "symbols", Help: "Search APL symbols"},
-		{Name: "docs", Help: "Search documentation"},
-		{Name: "aplcart", Help: "Search APLcart idioms"},
-		{Name: "format", Help: "Format code in focused editor"},
-		{Name: "toggle-local", Help: "Toggle localisation of word under cursor"},
-		{Name: "localise", Help: "Clean up locals: add missing, remove stale"},
-		{Name: "autolocalise", Help: "Toggle autolocalise mode" + autolocaliseLabel},
-		{Name: "cache-refresh", Help: "Re-download docs and APLcart caches"},
-		{Name: "reconnect", Help: "Reconnect to Dyalog"},
-		{Name: "close-all-windows", Help: "Close all editors/tracers (clear stuck state)"},
-		{Name: "save", Help: "Save session to file"},
-		{Name: "load", Help: "Load session from file"},
-		{Name: "quit", Help: "Quit gritt"},
-	}
-
+	commands := m.commands.PaletteCommands(m)
 	palette := NewCommandPalette(commands)
 
 	// Position: center top
@@ -2662,7 +2544,7 @@ func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
 		} else {
 			// Regular editor
 			token := w.Token
-			editorPane := NewEditorPane(w, m.config.TracerKeys,
+			editorPane := NewEditorPane(w,
 				func() { m.saveEditor(token) },
 				func() { m.closeEditor(token) },
 			)
@@ -2981,7 +2863,7 @@ func (m Model) View() string {
 		hintStyle := lipgloss.NewStyle().Foreground(AccentColor)
 		helpView = hintStyle.Render(hint)
 	} else {
-		helpView = m.help.View(m.keys)
+		helpView = m.help.View(m.commands)
 	}
 
 	return base + "\n" + helpView

@@ -12,15 +12,17 @@ import (
 // KeysPane displays all key mappings
 type KeysPane struct {
 	viewport viewport.Model
-	keys     KeyMap
+	commands *CommandRegistry
+	nav      NavKeys
 }
 
 // NewKeysPane creates a key mappings pane
-func NewKeysPane(keys KeyMap) *KeysPane {
+func NewKeysPane(commands *CommandRegistry, nav NavKeys) *KeysPane {
 	vp := viewport.New(0, 0)
 	return &KeysPane{
 		viewport: vp,
-		keys:     keys,
+		commands: commands,
+		nav:      nav,
 	}
 }
 
@@ -38,48 +40,45 @@ func (k *KeysPane) Render(w, h int) string {
 func (k *KeysPane) buildContent(width int) string {
 	var sb strings.Builder
 
-	bindings := []struct {
-		category string
-		keys     []key.Binding
-	}{
-		{"Actions", []key.Binding{
-			k.keys.Execute,
-			k.keys.ToggleDebug,
-			k.keys.CyclePane,
-			k.keys.ClosePane,
-			k.keys.ShowKeys,
-			k.keys.Quit,
-		}},
-		{"Navigation", []key.Binding{
-			k.keys.Up,
-			k.keys.Down,
-			k.keys.Left,
-			k.keys.Right,
-			k.keys.Home,
-			k.keys.End,
-			k.keys.PgUp,
-			k.keys.PgDn,
-		}},
-		{"Editing", []key.Binding{
-			k.keys.Backspace,
-			k.keys.Delete,
-		}},
+	// Leader commands
+	sb.WriteString("--- Leader commands ---\n")
+	for _, cmd := range k.commands.leaderCmds {
+		h := cmd.Binding.Help()
+		sb.WriteString(fmt.Sprintf("  %-16s %s\n", h.Key, cmd.Help))
 	}
+	sb.WriteString("\n")
 
-	for _, cat := range bindings {
-		sb.WriteString(fmt.Sprintf("─── %s ───\n", cat.category))
-		for _, b := range cat.keys {
-			help := b.Help()
-			keyStr := help.Key
-			desc := help.Desc
-			// Pad for alignment
-			line := fmt.Sprintf("  %-12s %s\n", keyStr, desc)
-			sb.WriteString(line)
+	// Direct commands
+	sb.WriteString("--- Direct commands ---\n")
+	for _, cmd := range k.commands.directCmds {
+		h := cmd.Binding.Help()
+		sb.WriteString(fmt.Sprintf("  %-16s %s\n", h.Key, cmd.Help))
+	}
+	sb.WriteString("\n")
+
+	// Tracer commands
+	sb.WriteString("--- Tracer commands ---\n")
+	for _, cmd := range k.commands.tracerCmds {
+		h := cmd.Binding.Help()
+		sb.WriteString(fmt.Sprintf("  %-16s %s\n", h.Key, cmd.Help))
+	}
+	sb.WriteString("\n")
+
+	// Navigation
+	navBindings := []key.Binding{
+		k.nav.Up, k.nav.Down, k.nav.Left, k.nav.Right,
+		k.nav.Home, k.nav.End, k.nav.PgUp, k.nav.PgDn,
+		k.nav.Execute, k.nav.Backspace, k.nav.Delete,
+	}
+	sb.WriteString("--- Navigation ---\n")
+	for _, b := range navBindings {
+		if b.Enabled() {
+			h := b.Help()
+			sb.WriteString(fmt.Sprintf("  %-16s %s\n", h.Key, h.Desc))
 		}
-		sb.WriteString("\n")
 	}
 
-	sb.WriteString("Press Esc to close")
+	sb.WriteString("\nPress Esc to close")
 	return sb.String()
 }
 

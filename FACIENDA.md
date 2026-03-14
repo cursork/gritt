@@ -2,7 +2,7 @@
 
 ## Priority
 
-- [ ] **Bindable commands** — Unify key dispatch and command palette dispatch. Let users bind any command palette name as a key in config (e.g. `"toggle_local": ["t"]` → routes through `dispatchCommand("toggle-local")`). Currently two separate code paths with inconsistent naming (`focus_mode` config vs `focus` command, `toggle_debug` vs `debug`, etc.). Would eliminate per-command boilerplate in KeyMap struct, config struct, and key switch.
+- [x] **Bindable commands** — Unified key dispatch via `CommandRegistry` in `commands.go`. All ~30 commands registered once with name, help, and action closure. Single dispatch for leader keys, direct keys, tracer keys, and command palette. Config uses `bindings` + `navigation` format; old `keys` + `tracer_keys` auto-migrates. Any command can be bound to any key as leader-prefixed or direct. `keys.go` deleted.
 - [x] **Variable editing** — Resolved: Dyalog sends `readOnly=1` for numeric arrays (entityType 4), `readOnly=0` for char vectors (entityType 128). Matches RIDE behavior. Title now shows `[read-only]` vs `[edit]`.
 
 ## GitHub Issues (prioritized)
@@ -26,10 +26,10 @@
 - [ ] Test: popping stack frame in tracer should update variables pane
 - [ ] Test: large values in variables pane (e.g. `x←1000 1000⍴⍳1000×1000`) should truncate but still allow editing
 - [x] Tracer-specific status bar (show tracer keys when focused) — done via context-sensitive bottom bar
-- [ ] Configurable tracer keys (currently hardcoded)
+- [x] Configurable tracer keys — now part of unified `bindings` config with `"context": "tracer"`
 
 ## Polish
-- [ ] Update key mappings pane (C-] ?) — missing entries like C-] m (move/resize), C-] l (variables), etc.
+- [x] Update key mappings pane (C-] ?) — now auto-generated from CommandRegistry, shows all leader/direct/tracer commands
 - [x] Context-sensitive bottom bar hints for focused panes (variables, editor, read-only editor, tracer)
 - [ ] Symbol search rendering cleanup
 - [ ] APLcart rendering cleanup (pink → standard gray)
@@ -255,6 +255,15 @@ RIDE handles multiline poorly. Research needed on:
 - [x] `⍝ GLOBALS: foo bar` comment to exclude intentional globals
 - [x] Config option `"autolocalise": true` to default on (per-session, toggle doesn't persist)
 - [x] Title bar `[AL]` indicator
+
+### Bindable Commands
+- [x] Unified `CommandRegistry` in `commands.go` — all commands registered once with name, help, action
+- [x] Single dispatch: leader, direct, tracer, and command palette all use registry
+- [x] New config format: `bindings` (command → keys/leader/context) + `navigation` (input primitives)
+- [x] Old `keys` + `tracer_keys` config auto-migrates on load
+- [x] Tracer keys use `key.Binding` matching (was single-char comparison)
+- [x] Keys pane auto-generated from registry (was hardcoded subset)
+- [x] `keys.go` deleted — `KeyMap` replaced by `CommandRegistry` + `NavKeys`
 
 ### Overlay Focus Restoration
 - [x] All overlay panes save/restore pre-overlay focus (command palette, symbol search, APLcart, doc search)

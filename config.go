@@ -12,28 +12,50 @@ import (
 //go:embed gritt.default.json
 var defaultConfigJSON []byte
 
+// BindingDef defines a key binding in the config file.
+type BindingDef struct {
+	Keys    []string `json:"keys,omitempty"`
+	Leader  bool     `json:"leader,omitempty"`
+	Context string   `json:"context,omitempty"` // "", "tracer"
+}
+
+// NavConfig defines navigation key bindings.
+type NavConfig struct {
+	Up        []string `json:"up"`
+	Down      []string `json:"down"`
+	Left      []string `json:"left"`
+	Right     []string `json:"right"`
+	Home      []string `json:"home"`
+	End       []string `json:"end"`
+	PgUp      []string `json:"pgup"`
+	PgDn      []string `json:"pgdn"`
+	Backspace []string `json:"backspace"`
+	Delete    []string `json:"delete"`
+	Execute   []string `json:"execute"`
+}
+
+// NavKeys holds resolved navigation key bindings.
+type NavKeys struct {
+	Up, Down, Left, Right key.Binding
+	Home, End, PgUp, PgDn key.Binding
+	Backspace, Delete      key.Binding
+	Execute                key.Binding
+}
+
 // Config holds all gritt configuration
 type Config struct {
-	Accent       string           `json:"accent"`
-	Keys         KeyMapConfig     `json:"keys"`
-	TracerKeys   TracerKeysConfig `json:"tracer_keys"`
-	Autolocalise bool             `json:"autolocalise"`
+	Accent       string                 `json:"accent"`
+	Bindings     map[string]BindingDef  `json:"bindings"`
+	Navigation   NavConfig              `json:"navigation"`
+	Autolocalise bool                   `json:"autolocalise"`
+
+	// Legacy fields for migration
+	Keys       *legacyKeyMapConfig     `json:"keys,omitempty"`
+	TracerKeys *legacyTracerKeysConfig `json:"tracer_keys,omitempty"`
 }
 
-// TracerKeysConfig defines single-key bindings for tracer mode
-type TracerKeysConfig struct {
-	StepOver  string `json:"step_over"`
-	StepInto  string `json:"step_into"`
-	StepOut   string `json:"step_out"`
-	Continue  string `json:"continue"`
-	ResumeAll string `json:"resume_all"`
-	Backward  string `json:"backward"`
-	Forward   string `json:"forward"`
-	EditMode  string `json:"edit_mode"`
-}
-
-// KeyMapConfig defines key bindings in config file format
-type KeyMapConfig struct {
+// legacyKeyMapConfig is the old config format
+type legacyKeyMapConfig struct {
 	Leader           []string `json:"leader"`
 	Execute          []string `json:"execute"`
 	ToggleDebug      []string `json:"toggle_debug"`
@@ -66,6 +88,18 @@ type KeyMapConfig struct {
 
 	Backspace []string `json:"backspace"`
 	Delete    []string `json:"delete"`
+}
+
+// legacyTracerKeysConfig is the old tracer_keys format
+type legacyTracerKeysConfig struct {
+	StepOver  string `json:"step_over"`
+	StepInto  string `json:"step_into"`
+	StepOut   string `json:"step_out"`
+	Continue  string `json:"continue"`
+	ResumeAll string `json:"resume_all"`
+	Backward  string `json:"backward"`
+	Forward   string `json:"forward"`
+	EditMode  string `json:"edit_mode"`
 }
 
 // LoadConfig loads configuration from first found config file
@@ -101,73 +135,121 @@ func loadConfigFile(path string) (Config, error) {
 		return Config{}, err
 	}
 
+	// Migrate old format if detected
+	if cfg.Keys != nil && cfg.Bindings == nil {
+		cfg.migrateFromLegacy()
+	}
+
 	return cfg, nil
 }
 
-// ToKeyMap converts config to KeyMap
-func (c *Config) ToKeyMap() KeyMap {
-	return KeyMap{
-		Leader:           c.binding(c.Keys.Leader, "", "leader"),
-		Execute:          c.binding(c.Keys.Execute, "", "execute"),
-		ToggleDebug:      c.bindingWithLeader(c.Keys.ToggleDebug, "debug"),
-		ToggleStack:      c.bindingWithLeader(c.Keys.ToggleStack, "stack"),
-		ToggleLocals:     c.bindingWithLeader(c.Keys.ToggleLocals, "locals"),
-		ToggleBreakpoint: c.bindingWithLeader(c.Keys.ToggleBreakpoint, "breakpoint"),
-		Reconnect:        c.bindingWithLeader(c.Keys.Reconnect, "reconnect"),
-		CommandPalette:   c.bindingWithLeader(c.Keys.CommandPalette, "commands"),
-		PaneMoveMode:     c.bindingWithLeader(c.Keys.PaneMoveMode, "move pane"),
-		CyclePane:        c.bindingWithLeader(c.Keys.CyclePane, "cycle pane"),
-		ClosePane:        c.binding(c.Keys.ClosePane, "", "close pane"),
-		Quit:             c.bindingWithLeader(c.Keys.Quit, "quit"),
-		ShowKeys:         c.bindingWithLeader(c.Keys.ShowKeys, "show keys"),
-		Autocomplete:     c.binding(c.Keys.Autocomplete, "", "autocomplete"),
-		DocHelp:          c.binding(c.Keys.DocHelp, "", "doc help"),
-		DocSearch:        c.bindingWithLeader(c.Keys.DocSearch, "search docs"),
-		HistoryBack:      c.binding(c.Keys.HistoryBack, "", "history back"),
-		HistoryForward:   c.binding(c.Keys.HistoryForward, "", "history forward"),
-		ClearScreen:      c.binding(c.Keys.ClearScreen, "", "clear screen"),
-		FocusMode:        c.bindingWithLeader(c.Keys.FocusMode, "focus mode"),
-		Up:          c.binding(c.Keys.Up, "", "up"),
-		Down:        c.binding(c.Keys.Down, "", "down"),
-		Left:        c.binding(c.Keys.Left, "", "left"),
-		Right:       c.binding(c.Keys.Right, "", "right"),
-		Home:        c.binding(c.Keys.Home, "", "line start"),
-		End:         c.binding(c.Keys.End, "", "line end"),
-		PgUp:        c.binding(c.Keys.PgUp, "", "page up"),
-		PgDn:        c.binding(c.Keys.PgDn, "", "page down"),
-		Backspace:   c.binding(c.Keys.Backspace, "", "delete back"),
-		Delete:      c.binding(c.Keys.Delete, "", "delete forward"),
+// migrateFromLegacy converts old keys+tracer_keys format to new bindings+navigation.
+func (c *Config) migrateFromLegacy() {
+	k := c.Keys
+	c.Bindings = map[string]BindingDef{
+		"leader":          {Keys: k.Leader},
+		"debug":           {Keys: k.ToggleDebug, Leader: true},
+		"stack":           {Keys: k.ToggleStack, Leader: true},
+		"variables":       {Keys: k.ToggleLocals, Leader: true},
+		"breakpoint":      {Keys: k.ToggleBreakpoint, Leader: true},
+		"reconnect":       {Keys: k.Reconnect, Leader: true},
+		"command-palette": {Keys: k.CommandPalette, Leader: true},
+		"pane-move":       {Keys: k.PaneMoveMode, Leader: true},
+		"cycle-pane":      {Keys: k.CyclePane, Leader: true},
+		"close-pane":      {Keys: k.ClosePane},
+		"quit":            {Keys: k.Quit, Leader: true},
+		"show-keys":       {Keys: k.ShowKeys, Leader: true},
+		"autocomplete":    {Keys: k.Autocomplete},
+		"doc-help":        {Keys: k.DocHelp},
+		"doc-search":      {Keys: k.DocSearch, Leader: true},
+		"history-back":    {Keys: k.HistoryBack},
+		"history-forward": {Keys: k.HistoryForward},
+		"clear":           {Keys: k.ClearScreen},
+		"focus-mode":      {Keys: k.FocusMode, Leader: true},
 	}
+
+	c.Navigation = NavConfig{
+		Up:        k.Up,
+		Down:      k.Down,
+		Left:      k.Left,
+		Right:     k.Right,
+		Home:      k.Home,
+		End:       k.End,
+		PgUp:      k.PgUp,
+		PgDn:      k.PgDn,
+		Backspace: k.Backspace,
+		Delete:    k.Delete,
+		Execute:   k.Execute,
+	}
+
+	// Migrate tracer keys
+	if t := c.TracerKeys; t != nil {
+		if t.StepInto != "" {
+			c.Bindings["step-into"] = BindingDef{Keys: []string{t.StepInto}, Context: "tracer"}
+		}
+		if t.StepOver != "" {
+			c.Bindings["step-over"] = BindingDef{Keys: []string{t.StepOver}, Context: "tracer"}
+		}
+		if t.StepOut != "" {
+			c.Bindings["step-out"] = BindingDef{Keys: []string{t.StepOut}, Context: "tracer"}
+		}
+		if t.Continue != "" {
+			c.Bindings["continue"] = BindingDef{Keys: []string{t.Continue}, Context: "tracer"}
+		}
+		if t.ResumeAll != "" {
+			c.Bindings["resume-all"] = BindingDef{Keys: []string{t.ResumeAll}, Context: "tracer"}
+		}
+		if t.Backward != "" {
+			c.Bindings["trace-back"] = BindingDef{Keys: []string{t.Backward}, Context: "tracer"}
+		}
+		if t.Forward != "" {
+			c.Bindings["trace-forward"] = BindingDef{Keys: []string{t.Forward}, Context: "tracer"}
+		}
+		if t.EditMode != "" {
+			c.Bindings["edit-mode"] = BindingDef{Keys: []string{t.EditMode}, Context: "tracer"}
+		}
+	}
+
+	// Clear legacy fields
+	c.Keys = nil
+	c.TracerKeys = nil
 }
 
-// binding creates a key binding, returning disabled binding if keys is empty
-func (c *Config) binding(keys []string, prefix, help string) key.Binding {
-	if len(keys) == 0 {
+// LeaderBinding returns the leader key.Binding from config.
+func (c *Config) LeaderBinding() key.Binding {
+	bd, ok := c.Bindings["leader"]
+	if !ok || len(bd.Keys) == 0 {
 		return key.NewBinding(key.WithDisabled())
 	}
-	helpText := help
-	if prefix != "" {
-		helpText = prefix + " " + keys[0]
-	} else {
-		helpText = keys[0]
-	}
 	return key.NewBinding(
-		key.WithKeys(keys...),
-		key.WithHelp(helpText, help),
+		key.WithKeys(bd.Keys...),
+		key.WithHelp(bd.Keys[0], "leader"),
 	)
 }
 
-// bindingWithLeader creates a key binding with leader prefix in help text
-func (c *Config) bindingWithLeader(keys []string, help string) key.Binding {
+// ToNavKeys converts config to NavKeys.
+func (c *Config) ToNavKeys() NavKeys {
+	return NavKeys{
+		Up:        navBinding(c.Navigation.Up, "up"),
+		Down:      navBinding(c.Navigation.Down, "down"),
+		Left:      navBinding(c.Navigation.Left, "left"),
+		Right:     navBinding(c.Navigation.Right, "right"),
+		Home:      navBinding(c.Navigation.Home, "line start"),
+		End:       navBinding(c.Navigation.End, "line end"),
+		PgUp:      navBinding(c.Navigation.PgUp, "page up"),
+		PgDn:      navBinding(c.Navigation.PgDn, "page down"),
+		Backspace: navBinding(c.Navigation.Backspace, "delete back"),
+		Delete:    navBinding(c.Navigation.Delete, "delete forward"),
+		Execute:   navBinding(c.Navigation.Execute, "execute"),
+	}
+}
+
+func navBinding(keys []string, help string) key.Binding {
 	if len(keys) == 0 {
 		return key.NewBinding(key.WithDisabled())
 	}
-	prefix := ""
-	if len(c.Keys.Leader) > 0 {
-		prefix = c.Keys.Leader[0]
-	}
 	return key.NewBinding(
 		key.WithKeys(keys...),
-		key.WithHelp(prefix+" "+keys[0], help),
+		key.WithHelp(keys[0], help),
 	)
 }

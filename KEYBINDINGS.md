@@ -91,41 +91,37 @@ Use `C-] :` → `symbols` to search all APL symbols by name.
 
 ## Command Palette
 
-Press `C-] :` to open. Type to filter, Enter to select:
-
-| Command | Action |
-|---------|--------|
-| debug | Toggle debug pane |
-| stack | Toggle stack pane |
-| variables | Toggle variables pane (~ toggles [local]/[all]) |
-| breakpoint | Toggle breakpoint |
-| keys | Show key bindings |
-| symbols | Search APL symbols |
-| aplcart | Search APLcart idioms |
-| reconnect | Reconnect to Dyalog |
-| save | Save session to file |
-| close-all-windows | Clear stuck editors/tracers |
-| quit | Quit gritt |
+Press `C-] :` to open. Type to filter, Enter to select. All commands are available here.
 
 ## Configuration
 
-Key bindings can be customized in `gritt.json`:
+Key bindings are configured in `gritt.json` using the `bindings` + `navigation` format:
 
 ```json
 {
-  "keys": {
-    "leader": ["ctrl+]"],
-    "toggle_debug": ["d"],
-    "toggle_stack": ["s"],
-    ...
+  "bindings": {
+    "leader":          { "keys": ["ctrl+]"] },
+    "debug":           { "keys": ["d"], "leader": true },
+    "stack":           { "keys": ["s"], "leader": true },
+    "doc-help":        { "keys": ["f1"] },
+    "clear":           { "keys": ["ctrl+l"] },
+    "symbols":         {},
+    "step-into":       { "keys": ["i"], "context": "tracer" }
   },
-  "tracer_keys": {
-    "step_over": "n",
-    "step_into": "i",
-    ...
+  "navigation": {
+    "up": ["up"], "down": ["down"],
+    "execute": ["enter"]
   }
 }
 ```
+
+- **`"leader": true`** — requires leader prefix. Absent/false = direct (always available).
+- **`"context": "tracer"`** — only active when tracer pane is focused in tracer mode.
+- **`{}`** — command exists (appears in palette) but has no keybinding.
+- **`navigation`** — separate section for input primitives (arrow keys, backspace, etc.).
+- Command names use kebab-case everywhere.
+
+The old `keys` + `tracer_keys` format is automatically migrated on load.
 
 Config lookup order:
 1. `./gritt.json` (local)
