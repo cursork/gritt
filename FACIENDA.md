@@ -14,7 +14,7 @@
 5. **#4 Inline tracing** — `IT` command: left/right args, current fn, axis spec, previous result etc.
 6. **#5 Proper multiline mode** — Explicit multiline input with `[`, edit lines before send. Important for APLAN, and required for creating namespaces/classes interactively (`:Namespace`/`:EndNamespace`). Reference: ~/dev/ride `src/` for how RIDE handles multiline.
 7. **#6 Syntax highlighting** — `)` commands, `]` commands, `⎕` fns, `:Keywords`, glyph vs name distinction
-8. **#13 Docs follow-ups** — Fix highlighting, grab example code, compile into binary (check IP)
+8. **#13 Docs follow-ups** — Fix highlighting, grab example code, compile into binary (check IP). Docs DB now auto-downloaded to cache dir.
 
 ## Pane Interactivity
 - [ ] Mouse drag edges to resize (partially broken)
@@ -218,6 +218,7 @@ RIDE handles multiline poorly. Research needed on:
 - [x] Backtick prefix for APL symbols (`` `i `` → `⍳`, `` `r `` → `⍴`, etc.)
 - [x] Symbol search (C-] : → symbols) - search by name
 - [x] APLcart integration (C-] : → aplcart) - search 3000+ idioms
+- [x] Cache infrastructure — APLcart and docs cached in `os.UserCacheDir()/gritt/`, auto-download on first use, weekly refresh, `:cache-refresh` command
 
 ### Autocomplete
 - [x] GetAutoComplete / ReplyGetAutoComplete protocol support

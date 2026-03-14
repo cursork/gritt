@@ -2,12 +2,85 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss/v2"
 )
+
+const docsReleaseAPI = "https://api.github.com/repos/xpqz/bundle-docs/releases/latest"
+
+// DocsCacheResult is sent when a docs cache fetch/refresh completes.
+type DocsCacheResult struct {
+	Err error
+}
+
+// RefreshDocsCache downloads the latest docs database from GitHub releases.
+func RefreshDocsCache() tea.Msg {
+	dbPath := cachePath("dyalog-docs.db")
+	if dbPath == "" {
+		return DocsCacheResult{Err: fmt.Errorf("cache dir unavailable")}
+	}
+
+	// Get latest release info
+	resp, err := http.Get(docsReleaseAPI)
+	if err != nil {
+		return DocsCacheResult{Err: err}
+	}
+	defer resp.Body.Close()
+
+	var release struct {
+		Assets []struct {
+			Name               string `json:"name"`
+			BrowserDownloadURL string `json:"browser_download_url"`
+		} `json:"assets"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return DocsCacheResult{Err: err}
+	}
+
+	// Find the .db asset
+	var downloadURL string
+	for _, asset := range release.Assets {
+		if strings.HasSuffix(asset.Name, ".db") {
+			downloadURL = asset.BrowserDownloadURL
+			break
+		}
+	}
+	if downloadURL == "" {
+		return DocsCacheResult{Err: fmt.Errorf("no .db asset in latest release")}
+	}
+
+	// Download to temp file, then rename
+	resp2, err := http.Get(downloadURL)
+	if err != nil {
+		return DocsCacheResult{Err: err}
+	}
+	defer resp2.Body.Close()
+
+	tmp := dbPath + ".tmp"
+	f, err := os.Create(tmp)
+	if err != nil {
+		return DocsCacheResult{Err: err}
+	}
+	if _, err := io.Copy(f, resp2.Body); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return DocsCacheResult{Err: err}
+	}
+	f.Close()
+
+	if err := os.Rename(tmp, dbPath); err != nil {
+		return DocsCacheResult{Err: err}
+	}
+
+	return DocsCacheResult{}
+}
 
 // DocSearchResult represents a single search result
 type DocSearchResult struct {

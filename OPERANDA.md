@@ -39,6 +39,17 @@ Integration in `tui.go`: OpenWindow and UpdateWindow both check for entityType 2
 
 **Not yet done**: testing editing, adding/removing elements, pagination.
 
+## Cache Infrastructure (new)
+
+APLcart and docs now use `os.UserCacheDir()/gritt/` (`~/Library/Caches/gritt/` on macOS). Generic cache utilities in `cache.go` (`cacheDir()`, `cachePath()`, `isCacheStale()`). Feature-specific fetch/cache logic stays with the feature (`aplcart.go`, `doc_search.go`).
+
+- **APLcart**: TSV fetched from GitHub, parsed, stored in `aplcart.db` (SQLite). Loaded synchronously from cache on open (instant). If cache missing, shows "Loading..." and fetches. If stale (>7 days), serves stale immediately, refreshes in background.
+- **Docs**: `dyalog-docs.db` downloaded from `xpqz/bundle-docs` GitHub releases. Opened lazily on first docs use. Old location `~/.config/gritt/` no longer used — startup warns if old file exists.
+- **`:cache-refresh`**: Command palette command to force re-download both caches.
+- **`NO_CACHE=1`**: Env var for tests to force fresh fetch.
+
+Also fixed: `cmd/explore-locals/main.go` had wrong import path (`"gritt/ride"` → `"github.com/cursork/gritt/ride"`).
+
 ## Recent
 
 - **Autolocalise**: Three commands for tradfn variable localisation (`autolocalise.go`):

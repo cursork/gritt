@@ -213,15 +213,8 @@ func NewModel(addr string, logFile io.Writer, profile colorprofile.Profile) Mode
 		autolocalise: cfg.Autolocalise,
 	}
 
-	// Open docs database (optional — F1 help is unavailable without it)
-	dbPath := filepath.Join(os.Getenv("HOME"), ".config", "gritt", "dyalog-docs.db")
-	if db, err := sql.Open("sqlite3", dbPath+"?mode=ro"); err == nil {
-		if err := db.Ping(); err == nil {
-			m.docsDB = db
-		} else {
-			db.Close()
-		}
-	}
+	// Docs database opened lazily on first use from cache dir
+	m.openDocsDB()
 
 	return m
 }
@@ -345,6 +338,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.cursorCol = len(aplIndent)
 		m.msgs = m.startRecvLoop()
 		m.log("Connected to %s", m.addr)
+		m.warnOldDocsCache()
 		m.send("GetWindowLayout", map[string]any{})
 		return m, waitForRide(m.msgs)
 
@@ -360,11 +354,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseMsg:
 		return m.handleMouse(msg)
 
-	case APLcartLoaded:
+	case APLcartCacheResult:
 		if pane := m.panes.Get("aplcart"); pane != nil {
 			if ac, ok := pane.Content.(*APLcart); ok {
 				ac.SetData(msg.Entries, msg.Err)
 			}
+		}
+		if msg.Err != nil {
+			m.log("APLcart refresh failed: %v", msg.Err)
+		}
+		return m, nil
+
+	case DocsCacheResult:
+		if msg.Err != nil {
+			m.log("Docs refresh failed: %v", msg.Err)
+		} else {
+			if m.docsDB != nil {
+				m.docsDB.Close()
+				m.docsDB = nil
+			}
+			m.openDocsDB()
+			m.log("Docs cache refreshed")
 		}
 		return m, nil
 
@@ -2108,6 +2118,9 @@ func (m *Model) dispatchCommand(action string) (tea.Model, tea.Cmd) {
 		m.clearScreen()
 	case "focus":
 		m.focusMode = !m.focusMode
+	case "cache-refresh":
+		m.log("Refreshing caches...")
+		return *m, tea.Batch(RefreshAPLcartCache, RefreshDocsCache)
 	case "reconnect":
 		return m.reconnect()
 	case "save":
@@ -2165,6 +2178,40 @@ func (m *Model) openSymbolSearch() {
 	m.panes.Focus("symbols")
 }
 
+// warnOldDocsCache logs a warning if the old ~/.config/gritt/dyalog-docs.db exists.
+func (m *Model) warnOldDocsCache() {
+	oldPath := filepath.Join(os.Getenv("HOME"), ".config", "gritt", "dyalog-docs.db")
+	if _, err := os.Stat(oldPath); err == nil {
+		m.log("Old docs cache at %s can be deleted — now using %s", oldPath, cachePath("dyalog-docs.db"))
+	}
+}
+
+// openDocsDB attempts to open the docs database from the cache directory.
+func (m *Model) openDocsDB() {
+	dbPath := cachePath("dyalog-docs.db")
+	if dbPath == "" {
+		return
+	}
+	db, err := sql.Open("sqlite3", dbPath+"?mode=ro")
+	if err != nil {
+		return
+	}
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return
+	}
+	m.docsDB = db
+}
+
+// docsStaleRefresh returns a background refresh command if the docs cache is stale.
+func (m *Model) docsStaleRefresh() tea.Cmd {
+	dbPath := cachePath("dyalog-docs.db")
+	if dbPath != "" && isCacheStale(dbPath) {
+		return RefreshDocsCache
+	}
+	return nil
+}
+
 func (m *Model) openDocHelp() (tea.Model, tea.Cmd) {
 	// Toggle off if already open
 	if m.panes.Get("docs") != nil {
@@ -2173,8 +2220,11 @@ func (m *Model) openDocHelp() (tea.Model, tea.Cmd) {
 	}
 
 	if m.docsDB == nil {
-		m.log("No docs database (download from https://github.com/xpqz/bundle-docs/releases)")
-		return *m, nil
+		m.openDocsDB()
+	}
+	if m.docsDB == nil {
+		m.log("Downloading docs...")
+		return *m, RefreshDocsCache
 	}
 
 	// Get symbol at cursor (to the left of cursor position)
@@ -2213,7 +2263,7 @@ func (m *Model) openDocHelp() (tea.Model, tea.Cmd) {
 	m.panes.Add(pane)
 	m.panes.Focus("docs")
 
-	return *m, nil
+	return *m, m.docsStaleRefresh()
 }
 
 // symbolAtCursor returns the APL symbol or keyword at/before the cursor.
@@ -2246,8 +2296,11 @@ func (m *Model) openDocSearch() (tea.Model, tea.Cmd) {
 	m.saveOverlayFocus()
 
 	if m.docsDB == nil {
-		m.log("No docs database (download from https://github.com/xpqz/bundle-docs/releases)")
-		return *m, nil
+		m.openDocsDB()
+	}
+	if m.docsDB == nil {
+		m.log("Downloading docs...")
+		return *m, RefreshDocsCache
 	}
 
 	ds := NewDocSearch(m.docsDB)
@@ -2262,7 +2315,7 @@ func (m *Model) openDocSearch() (tea.Model, tea.Cmd) {
 	m.panes.Add(pane)
 	m.panes.Focus("docsearch")
 
-	return *m, nil
+	return *m, m.docsStaleRefresh()
 }
 
 func (m *Model) openDocFromSearch(result *DocSearchResult) (tea.Model, tea.Cmd) {
@@ -2306,6 +2359,19 @@ func (m *Model) openAPLcart() (tea.Model, tea.Cmd) {
 	m.saveOverlayFocus()
 	ac := NewAPLcart()
 
+	// Try loading from cache (fast, synchronous)
+	var cmd tea.Cmd
+	dbPath := cachePath("aplcart.db")
+	if entries, err := LoadAPLcartCache(); err == nil && len(entries) > 0 {
+		ac.SetData(entries, nil)
+		if isCacheStale(dbPath) {
+			cmd = RefreshAPLcartCache
+		}
+	} else {
+		// No cache — show loading, fetch from network
+		cmd = RefreshAPLcartCache
+	}
+
 	// Position: center, larger
 	paneW := 70
 	paneH := min(25, m.height-4)
@@ -2316,8 +2382,7 @@ func (m *Model) openAPLcart() (tea.Model, tea.Cmd) {
 	m.panes.Add(pane)
 	m.panes.Focus("aplcart")
 
-	// Start fetching data
-	return *m, FetchAPLcart
+	return *m, cmd
 }
 
 func (m *Model) saveSession() {
@@ -2427,6 +2492,7 @@ func (m *Model) openCommandPalette() {
 		{Name: "toggle-local", Help: "Toggle localisation of word under cursor"},
 		{Name: "localise", Help: "Clean up locals: add missing, remove stale"},
 		{Name: "autolocalise", Help: "Toggle autolocalise mode" + autolocaliseLabel},
+		{Name: "cache-refresh", Help: "Re-download docs and APLcart caches"},
 		{Name: "reconnect", Help: "Reconnect to Dyalog"},
 		{Name: "close-all-windows", Help: "Close all editors/tracers (clear stuck state)"},
 		{Name: "save", Help: "Save session to file"},

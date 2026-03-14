@@ -26,14 +26,14 @@ func TestTUI(t *testing.T) {
 	}
 
 	// Setup docs database for test environment (tmux runs with HOME=/tmp)
-	// Symlink the real docs DB to /tmp/.config/gritt/ if it exists
-	realHome := os.Getenv("HOME")
-	realDocsDB := filepath.Join(realHome, ".config", "gritt", "dyalog-docs.db")
-	testDocsDir := "/tmp/.config/gritt"
-	testDocsDB := filepath.Join(testDocsDir, "dyalog-docs.db")
+	// Symlink the real docs DB to the test cache dir if it exists
+	realDocsDB := cachePath("dyalog-docs.db")
+	// With HOME=/tmp, UserCacheDir returns /tmp/Library/Caches on macOS
+	testCacheDir := "/tmp/Library/Caches/gritt"
+	testDocsDB := filepath.Join(testCacheDir, "dyalog-docs.db")
 
 	if _, err := os.Stat(realDocsDB); err == nil {
-		os.MkdirAll(testDocsDir, 0755)
+		os.MkdirAll(testCacheDir, 0755)
 		os.Remove(testDocsDB) // Remove old symlink if exists
 		if err := os.Symlink(realDocsDB, testDocsDB); err != nil {
 			t.Logf("Warning: could not symlink docs DB: %v", err)

@@ -97,6 +97,16 @@ echo "1+1" | ./gritt -l -stdin
 
 Works on function files (`.aplf`) and namespace/class files (`.apln`). Uses Dyalog's `FormatCode` to normalize whitespace and indentation. Also available in the TUI via the command palette (`Ctrl+]` `:` → `format`).
 
+## Caching
+
+gritt caches APLcart idioms and Dyalog documentation locally for fast offline access. Caches live in your OS cache directory (`~/Library/Caches/gritt/` on macOS, `~/.cache/gritt/` on Linux).
+
+Nothing is downloaded until you use a feature that needs it:
+- **APLcart** (`Ctrl+]` `:` → `aplcart`): downloads on first open
+- **Docs** (`F1` or `Ctrl+]` `:` → `docs`): downloads on first open
+
+Caches auto-refresh in the background after 7 days (serving stale data instantly while updating). To force an immediate refresh: `Ctrl+]` `:` → `cache-refresh`.
+
 ## Key Bindings
 
 Leader key: `Ctrl+]` (keeps other keys free for APL input, and I figured it wouldn't interfere with muscle memory)

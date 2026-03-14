@@ -191,6 +191,7 @@ See `adnotata/0003-debugging-protocol.md` for details.
 
 Critical path (approved):
 - `github.com/charmbracelet/bubbletea` - TUI framework
+- `github.com/mattn/go-sqlite3` - SQLite driver (docs and APLcart cache)
 
 ## Code Style
 

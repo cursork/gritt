@@ -1,9 +1,11 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -38,32 +40,73 @@ func NewAPLcart() *APLcart {
 	}
 }
 
-// APLcartLoaded is sent when data is fetched
-type APLcartLoaded struct {
+// APLcartCacheResult is sent when an APLcart cache fetch/refresh completes.
+type APLcartCacheResult struct {
 	Entries []APLcartEntry
 	Err     error
 }
 
-// FetchAPLcart fetches the APLcart data
-func FetchAPLcart() tea.Msg {
+// LoadAPLcartCache loads APLcart entries from the cache database.
+func LoadAPLcartCache() ([]APLcartEntry, error) {
+	dbPath := cachePath("aplcart.db")
+	if dbPath == "" {
+		return nil, fmt.Errorf("cache dir unavailable")
+	}
+	return loadAPLcartCacheFrom(dbPath)
+}
+
+func loadAPLcartCacheFrom(dbPath string) ([]APLcartEntry, error) {
+	db, err := sql.Open("sqlite3", dbPath+"?mode=ro")
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+
+	rows, err := db.Query("SELECT syntax, description, keywords FROM entries")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var entries []APLcartEntry
+	for rows.Next() {
+		var e APLcartEntry
+		if err := rows.Scan(&e.Syntax, &e.Description, &e.Keywords); err != nil {
+			continue
+		}
+		entries = append(entries, e)
+	}
+	return entries, nil
+}
+
+// RefreshAPLcartCache fetches APLcart from GitHub and updates the cache.
+func RefreshAPLcartCache() tea.Msg {
 	resp, err := http.Get(aplcartURL)
 	if err != nil {
-		return APLcartLoaded{Err: err}
+		return APLcartCacheResult{Err: err}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return APLcartLoaded{Err: fmt.Errorf("HTTP %d", resp.StatusCode)}
+		return APLcartCacheResult{Err: fmt.Errorf("HTTP %d", resp.StatusCode)}
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return APLcartLoaded{Err: err}
+		return APLcartCacheResult{Err: err}
 	}
 
-	lines := strings.Split(string(body), "\n")
-	entries := make([]APLcartEntry, 0, len(lines))
+	entries := parseAPLcartTSV(string(body))
+	if err := writeAPLcartCache(entries); err != nil {
+		return APLcartCacheResult{Err: err}
+	}
 
+	return APLcartCacheResult{Entries: entries}
+}
+
+func parseAPLcartTSV(data string) []APLcartEntry {
+	lines := strings.Split(data, "\n")
+	entries := make([]APLcartEntry, 0, len(lines))
 	for i, line := range lines {
 		if i == 0 || line == "" {
 			continue // Skip header
@@ -78,8 +121,52 @@ func FetchAPLcart() tea.Msg {
 			Keywords:    fields[6],
 		})
 	}
+	return entries
+}
 
-	return APLcartLoaded{Entries: entries}
+func writeAPLcartCache(entries []APLcartEntry) error {
+	dbPath := cachePath("aplcart.db")
+	if dbPath == "" {
+		return fmt.Errorf("cache dir unavailable")
+	}
+	return writeAPLcartCacheTo(dbPath, entries)
+}
+
+func writeAPLcartCacheTo(dbPath string, entries []APLcartEntry) error {
+	tmp := dbPath + ".tmp"
+	os.Remove(tmp)
+	db, err := sql.Open("sqlite3", tmp)
+	if err != nil {
+		return err
+	}
+
+	if _, err := db.Exec(`CREATE TABLE entries (syntax TEXT, description TEXT, keywords TEXT)`); err != nil {
+		db.Close()
+		return err
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		db.Close()
+		return err
+	}
+	stmt, err := tx.Prepare("INSERT INTO entries (syntax, description, keywords) VALUES (?, ?, ?)")
+	if err != nil {
+		db.Close()
+		return err
+	}
+	defer stmt.Close()
+
+	for _, e := range entries {
+		stmt.Exec(e.Syntax, e.Description, e.Keywords)
+	}
+	if err := tx.Commit(); err != nil {
+		db.Close()
+		return err
+	}
+	db.Close()
+
+	return os.Rename(tmp, dbPath)
 }
 
 func (a *APLcart) SetData(entries []APLcartEntry, err error) {

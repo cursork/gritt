@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -84,7 +83,7 @@ func TestDocPaneRender(t *testing.T) {
 }
 
 func TestDocsDatabase(t *testing.T) {
-	dbPath := filepath.Join(os.Getenv("HOME"), ".config", "gritt", "dyalog-docs.db")
+	dbPath := cachePath("dyalog-docs.db")
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		t.Skip("docs database not found at", dbPath)
 	}
