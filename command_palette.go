@@ -1,6 +1,7 @@
 package main
 
 import (
+	"sort"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -44,6 +45,12 @@ func (c *CommandPalette) filter() {
 				c.filtered = append(c.filtered, cmd)
 			}
 		}
+		// Name matches sort before help-only matches
+		sort.SliceStable(c.filtered, func(i, j int) bool {
+			iName := strings.Contains(strings.ToLower(c.filtered[i].Name), q)
+			jName := strings.Contains(strings.ToLower(c.filtered[j].Name), q)
+			return iName && !jName
+		})
 	}
 
 	// Reset selection and scroll if out of bounds

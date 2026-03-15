@@ -24,6 +24,7 @@
     "cache-refresh":   {},
     "save":            {},
     "load":            {},
+    "save-config":     {},
     "format":          {},
     "toggle-local":    {},
     "localise":        {},

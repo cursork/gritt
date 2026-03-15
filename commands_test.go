@@ -449,7 +449,7 @@ func TestBuildCommandsFromDefaults(t *testing.T) {
 		"doc-search", "focus-mode",
 		"doc-help", "clear", "autocomplete", "close-pane",
 		"history-back", "history-forward",
-		"symbols", "aplcart", "cache-refresh", "save", "load",
+		"symbols", "aplcart", "cache-refresh", "save", "load", "save-config",
 		"format", "toggle-local", "localise", "autolocalise", "close-all-windows",
 		"step-into", "step-over", "step-out", "continue", "resume-all",
 		"trace-back", "trace-forward", "edit-mode",

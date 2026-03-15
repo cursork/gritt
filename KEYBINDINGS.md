@@ -127,3 +127,11 @@ Config lookup order:
 1. `./gritt.json` (local)
 2. `~/.config/gritt/gritt.json` (user)
 3. Embedded default
+
+### Runtime Rebinding
+
+Open command palette (`C-] :`) → `rebind` to interactively change keybindings. Changes are ephemeral (session only) until saved.
+
+### Saving Config
+
+Open command palette → `save-config` to write the current config (including any rebindings) to disk. If `./gritt.json` or `~/.config/gritt/gritt.json` exists, it overwrites that file. If neither exists, prompts to choose [l]ocal or [g]lobal.

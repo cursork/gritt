@@ -265,6 +265,11 @@ RIDE handles multiline poorly. Research needed on:
 - [x] Keys pane auto-generated from registry (was hardcoded subset)
 - [x] `keys.go` deleted — `KeyMap` replaced by `CommandRegistry` + `NavKeys`
 
+### Rebind & Config Save
+- [x] `rebind` command — interactive keybinding editor via command palette
+- [x] `save-config` command — save full config to `./gritt.json` or `~/.config/gritt/gritt.json`
+- [x] Config save prompts [l]ocal/[g]lobal if neither file exists
+
 ### Overlay Focus Restoration
 - [x] All overlay panes save/restore pre-overlay focus (command palette, symbol search, APLcart, doc search)
 - [x] Symbol search and APLcart insert into focused editor, not always session

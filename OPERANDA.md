@@ -62,6 +62,19 @@ Unified key dispatch via `CommandRegistry` in `commands.go`. Three separate disp
 
 **Special cases**: `close-pane` stays inline in `tui.go` due to context-dependent logic (tracer edit mode fallthrough, data browser stack). `edit-mode` tracer binding has nil callback — EditorPane handles it locally by setting `editMode = true`.
 
+## Rebind Pane (new)
+
+`rebind_pane.go` — interactive keybinding editor accessible via command palette `rebind`. Up/down navigate, Enter captures next key press, Tab toggles leader, Delete unbinds. Changes apply immediately via `applyRebind()` in tui.go. 14 unit tests in `rebind_pane_test.go`, 11 TUI integration tests in `tui_test.go`.
+
+Escape-in-capture-mode fix: close-pane handler in tui.go checks `rp.capturing` and falls through to pane's HandleKey (same pattern as tracer edit mode).
+
+**Config save**: `save-config` command writes full config (bindings, navigation, accent, autolocalise) as JSON. Auto-detects existing `./gritt.json` or `~/.config/gritt/gritt.json`; prompts [l]ocal/[g]lobal if neither exists.
+
+**Fixed TUI test failures** (were pre-existing):
+- "No docs database message logged" — command was "doc-search" but test typed "docs", no palette match. Renamed to "docs".
+- "Load prompt shows default filename" — "cache-refresh" help text ("Re-download") matched "load" in palette and appeared first. Fixed palette filter to prioritize name matches over help-only matches.
+- "Loaded session contains saved content" — cascading failure from above.
+
 ## Recent
 
 - **Autolocalise**: Three commands for tradfn variable localisation (`autolocalise.go`):

@@ -221,7 +221,7 @@ func (a *APLcart) Render(w, h int) string {
 	var sb strings.Builder
 
 	// Query line
-	promptStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
+	promptStyle := lipgloss.NewStyle().Foreground(AccentColor)
 	sb.WriteString(promptStyle.Render("/ "))
 	sb.WriteString(a.query)
 	sb.WriteString(cursorStyle.Render(" "))
@@ -234,8 +234,8 @@ func (a *APLcart) Render(w, h int) string {
 	sb.WriteString("\n")
 
 	// Entries list
-	selectedStyle := lipgloss.NewStyle().Background(lipgloss.Color("214")).Foreground(lipgloss.Color("0"))
-	syntaxStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Bold(true)
+	selectedStyle := lipgloss.NewStyle().Background(AccentColor).Foreground(lipgloss.Color("0"))
+	syntaxStyle := lipgloss.NewStyle().Foreground(AccentColor).Bold(true)
 	descStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
 
 	listH := h - 2

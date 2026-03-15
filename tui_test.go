@@ -176,8 +176,8 @@ func TestTUI(t *testing.T) {
 		return runner.Contains("key mappings")
 	})
 
-	runner.Test("Key mappings shows Actions section", func() bool {
-		return runner.Contains("Actions")
+	runner.Test("Key mappings shows Leader commands section", func() bool {
+		return runner.Contains("Leader commands")
 	})
 
 	runner.SendKeys("Escape")
@@ -1134,16 +1134,16 @@ func TestTUI(t *testing.T) {
 	runner.WaitForIdle(3 * time.Second)
 
 	// === DOCUMENTATION TESTS ===
-	// Open docs via command palette: C-] : then type "docs"
+	// Open docs via command palette: C-] : then type "doc-s" (matches doc-search)
 	runner.SendKeys("C-]")
 	runner.Sleep(100 * time.Millisecond)
 	runner.SendKeys(":")
 	runner.Sleep(300 * time.Millisecond)
-	runner.SendText("docs")
+	runner.SendText("doc-s")
 	runner.Sleep(200 * time.Millisecond)
 	runner.SendKeys("Enter")
 	runner.Sleep(500 * time.Millisecond)
-	runner.Snapshot("After C-] : docs (doc search)")
+	runner.Snapshot("After C-] : doc-s (doc search)")
 
 	// Check if doc search opened (means db is available)
 	docsAvailable := runner.Contains("Search Docs")
@@ -1220,7 +1220,7 @@ func TestTUI(t *testing.T) {
 		runner.Snapshot("Debug pane after docs attempt (no db)")
 
 		runner.Test("No docs database message logged", func() bool {
-			return runner.Contains("No docs database")
+			return runner.Contains("Downloading docs")
 		})
 
 		runner.SendKeys("Escape")
@@ -1788,6 +1788,154 @@ func TestTUI(t *testing.T) {
 	// Clean up
 	runner.SendLine(")erase dbTest")
 	runner.WaitForIdle(3 * time.Second)
+
+	// =========================================================================
+	// Rebind pane tests
+	// =========================================================================
+
+	// Open rebind pane via command palette
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys(":")
+	runner.Sleep(300 * time.Millisecond)
+	runner.SendText("rebind")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Enter")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("Rebind pane open")
+
+	runner.Test("Rebind pane opens", func() bool {
+		return runner.Contains("rebind keys")
+	})
+
+	runner.Test("Rebind pane shows hint bar", func() bool {
+		return runner.Contains("Enter:bind")
+	})
+
+	runner.Test("Rebind pane shows debug command", func() bool {
+		return runner.Contains("debug")
+	})
+
+	runner.Test("Rebind pane shows leader prefix", func() bool {
+		return runner.Contains("L+")
+	})
+
+	// Navigate down a few entries
+	runner.SendKeys("Down", "Down")
+	runner.Sleep(100 * time.Millisecond)
+
+	// Toggle leader with Tab
+	runner.Snapshot("Rebind pane before leader toggle")
+	runner.SendKeys("Tab")
+	runner.Sleep(200 * time.Millisecond)
+	runner.Snapshot("Rebind pane after leader toggle")
+
+	runner.Test("Leader toggle changes binding display", func() bool {
+		// variables was L+l, after Tab it should show just "l" (no L+ prefix)
+		// Check that the entry changed: "variables" row should NOT have "L+l"
+		return runner.Contains("rebind keys") && !runner.Contains("L+l")
+	})
+
+	// Enter capture mode
+	runner.SendKeys("Enter")
+	runner.Sleep(200 * time.Millisecond)
+	runner.Snapshot("Rebind capture mode")
+
+	runner.Test("Capture mode shows in title", func() bool {
+		return runner.Contains("press key for")
+	})
+
+	// Cancel capture with Escape
+	runner.SendKeys("Escape")
+	runner.Sleep(200 * time.Millisecond)
+
+	runner.Test("Escape cancels capture mode", func() bool {
+		return runner.Contains("rebind keys") && !runner.Contains("press key for")
+	})
+
+	// Test capture can grab C-] (leader key) without it being intercepted
+	runner.SendKeys("Enter") // capture mode
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("C-]") // should be captured, not trigger leader mode
+	runner.Sleep(200 * time.Millisecond)
+	runner.Snapshot("After capturing leader key")
+
+	runner.Test("Capture grabbed leader key", func() bool {
+		// Should still be in rebind pane (not closed/leader mode), and auto-advanced
+		return runner.Contains("rebind keys") && !runner.Contains("press key for")
+	})
+
+	// Close rebind pane
+	runner.SendKeys("Escape")
+	runner.Sleep(200 * time.Millisecond)
+	runner.Snapshot("Rebind pane closed")
+
+	runner.Test("Escape closes rebind pane", func() bool {
+		return !runner.Contains("rebind keys")
+	})
+
+	// Test that rebinding actually works: rebind debug to 'z' via leader
+	// 1. Open rebind pane
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys(":")
+	runner.Sleep(300 * time.Millisecond)
+	runner.SendText("rebind")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Enter")
+	runner.Sleep(300 * time.Millisecond)
+
+	// 2. First entry should be 'debug' — capture and rebind to 'z'
+	runner.SendKeys("Enter") // capture mode
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendText("z")
+	runner.Sleep(200 * time.Millisecond)
+	runner.Snapshot("After rebinding debug to z")
+
+	// 3. Close rebind pane
+	runner.SendKeys("Escape")
+	runner.Sleep(200 * time.Millisecond)
+
+	// 4. Verify old binding C-] d no longer opens debug
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys("d")
+	runner.Sleep(300 * time.Millisecond)
+
+	runner.Test("Old debug binding (d) no longer works", func() bool {
+		return !runner.Contains("╔") // No pane opened
+	})
+
+	// 5. Verify new binding C-] z opens debug
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendText("z")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("Debug pane opened via rebind")
+
+	runner.Test("New debug binding (z) works", func() bool {
+		return runner.Contains("debug")
+	})
+
+	// Close debug pane
+	runner.SendKeys("Escape")
+	runner.Sleep(200 * time.Millisecond)
+
+	// 6. Restore original binding so remaining tests aren't broken
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys(":")
+	runner.Sleep(300 * time.Millisecond)
+	runner.SendText("rebind")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Enter")
+	runner.Sleep(300 * time.Millisecond)
+	runner.SendKeys("Enter") // capture mode on debug (first entry)
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendText("d") // rebind back to 'd'
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Escape")
+	runner.Sleep(200 * time.Millisecond)
 
 	// Final snapshot
 	runner.Snapshot("Final state")

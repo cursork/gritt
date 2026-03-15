@@ -301,6 +301,10 @@ func buildCommands(cfg *Config) *CommandRegistry {
 		m.loadSession()
 		return *m, nil
 	})
+	reg.add("save-config", "Save current config to disk", false, "", func(m *Model) (tea.Model, tea.Cmd) {
+		m.saveConfig()
+		return *m, nil
+	})
 	reg.add("format", "Format code in focused editor", false, "", func(m *Model) (tea.Model, tea.Cmd) {
 		m.formatFocusedEditor()
 		return *m, nil

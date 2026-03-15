@@ -61,8 +61,8 @@ func (r *RebindPane) Title() string {
 func (r *RebindPane) Render(w, h int) string {
 	var sb strings.Builder
 
-	selectedStyle := lipgloss.NewStyle().Background(AccentColor).Foreground(lipgloss.Color("0"))
-	keyStyle := lipgloss.NewStyle().Foreground(AccentColor)
+	selectedStyle := lipgloss.NewStyle().Background(lipgloss.Color("3")).Foreground(lipgloss.Color("0"))
+	keyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("243"))
 	captureStyle := lipgloss.NewStyle().Background(lipgloss.Color("3")).Foreground(lipgloss.Color("0"))
 

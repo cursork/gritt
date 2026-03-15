@@ -140,6 +140,9 @@ type Model struct {
 	loadPromptDefault  string // most recent session-* file
 	loadPromptCustom   bool   // true once user starts typing
 
+	// Config save prompt: 'l' for local, 'g' for global
+	configSavePromptActive bool
+
 	// Backtick mode for APL symbol input
 	backtickActive bool
 
@@ -509,6 +512,20 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Handle config save prompt
+	if m.configSavePromptActive {
+		m.configSavePromptActive = false
+		switch msg.String() {
+		case "l":
+			m.doSaveConfig("gritt.json")
+		case "g":
+			m.doSaveConfig(filepath.Join(os.Getenv("HOME"), ".config", "gritt", "gritt.json"))
+		default:
+			m.log("Config save cancelled")
+		}
+		return m, nil
+	}
+
 	// Handle pane move mode
 	if m.paneMoveMode {
 		fp := m.panes.FocusedPane()
@@ -551,6 +568,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Rebind pane in capture mode: bypass everything so it can capture any key
+	if fp := m.panes.FocusedPane(); fp != nil {
+		if rp, ok := fp.Content.(*RebindPane); ok && rp.capturing {
+			goto routeToPane
+		}
+	}
+
 	// Handle leader key sequences
 	if m.leaderActive {
 		m.leaderActive = false
@@ -584,6 +608,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Close pane — complex context-dependent logic, handled inline
 	if closePaneCmd := m.commands.ByName("close-pane"); closePaneCmd != nil && closePaneCmd.Binding.Enabled() && key.Matches(msg, closePaneCmd.Binding) {
 		if fp := m.panes.FocusedPane(); fp != nil {
+			// Rebind pane in capture mode — let it handle Escape
+			if rp, ok := fp.Content.(*RebindPane); ok && rp.capturing {
+				goto routeToPane
+			}
 			if fp.ID == "tracer" {
 				// Check if tracer is in edit mode - if so, let the pane handle it
 				if ep, ok := fp.Content.(*EditorPane); ok && ep.editMode {
@@ -636,6 +664,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
+	}
+
+	// Rebind pane (not capturing): bypass direct dispatch so Tab etc. reach the pane
+	if fp := m.panes.FocusedPane(); fp != nil {
+		if _, ok := fp.Content.(*RebindPane); ok {
+			goto routeToPane
+		}
 	}
 
 	// Direct command dispatch (non-leader, non-close-pane)
@@ -2377,6 +2412,57 @@ func (m *Model) doLoadSession() {
 	m.log("Loaded %d lines from %s", len(lines), filename)
 }
 
+func (m *Model) saveConfig() {
+	localPath := "gritt.json"
+	globalPath := filepath.Join(os.Getenv("HOME"), ".config", "gritt", "gritt.json")
+
+	_, localErr := os.Stat(localPath)
+	_, globalErr := os.Stat(globalPath)
+
+	switch {
+	case localErr == nil:
+		m.doSaveConfig(localPath)
+	case globalErr == nil:
+		m.doSaveConfig(globalPath)
+	default:
+		m.configSavePromptActive = true
+	}
+}
+
+func (m *Model) doSaveConfig(path string) {
+	cfg := struct {
+		Accent       string                `json:"accent,omitempty"`
+		Bindings     map[string]BindingDef `json:"bindings"`
+		Navigation   NavConfig             `json:"navigation"`
+		Autolocalise bool                  `json:"autolocalise,omitempty"`
+	}{
+		Accent:       m.config.Accent,
+		Bindings:     m.config.Bindings,
+		Navigation:   m.config.Navigation,
+		Autolocalise: m.config.Autolocalise,
+	}
+
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		m.log("Failed to marshal config: %v", err)
+		return
+	}
+	data = append(data, '\n')
+
+	// Ensure parent directory exists
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		m.log("Failed to create config directory: %v", err)
+		return
+	}
+
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		m.log("Failed to save config: %v", err)
+	} else {
+		m.log("Config saved to %s", path)
+	}
+}
+
 func (m *Model) openCommandPalette() {
 	// Remove existing palette if open
 	if m.panes.Get("commands") != nil {
@@ -2887,6 +2973,10 @@ func (m Model) View() string {
 		} else {
 			helpView = promptStyle.Render("Load: ") + dimStyle.Render("no session files found")
 		}
+	} else if m.configSavePromptActive {
+		promptStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("82")).Bold(true)
+		dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+		helpView = promptStyle.Render("Save config: ") + dimStyle.Render("[l]ocal ./gritt.json  [g]lobal ~/.config/gritt/gritt.json")
 	} else if m.backtickActive {
 		backtickStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("207")).Bold(true)
 		helpView = backtickStyle.Render("` APL symbol...")
