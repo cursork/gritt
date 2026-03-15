@@ -137,6 +137,16 @@ func CacheIsStale() bool {
 	return dbPath == "" || cache.IsStale(dbPath)
 }
 
+// Content retrieves the markdown content for a search result.
+func Content(db *sql.DB, path string) (string, error) {
+	var content string
+	err := db.QueryRow("SELECT content FROM docs WHERE path = ?", path).Scan(&content)
+	if err != nil {
+		return "", fmt.Errorf("doc not found: %s", path)
+	}
+	return content, nil
+}
+
 // --- Internal ---
 
 func collectResults(rows *sql.Rows, seen map[int64]bool, limit int, results []Result) []Result {

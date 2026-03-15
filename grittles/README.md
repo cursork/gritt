@@ -40,13 +40,16 @@ Shares cache with gritt at `~/.cache/gritt/aplcart.db`.
 
 ### apldocs
 
-Search Dyalog documentation from the terminal.
+Search and read Dyalog documentation from the terminal.
 
 ```
-apldocs "each"
+apldocs "each"                      # search and display first match
+apldocs -list "each"                # list all matching titles
+apldocs -n 2 "each"                 # display 2nd match
 apldocs -refresh                    # download latest docs DB
 ```
 
+Renders markdown with glamour, same as gritt's doc pane.
 Shares cache with gritt at `~/.cache/gritt/dyalog-docs.db`.
 
 ### aplfmt
