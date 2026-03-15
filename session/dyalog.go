@@ -1,8 +1,9 @@
-package main
+package session
 
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -12,16 +13,35 @@ import (
 )
 
 type dyalogInstall struct {
-	path    string // full path to dyalog binary
-	version string // e.g. "20.0"
+	path    string
+	version string
 	major   int
 	minor   int
 }
 
-// findDyalog discovers installed Dyalog interpreters and returns the path to
-// the best match. If version is non-empty, only that version is considered.
-// Returns "" if nothing found.
-func findDyalog(version string) string {
+// FindDyalog discovers installed Dyalog interpreters and returns the path
+// to the best match.
+//
+// If version contains a path separator, it is treated as a direct path to
+// the binary. If version is "X.Y", only that version is returned. If version
+// is empty, the highest installed version is returned (checking PATH first).
+func FindDyalog(version string) (string, error) {
+	// Direct path (contains / or \)
+	if strings.ContainsAny(version, `/\`) {
+		if _, err := os.Stat(version); err != nil {
+			return "", fmt.Errorf("dyalog binary not found: %s", version)
+		}
+		return version, nil
+	}
+
+	// If no version requested, try PATH first
+	if version == "" {
+		if path, err := exec.LookPath("dyalog"); err == nil {
+			return path, nil
+		}
+	}
+
+	// Discovery
 	var installs []dyalogInstall
 
 	switch runtime.GOOS {
@@ -34,7 +54,11 @@ func findDyalog(version string) string {
 	}
 
 	if len(installs) == 0 {
-		return ""
+		if version != "" {
+			return "", fmt.Errorf("Dyalog version %s not found.\nSearched:\n  %s", version, SearchedPaths())
+		}
+		return "", fmt.Errorf("Dyalog not found in PATH or standard install locations.\nSearched:\n  %s\n  %s",
+			"$PATH", SearchedPaths())
 	}
 
 	// Sort by version descending (highest first)
@@ -49,18 +73,19 @@ func findDyalog(version string) string {
 	if version != "" {
 		for _, inst := range installs {
 			if inst.version == version {
-				return inst.path
+				return inst.path, nil
 			}
 		}
-		return ""
+		return "", fmt.Errorf("Dyalog version %s not found (available: %s).\nSearched:\n  %s",
+			version, availableVersions(installs), SearchedPaths())
 	}
 
-	return installs[0].path
+	return installs[0].path, nil
 }
 
-// searchedPaths returns a human-readable list of paths that were searched,
+// SearchedPaths returns a human-readable list of paths that were searched,
 // for error messages.
-func searchedPaths() string {
+func SearchedPaths() string {
 	switch runtime.GOOS {
 	case "darwin":
 		return "/Applications/Dyalog-*.app/Contents/Resources/Dyalog/dyalog"
@@ -78,6 +103,14 @@ func searchedPaths() string {
 	default:
 		return "(unsupported platform)"
 	}
+}
+
+func availableVersions(installs []dyalogInstall) string {
+	var versions []string
+	for _, inst := range installs {
+		versions = append(versions, inst.version)
+	}
+	return strings.Join(versions, ", ")
 }
 
 var versionRe = regexp.MustCompile(`(\d+)\.(\d+)`)
@@ -154,7 +187,7 @@ func findDyalogLinux() []dyalogInstall {
 					major:   major,
 					minor:   minor,
 				})
-				break // don't add both 64 and 32 for same version
+				break
 			}
 		}
 	}
@@ -209,13 +242,12 @@ func findDyalogWindows() []dyalogInstall {
 	return installs
 }
 
-// dyalogEnv returns environment variables needed to run a discovered Dyalog binary.
-func dyalogEnv(dyalogPath string) []string {
+// DyalogEnv returns environment variables needed to run a discovered Dyalog binary.
+func DyalogEnv(dyalogPath string) []string {
 	dir := filepath.Dir(dyalogPath)
 	env := []string{fmt.Sprintf("DYALOG=%s", dir)}
 
 	if runtime.GOOS == "linux" {
-		// Prepend to LD_LIBRARY_PATH like mapl does
 		ldPath := os.Getenv("LD_LIBRARY_PATH")
 		if ldPath == "" {
 			env = append(env, fmt.Sprintf("LD_LIBRARY_PATH=%s", dir))

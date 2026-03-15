@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cursork/gritt/cache"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -62,7 +63,7 @@ func TestIsCacheStale(t *testing.T) {
 	// Old file is stale
 	old := filepath.Join(t.TempDir(), "old.db")
 	os.WriteFile(old, []byte("test"), 0644)
-	then := time.Now().Add(-(cacheMaxAge + time.Hour))
+	then := time.Now().Add(-(cache.MaxAge + time.Hour))
 	os.Chtimes(old, then, then)
 	if !isCacheStale(old) {
 		t.Error("8-day-old file should be stale")

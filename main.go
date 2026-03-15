@@ -18,6 +18,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/cursork/gritt/ride"
+	"github.com/cursork/gritt/session"
 )
 
 // launchDyalog starts Dyalog APL with RIDE on a random port.
@@ -28,7 +29,7 @@ func launchDyalog(version string) (*exec.Cmd, int) {
 	port := 10000 + rand.Intn(50000)
 	cmd := exec.Command(exe, "+s", "-q")
 	cmd.Env = append(os.Environ(), fmt.Sprintf("RIDE_INIT=SERVE:*:%d", port))
-	cmd.Env = append(cmd.Env, dyalogEnv(exe)...)
+	cmd.Env = append(cmd.Env, session.DyalogEnv(exe)...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
 		log.Fatalf("Failed to start Dyalog (%s): %v", exe, err)
@@ -48,37 +49,12 @@ func launchDyalog(version string) (*exec.Cmd, int) {
 }
 
 // resolveDyalog finds the Dyalog binary to use.
-// If version is empty, tries PATH first then discovery.
-// If version contains a path separator, treats it as a direct path to the binary.
-// Otherwise, uses discovery to find that specific version.
 func resolveDyalog(version string) string {
-	// Direct path (contains / or \)
-	if strings.ContainsAny(version, `/\`) {
-		if _, err := os.Stat(version); err != nil {
-			log.Fatalf("Dyalog binary not found: %s", version)
-		}
-		return version
+	exe, err := session.FindDyalog(version)
+	if err != nil {
+		log.Fatal(err)
 	}
-
-	// If no version requested, try PATH first
-	if version == "" {
-		if path, err := exec.LookPath("dyalog"); err == nil {
-			return path
-		}
-	}
-
-	// Discovery
-	if exe := findDyalog(version); exe != "" {
-		return exe
-	}
-
-	// Helpful error
-	if version != "" {
-		log.Fatalf("Dyalog version %s not found.\nSearched:\n  %s", version, searchedPaths())
-	}
-	log.Fatalf("Dyalog not found in PATH or standard install locations.\nSearched:\n  %s\n  %s",
-		"$PATH", searchedPaths())
-	return ""
+	return exe
 }
 
 // multiFlag allows a flag to be specified multiple times, collecting all values
