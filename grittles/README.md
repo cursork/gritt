@@ -7,25 +7,24 @@ Standalone CLI tools built on gritt's libraries. Each is its own binary.
 
 ## Tools
 
-### aplan2json
+### aplanconv
 
-Reads APLAN from stdin, writes JSON to stdout.
-
-```
-echo '(1 2 3)' | aplan2json
-echo '(name: ''Bob'' age: 42)' | aplan2json
-aplan2json -lossy < shaped.aplan    # nested arrays, no shape metadata
-```
-
-### json2aplan
-
-Reads JSON from stdin, writes APLAN to stdout.
+Converts between APLAN and JSON. Auto-detects input format from the first
+non-whitespace character (`(` `'` `⍬` `¯` → APLAN; `{` `"` → JSON).
+Ambiguous cases like `[` (used by both formats) guess JSON first, then
+try APLAN if parsing fails. Use `-from`/`-to` to override detection with
+explicit formats.
 
 ```
-echo '[1,2,3]' | json2aplan
-echo '{"a":1}' | json2aplan
-json2aplan -lossy < data.json       # skip shape reconstruction
+echo '(1 2 3)' | aplanconv          # APLAN → JSON (auto-detected)
+echo '[1,2,3]' | aplanconv          # JSON → APLAN (auto-detected)
+echo '[1 2 ⋄ 3 4]' | aplanconv     # APLAN matrix (JSON fails, APLAN succeeds)
+aplanconv data.aplan                # read from file
+aplanconv -from aplan -to json      # explicit formats
+aplanconv -lossy < shaped.aplan     # nested arrays, no shape metadata
 ```
+
+Flags: `-from FORMAT`, `-to FORMAT` (aplan or json), `-lossy`.
 
 ### aplcart
 
@@ -77,8 +76,7 @@ Tools: `launch`, `connect`, `disconnect`, `eval`, `batch`, `link`, `names`, `get
 From the gritt root:
 
 ```
-go build ./grittles/aplan2json
-go build ./grittles/json2aplan
+go build ./grittles/aplanconv
 go build ./grittles/aplcart
 go build ./grittles/apldocs
 go build ./grittles/aplfmt
