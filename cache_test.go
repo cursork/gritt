@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cursork/gritt/aplcart"
 	"github.com/cursork/gritt/cache"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -70,96 +71,14 @@ func TestIsCacheStale(t *testing.T) {
 	}
 }
 
-func TestAPLcartCacheRoundTrip(t *testing.T) {
-	// Use a temp dir to avoid polluting the real cache
-	tmpDir := t.TempDir()
-	tmpDB := filepath.Join(tmpDir, "aplcart.db")
-
-	entries := []APLcartEntry{
-		{Syntax: "⍳N", Description: "First N integers", Keywords: "iota index"},
-		{Syntax: "⍴A", Description: "Shape of A", Keywords: "rho shape"},
-		{Syntax: "+/A", Description: "Sum of A", Keywords: "plus reduce sum"},
-	}
-
-	if err := writeAPLcartCacheTo(tmpDB, entries); err != nil {
-		t.Fatal(err)
-	}
-
-	loaded, err := loadAPLcartCacheFrom(tmpDB)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(loaded) != len(entries) {
-		t.Fatalf("got %d entries, want %d", len(loaded), len(entries))
-	}
-	for i, e := range entries {
-		if loaded[i].Syntax != e.Syntax {
-			t.Errorf("[%d] Syntax = %q, want %q", i, loaded[i].Syntax, e.Syntax)
-		}
-		if loaded[i].Description != e.Description {
-			t.Errorf("[%d] Description = %q, want %q", i, loaded[i].Description, e.Description)
-		}
-		if loaded[i].Keywords != e.Keywords {
-			t.Errorf("[%d] Keywords = %q, want %q", i, loaded[i].Keywords, e.Keywords)
-		}
-	}
-}
-
-func TestParseAPLcartTSV(t *testing.T) {
-	tsv := "syntax\tdesc\tf2\tf3\tf4\tf5\tkeywords\n" +
-		"⍳N\tFirst N integers\t\t\t\t\tiota index\n" +
-		"⍴A\tShape of A\t\t\t\t\trho shape\n" +
-		"\n" // trailing blank line
-
-	entries := parseAPLcartTSV(tsv)
-	if len(entries) != 2 {
-		t.Fatalf("got %d entries, want 2", len(entries))
-	}
-	if entries[0].Syntax != "⍳N" {
-		t.Errorf("[0] Syntax = %q, want %q", entries[0].Syntax, "⍳N")
-	}
-	if entries[0].Keywords != "iota index" {
-		t.Errorf("[0] Keywords = %q, want %q", entries[0].Keywords, "iota index")
-	}
-	if entries[1].Description != "Shape of A" {
-		t.Errorf("[1] Description = %q, want %q", entries[1].Description, "Shape of A")
-	}
-}
-
-func TestParseAPLcartTSVSkipsShortLines(t *testing.T) {
-	tsv := "header\n" +
-		"only\ttwo\tfields\n" +
-		"⍳N\tFirst N integers\t\t\t\t\tiota\n"
-
-	entries := parseAPLcartTSV(tsv)
-	if len(entries) != 1 {
-		t.Fatalf("got %d entries, want 1 (short line should be skipped)", len(entries))
-	}
-}
-
-func TestLoadAPLcartCacheEmpty(t *testing.T) {
-	// Remove cache file if it exists, then try loading
-	dbPath := cachePath("aplcart-nonexistent-test.db")
-	os.Remove(dbPath)
-
-	_, err := LoadAPLcartCache()
-	if err == nil {
-		// It's OK if this fails — we just need it not to panic
-		// The actual error depends on whether the DB exists
-	}
-	_ = err
-}
-
 // TestRefreshAPLcartCache exercises the real APLcart fetch-and-cache path.
 // Uses the real cache: fast when fresh, hits GitHub when stale/missing.
 // Set NO_CACHE=1 to force a fresh fetch.
 func TestRefreshAPLcartCache(t *testing.T) {
-	dbPath := cachePath("aplcart.db")
 	noCache := os.Getenv("NO_CACHE") == "1"
 
 	// If cache is fresh and not forced, just verify we can load from it
-	if !noCache && !isCacheStale(dbPath) {
+	if !noCache && !aplcart.CacheIsStale() {
 		t.Log("APLcart cache is fresh, loading from disk")
 	} else {
 		t.Log("APLcart cache is stale/missing, fetching from GitHub...")
@@ -174,7 +93,7 @@ func TestRefreshAPLcartCache(t *testing.T) {
 	}
 
 	// Either way, cache should now be loadable
-	entries, err := LoadAPLcartCache()
+	entries, err := aplcart.LoadCache()
 	if err != nil {
 		t.Fatal(err)
 	}

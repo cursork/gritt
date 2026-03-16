@@ -40,6 +40,12 @@
 - [ ] StringDialog (text input)
 - [ ] ReplyOptionsDialog/ReplyStringDialog
 
+## Grittles follow-up
+- [ ] **Tests for new library packages** — `session/`, `mcp/`, `aplcart/`, `docs/`, `codec/json.go` all lack tests
+- [ ] **TUI switch to library packages** — `aplcart.go` and `doc_search.go` in `package main` still have their own copies of data functions; should call `aplcart/` and `docs/` packages instead
+- [ ] **aplfmt printed-files feedback** — currently silent on unchanged files; gritt's `runFormat` prints changed filenames
+- [ ] **aplcart output formatting** — APL syntax column needs display-width-aware padding (same `padRight` fix as TUI)
+
 ## codec package (APLAN roundtrip)
 - [ ] **Structured variable viewer** — Parse APLAN (`ShowAsArrayNotation`) in variables pane to render matrices as tables, namespaces as trees, nested structures with expandable nodes
 - [ ] **Structured variable editing** — Parse APLAN in editor (entityType 262144) for cell-level navigation/editing of matrices rather than raw text

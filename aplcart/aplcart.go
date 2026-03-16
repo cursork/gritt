@@ -141,7 +141,10 @@ func writeCache(entries []Entry) error {
 	if dbPath == "" {
 		return fmt.Errorf("cache dir unavailable")
 	}
+	return writeCacheTo(dbPath, entries)
+}
 
+func writeCacheTo(dbPath string, entries []Entry) error {
 	tmp := dbPath + ".tmp"
 	os.Remove(tmp)
 	db, err := sql.Open("sqlite3", tmp)
