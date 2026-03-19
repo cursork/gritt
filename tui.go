@@ -18,7 +18,9 @@ import (
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/charmbracelet/x/cellbuf"
+	"github.com/cursork/gritt/aplcart"
 	"github.com/cursork/gritt/codec"
+	"github.com/cursork/gritt/docs"
 	"github.com/cursork/gritt/ride"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -2156,11 +2158,7 @@ func (m *Model) warnOldDocsCache() {
 
 // openDocsDB attempts to open the docs database from the cache directory.
 func (m *Model) openDocsDB() {
-	dbPath := cachePath("dyalog-docs.db")
-	if dbPath == "" {
-		return
-	}
-	db, err := sql.Open("sqlite3", dbPath+"?mode=ro")
+	db, err := docs.OpenCache()
 	if err != nil {
 		return
 	}
@@ -2173,8 +2171,7 @@ func (m *Model) openDocsDB() {
 
 // docsStaleRefresh returns a background refresh command if the docs cache is stale.
 func (m *Model) docsStaleRefresh() tea.Cmd {
-	dbPath := cachePath("dyalog-docs.db")
-	if dbPath != "" && isCacheStale(dbPath) {
+	if docs.CacheIsStale() {
 		return RefreshDocsCache
 	}
 	return nil
@@ -2286,7 +2283,7 @@ func (m *Model) openDocSearch() (tea.Model, tea.Cmd) {
 	return *m, m.docsStaleRefresh()
 }
 
-func (m *Model) openDocFromSearch(result *DocSearchResult) (tea.Model, tea.Cmd) {
+func (m *Model) openDocFromSearch(result *docs.Result) (tea.Model, tea.Cmd) {
 	if m.docsDB == nil {
 		return *m, nil
 	}
@@ -2329,10 +2326,9 @@ func (m *Model) openAPLcart() (tea.Model, tea.Cmd) {
 
 	// Try loading from cache (fast, synchronous)
 	var cmd tea.Cmd
-	dbPath := cachePath("aplcart.db")
-	if entries, err := LoadAPLcartCache(); err == nil && len(entries) > 0 {
+	if entries, err := aplcart.LoadCache(); err == nil && len(entries) > 0 {
 		ac.SetData(entries, nil)
-		if isCacheStale(dbPath) {
+		if aplcart.CacheIsStale() {
 			cmd = RefreshAPLcartCache
 		}
 	} else {

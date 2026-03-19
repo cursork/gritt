@@ -149,10 +149,11 @@ func (c *CommandPalette) Render(w, h int) string {
 }
 
 func padRight(s string, width int) string {
-	if len(s) >= width {
+	sw := lipgloss.Width(s)
+	if sw >= width {
 		return s
 	}
-	return s + strings.Repeat(" ", width-len(s))
+	return s + strings.Repeat(" ", width-sw)
 }
 
 func (c *CommandPalette) HandleKey(msg tea.KeyMsg) bool {

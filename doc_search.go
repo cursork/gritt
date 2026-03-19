@@ -2,18 +2,13 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"os"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss/v2"
+	"github.com/cursork/gritt/docs"
 )
-
-const docsReleaseAPI = "https://api.github.com/repos/xpqz/bundle-docs/releases/latest"
 
 // DocsCacheResult is sent when a docs cache fetch/refresh completes.
 type DocsCacheResult struct {
@@ -22,81 +17,17 @@ type DocsCacheResult struct {
 
 // RefreshDocsCache downloads the latest docs database from GitHub releases.
 func RefreshDocsCache() tea.Msg {
-	dbPath := cachePath("dyalog-docs.db")
-	if dbPath == "" {
-		return DocsCacheResult{Err: fmt.Errorf("cache dir unavailable")}
-	}
-
-	// Get latest release info
-	resp, err := http.Get(docsReleaseAPI)
-	if err != nil {
-		return DocsCacheResult{Err: err}
-	}
-	defer resp.Body.Close()
-
-	var release struct {
-		Assets []struct {
-			Name               string `json:"name"`
-			BrowserDownloadURL string `json:"browser_download_url"`
-		} `json:"assets"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-		return DocsCacheResult{Err: err}
-	}
-
-	// Find the .db asset
-	var downloadURL string
-	for _, asset := range release.Assets {
-		if strings.HasSuffix(asset.Name, ".db") {
-			downloadURL = asset.BrowserDownloadURL
-			break
-		}
-	}
-	if downloadURL == "" {
-		return DocsCacheResult{Err: fmt.Errorf("no .db asset in latest release")}
-	}
-
-	// Download to temp file, then rename
-	resp2, err := http.Get(downloadURL)
-	if err != nil {
-		return DocsCacheResult{Err: err}
-	}
-	defer resp2.Body.Close()
-
-	tmp := dbPath + ".tmp"
-	f, err := os.Create(tmp)
-	if err != nil {
-		return DocsCacheResult{Err: err}
-	}
-	if _, err := io.Copy(f, resp2.Body); err != nil {
-		f.Close()
-		os.Remove(tmp)
-		return DocsCacheResult{Err: err}
-	}
-	f.Close()
-
-	if err := os.Rename(tmp, dbPath); err != nil {
-		return DocsCacheResult{Err: err}
-	}
-
-	return DocsCacheResult{}
-}
-
-// DocSearchResult represents a single search result
-type DocSearchResult struct {
-	Rowid int64
-	Title string
-	Path  string
+	return DocsCacheResult{Err: docs.RefreshCache()}
 }
 
 // DocSearch is a searchable documentation browser
 type DocSearch struct {
 	db             *sql.DB
 	query          string
-	results        []DocSearchResult
+	results        []docs.Result
 	selected       int
 	scrollOffset   int
-	SelectedResult *DocSearchResult // Set when Enter pressed
+	SelectedResult *docs.Result // Set when Enter pressed
 }
 
 // NewDocSearch creates a doc search pane with the given database
@@ -114,7 +45,7 @@ func (d *DocSearch) search() {
 		return
 	}
 
-	d.results = searchDocs(d.db, d.query, 50)
+	d.results = docs.Search(d.db, d.query, 50)
 
 	// Reset selection if out of bounds
 	if d.selected >= len(d.results) {
@@ -124,75 +55,6 @@ func (d *DocSearch) search() {
 		d.selected = 0
 	}
 	d.scrollOffset = 0
-}
-
-// searchDocs performs the three-tier search like docsearch
-func searchDocs(db *sql.DB, query string, limit int) []DocSearchResult {
-	seen := make(map[int64]bool)
-	var results []DocSearchResult
-
-	// 1. Exact case-insensitive match on keywords
-	rows, err := db.Query(`
-		SELECT rowid, title, path FROM docs
-		WHERE keywords LIKE ? COLLATE NOCASE AND exclude = 0
-	`, "%"+query+"%")
-	if err == nil {
-		results = collectResults(rows, seen, limit, results)
-	}
-	if len(results) >= limit {
-		return results
-	}
-
-	// 2. FTS search on title
-	rows, err = db.Query(`
-		SELECT f.rowid, f.title, f.path FROM docs_fts f
-		JOIN docs d ON f.rowid = d.rowid
-		WHERE f.title MATCH ? AND d.exclude = 0
-	`, escapeQuery(query))
-	if err == nil {
-		results = collectResults(rows, seen, limit, results)
-	}
-	if len(results) >= limit {
-		return results
-	}
-
-	// 3. FTS search on content
-	rows, err = db.Query(`
-		SELECT f.rowid, f.title, f.path FROM docs_fts f
-		JOIN docs d ON f.rowid = d.rowid
-		WHERE f.content MATCH ? AND d.exclude = 0
-	`, escapeQuery(query))
-	if err == nil {
-		results = collectResults(rows, seen, limit, results)
-	}
-
-	return results
-}
-
-func collectResults(rows *sql.Rows, seen map[int64]bool, limit int, results []DocSearchResult) []DocSearchResult {
-	defer rows.Close()
-	for rows.Next() {
-		if len(results) >= limit {
-			break
-		}
-		var rowid int64
-		var title, path string
-		if err := rows.Scan(&rowid, &title, &path); err != nil {
-			continue
-		}
-		if seen[rowid] {
-			continue
-		}
-		seen[rowid] = true
-		results = append(results, DocSearchResult{Rowid: rowid, Title: title, Path: path})
-	}
-	return results
-}
-
-// escapeQuery wraps the query in quotes to handle special characters
-func escapeQuery(q string) string {
-	q = strings.ReplaceAll(q, `"`, `""`)
-	return `"` + q + `"`
 }
 
 func (d *DocSearch) Title() string {

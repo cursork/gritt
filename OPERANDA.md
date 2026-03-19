@@ -39,9 +39,32 @@ Integration in `tui.go`: OpenWindow and UpdateWindow both check for entityType 2
 
 **Not yet done**: testing editing, adding/removing elements, pagination.
 
-## Cache Infrastructure (new)
+## Grittles (new)
 
-APLcart and docs now use `os.UserCacheDir()/gritt/` (`~/Library/Caches/gritt/` on macOS). Generic cache utilities in `cache.go` (`cacheDir()`, `cachePath()`, `isCacheStale()`). Feature-specific fetch/cache logic stays with the feature (`aplcart.go`, `doc_search.go`).
+Standalone CLI tools built on gritt's libraries. Five tools in `grittles/`:
+
+- **aplanconv** — APLAN ↔ JSON conversion (codec only, no Dyalog needed). Auto-detects format via quick peek at first char; ambiguous cases (e.g. `[`) guess and fallback — try one parser, if it fails try the other. Accepts `-from`/`-to` for explicit control and future format extensibility. Also accepts a filename argument instead of stdin.
+- **aplcart** — search APLcart from terminal (shares cache with TUI)
+- **apldocs** — search and display Dyalog docs with glamour rendering (shares cache with TUI)
+- **aplfmt** — format APL source files via Dyalog interpreter
+- **aplmcp** — MCP server for LLM ↔ Dyalog (replaces dapple)
+
+New library packages extracted from `package main`:
+
+- **`cache/`** — shared cache dir/path/staleness (extracted from `cache.go`, which is now a thin wrapper)
+- **`session/`** — headless Dyalog session API: Launch, Connect, Eval, Format, Link, etc. (extracted from `main.go` + `dyalog.go`; `dyalog.go` deleted from root, `main.go` imports `session.FindDyalog`)
+- **`mcp/`** — MCP server (from dapple, rewired to use `session/`)
+- **`aplcart/`** — APLcart data loading, caching, search
+- **`docs/`** — Dyalog docs search, caching, content retrieval
+- **`codec/json.go`** — `ToJSON()` / `FromJSON()` for APLAN ↔ JSON-safe values
+
+Design doc: `GRITTLES-PLAN.md`. README: `grittles/README.md`. dapple is now deprecated — its functionality lives in gritt's libraries.
+
+**Not yet done**: tests for new library packages (`session/`, `mcp/`, `aplcart/`, `docs/`, `codec/json.go`). TUI integration with extracted libraries (aplcart.go and doc_search.go still have their own copies of data functions — not yet switched to the library packages).
+
+## Cache Infrastructure
+
+APLcart and docs now use `os.UserCacheDir()/gritt/` (`~/Library/Caches/gritt/` on macOS). Generic cache utilities in `cache/` package (`Dir()`, `Path()`, `IsStale()`). Feature-specific fetch/cache logic in `aplcart/` and `docs/` library packages (TUI pane code still in `package main`).
 
 - **APLcart**: TSV fetched from GitHub, parsed, stored in `aplcart.db` (SQLite). Loaded synchronously from cache on open (instant). If cache missing, shows "Loading..." and fetches. If stale (>7 days), serves stale immediately, refreshes in background.
 - **Docs**: `dyalog-docs.db` downloaded from `xpqz/bundle-docs` GitHub releases. Opened lazily on first docs use. Old location `~/.config/gritt/` no longer used — startup warns if old file exists.
