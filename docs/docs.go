@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/cursork/gritt/cache"
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 const releaseAPI = "https://api.github.com/repos/xpqz/bundle-docs/releases/latest"
@@ -73,7 +73,7 @@ func OpenCache() (*sql.DB, error) {
 	if dbPath == "" {
 		return nil, fmt.Errorf("cache dir unavailable")
 	}
-	return sql.Open("sqlite3", dbPath+"?mode=ro")
+	return sql.Open("sqlite", dbPath+"?mode=ro")
 }
 
 // RefreshCache downloads the latest docs database from GitHub releases.

@@ -9,7 +9,7 @@ import (
 
 	"github.com/cursork/gritt/aplcart"
 	"github.com/cursork/gritt/cache"
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 func TestCacheDir(t *testing.T) {
@@ -142,7 +142,7 @@ func TestRefreshDocsCache(t *testing.T) {
 	}
 
 	// Open and verify schema
-	db, err := sql.Open("sqlite3", dbPath+"?mode=ro")
+	db, err := sql.Open("sqlite", dbPath+"?mode=ro")
 	if err != nil {
 		t.Fatal(err)
 	}

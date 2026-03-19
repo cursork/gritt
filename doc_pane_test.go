@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 func TestRenderMarkdown(t *testing.T) {
@@ -88,7 +88,7 @@ func TestDocsDatabase(t *testing.T) {
 		t.Skip("docs database not found at", dbPath)
 	}
 
-	db, err := sql.Open("sqlite3", dbPath+"?mode=ro")
+	db, err := sql.Open("sqlite", dbPath+"?mode=ro")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -60,7 +60,7 @@ New library packages extracted from `package main`:
 
 Design doc: `GRITTLES-PLAN.md`. README: `grittles/README.md`. dapple is now deprecated — its functionality lives in gritt's libraries.
 
-**Not yet done**: tests for new library packages (`session/`, `mcp/`, `aplcart/`, `docs/`, `codec/json.go`). TUI integration with extracted libraries (aplcart.go and doc_search.go still have their own copies of data functions — not yet switched to the library packages).
+TUI deduplication complete: `aplcart.go` and `doc_search.go` now delegate to library packages (`aplcart/` and `docs/`) — all data loading, search, caching, and refresh logic removed from root. TUI pane structs (rendering, key handling) stay in `package main`. `tui.go` calls library functions directly (`aplcart.LoadCache()`, `docs.OpenCache()`, `docs.CacheIsStale()`). `aplcart/aplcart_test.go` has 5 unit tests covering cache round-trip, TSV parsing, and search.
 
 ## Cache Infrastructure
 
@@ -68,6 +68,7 @@ APLcart and docs now use `os.UserCacheDir()/gritt/` (`~/Library/Caches/gritt/` o
 
 - **APLcart**: TSV fetched from GitHub, parsed, stored in `aplcart.db` (SQLite). Loaded synchronously from cache on open (instant). If cache missing, shows "Loading..." and fetches. If stale (>7 days), serves stale immediately, refreshes in background.
 - **Docs**: `dyalog-docs.db` downloaded from `xpqz/bundle-docs` GitHub releases. Opened lazily on first docs use. Old location `~/.config/gritt/` no longer used — startup warns if old file exists.
+- **SQLite driver**: `modernc.org/sqlite` (pure Go, no cgo). Enables `CGO_ENABLED=0` cross-compilation in release workflow.
 - **`:cache-refresh`**: Command palette command to force re-download both caches.
 - **`NO_CACHE=1`**: Env var for tests to force fresh fetch.
 

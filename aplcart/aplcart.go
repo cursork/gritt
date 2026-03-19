@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/cursork/gritt/cache"
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 const sourceURL = "https://raw.githubusercontent.com/abrudz/aplcart/master/table.tsv"
@@ -93,7 +93,7 @@ func CacheIsStale() bool {
 // --- Internal ---
 
 func loadFrom(dbPath string) ([]Entry, error) {
-	db, err := sql.Open("sqlite3", dbPath+"?mode=ro")
+	db, err := sql.Open("sqlite", dbPath+"?mode=ro")
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +147,7 @@ func writeCache(entries []Entry) error {
 func writeCacheTo(dbPath string, entries []Entry) error {
 	tmp := dbPath + ".tmp"
 	os.Remove(tmp)
-	db, err := sql.Open("sqlite3", tmp)
+	db, err := sql.Open("sqlite", tmp)
 	if err != nil {
 		return err
 	}
