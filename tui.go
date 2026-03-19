@@ -22,7 +22,7 @@ import (
 	"github.com/cursork/gritt/codec"
 	"github.com/cursork/gritt/docs"
 	"github.com/cursork/gritt/ride"
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 // AccentColor is the UI accent, configurable via "accent" in gritt.json.

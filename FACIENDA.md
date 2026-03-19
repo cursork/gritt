@@ -41,8 +41,7 @@
 - [ ] ReplyOptionsDialog/ReplyStringDialog
 
 ## Grittles follow-up
-- [ ] **Tests for new library packages** — `session/`, `mcp/`, `aplcart/`, `docs/`, `codec/json.go` all lack tests
-- [ ] **TUI switch to library packages** — `aplcart.go` and `doc_search.go` in `package main` still have their own copies of data functions; should call `aplcart/` and `docs/` packages instead
+- [x] **TUI switch to library packages** — `aplcart.go` and `doc_search.go` now delegate to `aplcart/` and `docs/` packages; all duplicated data functions removed
 - [ ] **aplfmt printed-files feedback** — currently silent on unchanged files; gritt's `runFormat` prints changed filenames
 - [ ] **aplcart output formatting** — APL syntax column needs display-width-aware padding (same `padRight` fix as TUI)
 
