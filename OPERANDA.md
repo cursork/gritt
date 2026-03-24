@@ -140,10 +140,13 @@ nc localhost 4200                             # Interactive netcat session
 - `Serialise` can't resolve namespace refs held in local variables. Eval stores result in `#.⍙r` (global) before serializing, then cleans up.
 - `62583⌶` (Kamila's APLAN formatter) with left arg 1 compacts `Serialise` output to single-line with `⋄` separators.
 
+**Modes:** Default serves raw APLAN (for tooling). `-repl` flag decodes to plain text (for interactive nc).
+
 **Known limitations:**
 - `⎕←` in expressions is a no-op (output goes to RIDE drain, not returned to client). Parked for APL-side solution.
 - System commands (`)ts`, `)vars`) may not serialize cleanly.
 - Single shared `_buf` on APL side — one connection at a time per prepl server.
+- `62583⌶` output contains CR characters — `ToAPLAN` strips them (protocol is LF-delimited).
 
 **Design decisions:** See `deliberanda/prepl.md`.
 

@@ -1,40 +1,53 @@
 # aplsock / Prepl: APL Socket Server
 
-Pure APL socket server inspired by Clojure's prepl. Accepts expressions over TCP, returns tagged JSON with APLAN values. Intended to eventually replace RIDE as gritt's primary connection method.
+Pure APL socket server inspired by Clojure's prepl. Accepts expressions over TCP, returns tagged APLAN namespaces. Intended to eventually replace RIDE as gritt's primary connection method.
 
 ## Architecture
 
 ```
-Client (gritt/nc/telnet) → aplsock (Go, serves on -sock) → APL prepl (in Dyalog, internal port)
-                                ↑ bootstrapped via RIDE, then RIDE dropped
+Client (gritt/nc/tooling) → aplsock (Go, -sock) → APL prepl (Conga, internal port)
+                                 ↑ bootstrapped via RIDE, RIDE kept alive for drain
 ```
 
-- `prepl/Prepl.apln` — APL namespace: Conga TCP server, eval in `#` context, APLAN serialization
-- `prepl/client.go` — Go client library: `Connect`, `Eval` (parsed), `EvalRaw` (proxy)
-- `prepl/embed.go` — `go:embed` of the APL source
-- `grittles/aplsock/` — standalone binary: bootstrap + proxy server
+## Protocol (pure APLAN)
+
+Input: APL expression, newline-terminated. Optional `⍝ID:uuid` trailing comment for correlation.
+
+```
+→ ⍳5
+← (tag: 'ret' ⋄ val: 1 2 3 4 5)
+
+→ ⍳5 ⍝ID:019abc12-3456-7890-abcd-ef1234567890
+← (id: '019abc12-3456-7890-abcd-ef1234567890' ⋄ tag: 'ret' ⋄ val: 1 2 3 4 5)
+
+→ ÷0
+← (tag: 'err' ⋄ en: 11 ⋄ message: 'Divide by zero' ⋄ dm: (...))
+
+→ x←42
+← (tag: 'ret' ⋄ val: 42)
+
+→ f←{⍺+⍵}
+← (tag: 'ret')
+```
+
+Default mode: raw APLAN passthrough (for tooling). `-repl` mode: decoded plain text (for interactive use).
 
 ## Open Decisions
 
 ### ⎕← Capture (parked)
-The `out` stream tag is reserved but not implemented. Capturing `⎕←` output requires APL-side work — it's a side effect to the session, not a capturable return value. Solution will be on the APL side.
+`⎕←` output goes to RIDE drain, not returned to client. Solution will be on the APL side. The `out` tag is reserved for future use.
 
 ### Multi-Line Expressions
-Current protocol: one expression per newline. Multi-line constructs (`:Namespace`/`:EndNamespace`, nabla definitions) need a framing mechanism. Options: length-prefixed messages, explicit begin/end markers, or a "raw mode" toggle.
+One expression per newline. Multi-line constructs need a framing mechanism.
 
 ### Multi-Connection Support
-APL prepl v1 uses a single shared buffer — one connection at a time. aplsock serializes concurrent clients through one prepl.Client (mutex). For real multi-connection: per-connection buffers in APL (keyed by Conga object name), potentially threaded execution.
+Single `_buf` on APL side — one connection at a time per prepl. aplsock serializes via mutex.
 
 ### gritt as Client (phase 2)
-gritt would add `-prepl addr` to connect to a running aplsock as an alternative to RIDE. The TUI would need adapting — the prepl protocol is simpler than RIDE (no editors, tracing, etc. yet). Either the prepl protocol grows, or those features get implemented in APL.
+gritt adds `-prepl addr` to connect to aplsock. TUI would use `prepl.Client` instead of `ride.Client`.
 
-### Execution Context
-`Eval` uses `:With #` to execute in the root namespace. `⎕IO`, `⎕ML`, etc. inherit from `#`'s settings — should the prepl set/restore these?
+### System Commands
+`)ts`, `)vars` etc. may not serialize cleanly via `⎕SE.Dyalog.Array.Serialise`.
 
-### APLAN Serialization Completeness
-`ToAPLAN` handles scalars, vectors, matrices, namespaces, and nested arrays. Not handled:
-- Higher-rank arrays (≥3D) — falls back to `⍕`
-- Nested matrices — best-effort, may lose structure
-- Special values (`⎕NULL`, refs, etc.)
-
-May be replaceable with a system function if Dyalog adds one.
+### 220⌶ / 219⌶ (binary serialization)
+Alternative to APLAN — binary array serialization. Would need a new Go parser. Not pursued yet but noted.

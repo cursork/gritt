@@ -37,6 +37,7 @@ func main() {
 	flag.BoolVar(launch, "l", false, "Launch Dyalog automatically")
 	version := flag.String("version", "", "Dyalog version or path to binary")
 	sock := flag.String("sock", ":4200", "Socket to serve on (:port or /path)")
+	repl := flag.Bool("repl", false, "REPL mode: decode APLAN, return plain text")
 	flag.Parse()
 
 	// 1. Launch Dyalog if requested
@@ -88,7 +89,7 @@ func main() {
 	log.Printf("prepl connected on internal port %d", internalPort)
 
 	// 6. Serve external clients (pc shared across all client connections)
-	serve(pc, *sock, cleanup)
+	serve(pc, *sock, *repl, cleanup)
 }
 
 // launchDyalog starts Dyalog APL with RIDE on a random port.
@@ -167,7 +168,7 @@ func waitForPrepl(addr string) *prepl.Client {
 }
 
 // serve listens on the given address and proxies client connections to the APL prepl.
-func serve(pc *prepl.Client, sockAddr string, cleanup func()) {
+func serve(pc *prepl.Client, sockAddr string, replMode bool, cleanup func()) {
 	var listener net.Listener
 	var err error
 	var isUnix bool
@@ -204,12 +205,35 @@ func serve(pc *prepl.Client, sockAddr string, cleanup func()) {
 		if err != nil {
 			return
 		}
-		go handleConn(pc, conn)
+		if replMode {
+			go handleConnRepl(pc, conn)
+		} else {
+			go handleConn(pc, conn)
+		}
 	}
 }
 
-// handleConn serves a single client connection, decoding responses back to APLAN.
+// handleConn pipes between client and APL prepl — raw APLAN passthrough.
+// No parsing, no decoding. Tooling reads the tagged APLAN protocol directly.
 func handleConn(pc *prepl.Client, conn net.Conn) {
+	defer conn.Close()
+	scanner := bufio.NewScanner(conn)
+	for scanner.Scan() {
+		expr := scanner.Text()
+		if expr == "" {
+			continue
+		}
+		raw, err := pc.EvalRaw(expr)
+		if err != nil {
+			log.Printf("eval error: %v", err)
+			return
+		}
+		fmt.Fprintf(conn, "%s\n", raw)
+	}
+}
+
+// handleConnRepl decodes APLAN and returns plain text — for interactive use.
+func handleConnRepl(pc *prepl.Client, conn net.Conn) {
 	defer conn.Close()
 	scanner := bufio.NewScanner(conn)
 	for scanner.Scan() {

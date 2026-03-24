@@ -159,6 +159,7 @@
 
     ∇ r←ToAPLAN v
       r←1(62583⌶)⎕SE.Dyalog.Array.Serialise v
+      r←(r≠⎕UCS 13)/r                        ⍝ Strip CR — protocol is LF-delimited
     ∇
 
 :EndNamespace

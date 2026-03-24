@@ -61,6 +61,52 @@ aplfmt -addr localhost:4502 *.aplf  # use running Dyalog
 aplfmt -version 20.0 src/          # specific version, directory
 ```
 
+### aplsock
+
+Bootstrap a pure APL socket server inside Dyalog and serve the prepl
+protocol over TCP or Unix sockets. Default mode returns raw APLAN for
+tooling; `-repl` mode decodes to plain text.
+
+```
+aplsock -l -sock :4200              # launch Dyalog, serve on TCP 4200
+aplsock -addr host:4502 -sock :4200 # connect to existing Dyalog
+aplsock -l -sock /tmp/apl.sock      # Unix socket
+aplsock -l -sock :4200 -repl        # plain text mode for interactive use
+```
+
+Protocol (raw mode — each response is a single-line APLAN namespace):
+
+```
+→ ⍳5
+← (tag: 'ret' ⋄ val: 1 2 3 4 5)
+
+→ 1÷0
+← (tag: 'err' ⋄ en: 11 ⋄ message: 'Divide by zero' ⋄ dm: (...))
+
+→ f←{⍺+⍵}
+← (tag: 'ret')
+
+→ ⍳3 ⍝ID:019abc12-3456-7890-abcd-ef1234567890
+← (id: '019abc12-...' ⋄ tag: 'ret' ⋄ val: 1 2 3)
+```
+
+Optional `⍝ID:uuid` trailing comment for correlation — `⍎` ignores APL
+comments, so the expression evaluates normally. IDs are mirrored in the
+response for tooling to match requests with responses.
+
+The APL server code (`prepl/Prepl.apln`) is also standalone-testable
+without aplsock:
+
+```apl
+2 ⎕FIX 'file:///path/to/Prepl.apln'
+Prepl.Start 4200
+```
+
+Tests: `grittles/aplsock/test.sh`
+
+Flags: `-l` (launch Dyalog), `-addr HOST:PORT`, `-sock :PORT` or
+`-sock /path`, `-version VERSION`, `-repl`.
+
 ### aplmcp
 
 MCP server for LLM-driven APL interaction over stdio.
@@ -81,6 +127,7 @@ go build ./grittles/aplcart
 go build ./grittles/apldocs
 go build ./grittles/aplfmt
 go build ./grittles/aplmcp
+go build ./grittles/aplsock
 ```
 
 Or all at once:

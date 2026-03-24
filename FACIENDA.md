@@ -5,6 +5,15 @@
 - [x] **Bindable commands** — Unified key dispatch via `CommandRegistry` in `commands.go`. All ~30 commands registered once with name, help, and action closure. Single dispatch for leader keys, direct keys, tracer keys, and command palette. Config uses `bindings` + `navigation` format; old `keys` + `tracer_keys` auto-migrates. Any command can be bound to any key as leader-prefixed or direct. `keys.go` deleted.
 - [x] **Variable editing** — Resolved: Dyalog sends `readOnly=1` for numeric arrays (entityType 4), `readOnly=0` for char vectors (entityType 128). Matches RIDE behavior. Title now shows `[read-only]` vs `[edit]`.
 
+## aplsock / Prepl
+
+- [ ] **gritt as client (phase 2)** — `-prepl addr` connects to aplsock instead of RIDE
+- [ ] **⎕← capture** — output stream (`tag: 'out'`). Solution is on the APL side.
+- [ ] **Multi-line expressions** — framing for `:Namespace`/`:EndNamespace`, nabla
+- [ ] **Multi-connection** — per-connection buffers on APL side (currently single `_buf`)
+- [ ] **System commands** — `)ts`, `)vars` etc. may not serialize via `Serialise`
+- [ ] **220⌶/219⌶** — binary serialization alternative to APLAN (needs Go parser)
+
 ## GitHub Issues (prioritized)
 
 1. ~~**#15 History paging**~~ — Done
