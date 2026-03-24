@@ -99,6 +99,39 @@ Escape-in-capture-mode fix: close-pane handler in tui.go checks `rp.capturing` a
 - "Load prompt shows default filename" — "cache-refresh" help text ("Re-download") matched "load" in palette and appeared first. Fixed palette filter to prioritize name matches over help-only matches.
 - "Loaded session contains saved content" — cascading failure from above.
 
+## aplsock / Prepl (new — experimental)
+
+Pure APL socket server inspired by Clojure's prepl. Long-term goal: replace RIDE as gritt's primary connection to Dyalog, running entirely in APL on a separate interpreter thread.
+
+**Architecture:** `aplsock` (grittles binary) bootstraps an APL prepl server inside Dyalog via RIDE, drops RIDE, then proxies between external clients and the APL server.
+
+**What exists:**
+- `prepl/Prepl.apln` — APL namespace: Conga TCP server, eval via `⍎` in `#` context, APLAN serialization. Standalone-testable (`2 ⎕FIX`, then `Prepl.Start 4200`).
+- `prepl/client.go` — Go client library: `Eval` (parsed APLAN via codec) + `EvalRaw` (for proxying).
+- `prepl/embed.go` — `go:embed` of APL source for bootstrap injection.
+- `grittles/aplsock/` — standalone binary: launch/connect Dyalog via RIDE → inject Prepl → start on thread → drop RIDE → serve on `-sock` (TCP or Unix).
+
+**Protocol:** Client sends `expression\n`, server responds with tagged JSON: `{"tag":"ret","val":"APLAN"}` or `{"tag":"err","val":{⎕DMX fields}}`. `"out"` tag reserved for future `⎕←` capture.
+
+**Usage:**
+```
+aplsock -l -sock :4200                    # Launch Dyalog, serve on TCP 4200
+aplsock -addr host:4502 -sock /tmp/apl.sock  # Connect to existing, Unix socket
+echo '⍳5' | nc localhost 4200             # Any client works
+```
+
+**Also testable standalone** (no aplsock needed): `2 ⎕FIX 'file:///path/to/Prepl.apln'` then `Prepl.Start 4200` in any Dyalog session.
+
+**Working (17/20 tests pass):** Scalars, vectors, matrices, char vectors/matrices, errors, assignment persistence, negative numbers, floats, empty vectors, single-element vectors, state across expressions.
+
+**Known bugs:**
+- `ToAPLAN` fails on nested vectors (`(1 2)(3 4)`) and mixed-type vectors (`1 'hello' 3`) — falls back to `⍕` display form. Depth check in `VecToAPLAN` likely wrong. Neil checking if an I-beam exists for single-line APLAN serialization.
+- VALUE ERROR returns `⍬` instead of error — void sentinel check in `RetAPLAN` doesn't match `⍬` correctly (depth of `⍬` is 1, not 0).
+- `⎕←` in expressions deadlocks (Conga contention between RIDE and prepl on separate threads).
+- Thread 0 must stay active with `⎕DL 1e9` — Dyalog's cooperative scheduler doesn't run other threads when thread 0 is idle in RIDE input mode. `⎕TSYNC` doesn't yield either. Only `⎕DL` works.
+
+**Design decisions:** See `deliberanda/prepl.md`.
+
 ## Recent
 
 - **Autolocalise**: Three commands for tradfn variable localisation (`autolocalise.go`):

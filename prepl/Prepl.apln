@@ -1,0 +1,224 @@
+:Namespace Prepl
+⍝ Prepl: A programmable REPL server for Dyalog APL
+⍝ Inspired by Clojure's prepl
+⍝
+⍝ Protocol (pure APLAN):
+⍝   Input:  APL expression, newline-terminated
+⍝   Output: APLAN namespace, newline-terminated:
+⍝     (tag: 'ret' ⋄ val: 1 2 3)         — return value
+⍝     (tag: 'ret')                        — no displayable result (shy/void)
+⍝     (tag: 'err' ⋄ en: 11 ⋄ message: 'DOMAIN ERROR' ⋄ dm: (...))
+⍝
+⍝ Usage:
+⍝   2 ⎕FIX 'file:///path/to/Prepl.apln'
+⍝   Prepl.Start 4200          ⍝ blocking
+⍝   Prepl.LoadConga            ⍝ pre-load on main thread (⎕CY needs thread 0)
+⍝   tid←Prepl.Start&4200      ⍝ on new thread (& is an operator: f&arg)
+⍝
+⍝ Loads Conga from workspace if needed.
+
+    ⎕IO←1
+
+    LDRC←⍬           ⍝ Conga instance (set by LoadConga)
+    _stop←0          ⍝ Stop flag
+    _buf←''          ⍝ Receive buffer (v1: single connection)
+
+    ⍝ ── Server Lifecycle ──
+
+    ∇ LoadConga
+    ⍝ Load and initialize Conga. Copies from ws if not already present.
+      :If 9≠⌊#.⎕NC'Conga'
+          'Conga'#.⎕CY'conga'
+      :EndIf
+      LDRC←#.Conga.Init'prepl'
+    ∇
+
+    ∇ Start port;z
+      _stop←0
+      _buf←''
+      :If ⍬≡LDRC ⋄ LoadConga ⋄ :EndIf   ⍝ Skip if pre-loaded by bootstrap
+      :Trap 0 ⋄ {}LDRC.Close'prepl' ⋄ :EndTrap
+      z←LDRC.Srv'prepl' '' port 'Raw' 4096
+      :If 0≠⊃z
+          ⎕←'Prepl: failed to start on port ',⍕port
+          :Return
+      :EndIf
+      ⎕←'Prepl listening on port ',⍕port
+      Loop
+    ∇
+
+    ∇ Stop
+      _stop←1
+    ∇
+
+    ∇ Loop;wres;rc;obj;evt;data
+      :While ~_stop
+          wres←LDRC.Wait'prepl' 5000
+          :If 0≠1⊃wres
+              :If 100=3⊃wres ⋄ :Continue ⋄ :EndIf   ⍝ Timeout
+              ⎕←'Prepl: wait error ',⍕wres
+              :Leave
+          :EndIf
+          (rc obj evt data)←4↑wres
+          :Trap 0
+              :Select evt
+              :Case 'Connect'
+                  _buf←''
+              :Case 'Block'
+                  obj HandleBlock data
+              :Case 'BlockLast'
+                  obj HandleBlock data
+              :Case 'Closed'
+                  _buf←''
+              :Case 'Error'
+                  _buf←''
+              :EndSelect
+          :Else
+              ⎕←'Prepl event error:' ⎕DMX.(EN Message)
+          :EndTrap
+      :EndWhile
+      {}LDRC.Close'prepl'
+      ⎕←'Prepl stopped'
+    ∇
+
+    ∇ obj HandleBlock data;text;idx;expr;response
+    ⍝ Buffer incoming data and process complete lines
+      text←'UTF-8'⎕UCS data
+      _buf,←text
+      :While (⎕UCS 10)∊_buf
+          idx←_buf⍳⎕UCS 10
+          expr←(idx-1)↑_buf
+          _buf←idx↓_buf
+          :If (0<≢expr)∧(⎕UCS 13)=⊃⌽expr    ⍝ Strip CR from CRLF
+              expr←¯1↓expr
+          :EndIf
+          :If 0<≢expr
+              response←Eval expr
+              {}LDRC.Send obj('UTF-8'⎕UCS response,⎕UCS 10)
+          :EndIf
+      :EndWhile
+    ∇
+
+    ⍝ ── Evaluation ──
+
+    ∇ r←Eval expr;val;ok;⎕PW;⎕PP
+      ⎕PW←32767
+      ⎕PP←17
+      ok←0
+      :Trap 0
+          :With #
+              val←⍎expr
+          :EndWith
+          ok←1
+      :Else
+          :If 6=⎕DMX.EN            ⍝ VALUE ERROR → no result (shy/void)
+              r←RetAPLAN ⍬
+          :Else
+              r←ErrAPLAN ⎕DMX
+          :EndIf
+      :EndTrap
+      :If ok
+          :Trap 0
+              r←RetAPLAN val
+          :Else
+              :Trap 0
+                  r←RetAPLAN(⍕val)  ⍝ Fallback to display form string
+              :Else
+                  r←RetAPLAN'[serialization failed]'
+              :EndTrap
+          :EndTrap
+      :EndIf
+    ∇
+
+    ∇ r←RetAPLAN val;ns
+    ⍝ (tag: 'ret' ⋄ val: <value>)  or  (tag: 'ret')  for void
+      ns←⎕NS''
+      ns.tag←'ret'
+      :If ~(0=≡val)∧(0∊⍴val)∧(' '≠⊃0⍴val)   ⍝ Not ⍬ (void sentinel)
+          ns.val←val
+      :EndIf
+      r←ToAPLAN ns
+    ∇
+
+    ∇ r←ErrAPLAN dmx;ns
+    ⍝ (tag: 'err' ⋄ dm: (...) ⋄ en: 11 ⋄ message: 'DOMAIN ERROR')
+      ns←⎕NS''
+      ns.tag←'err'
+      ns.message←dmx.Message
+      ns.en←dmx.EN
+      ns.dm←dmx.DM
+      r←ToAPLAN ns
+    ∇
+
+    ⍝ ── APLAN Serialization ──
+    ⍝ Converts APL values to Array Notation text that gritt's codec can parse.
+    ⍝ Handles scalars, vectors, matrices, namespaces, and nested arrays.
+    ⍝ Higher-rank arrays fall back to ⍕ (display form).
+
+    ∇ r←ToAPLAN val
+      :If 9=⌊⎕NC'val'                      ⍝ Namespace
+          r←NStoAPLAN val
+      :ElseIf 0∊⍴val                        ⍝ Empty
+          :If ' '=⊃0⍴val ⋄ r←'''''' ⋄ :Else ⋄ r←'⍬' ⋄ :EndIf
+      :ElseIf 0=⍴⍴val                       ⍝ Scalar
+          :If ' '=⊃0⍴val
+              r←'''',val,''''               ⍝ Character scalar
+          :Else
+              r←⍕val                         ⍝ Number (⍕ uses ¯ and J natively)
+          :EndIf
+      :ElseIf 1=⍴⍴val                       ⍝ Vector
+          r←VecToAPLAN val
+      :ElseIf 2=⍴⍴val                       ⍝ Matrix
+          r←MatToAPLAN val
+      :Else
+          r←⍕val                             ⍝ Higher rank: display form fallback
+      :EndIf
+    ∇
+
+    ∇ r←VecToAPLAN val;parts
+      :If 1≥≡val                             ⍝ Simple (not nested)
+          :If ' '=⊃0⍴val                    ⍝ Character vector
+              r←QuoteStr val
+          :ElseIf 1=≢val                     ⍝ Single-element numeric
+              r←'(⋄ ',(⍕⊃val),')'
+          :Else                               ⍝ Numeric strand
+              r←⊃{⍺,' ',⍵}/⍕¨val
+          :EndIf
+      :Else                                   ⍝ Nested vector
+          parts←ToAPLAN¨val
+          :If 1=≢parts
+              r←'(⋄ ',(⊃parts),')'
+          :Else
+              r←'(',(⊃{⍺,' ⋄ ',⍵}/parts),')'
+          :EndIf
+      :EndIf
+    ∇
+
+    ∇ r←MatToAPLAN val;rows;parts
+      rows←↓val
+      :If ' '=⊃0⍴val                        ⍝ Character matrix
+          parts←QuoteStr¨rows
+      :ElseIf 1≥≡val                         ⍝ Simple numeric matrix
+          parts←{⊃{⍺,' ',⍵}/⍕¨⍵}¨rows
+      :Else                                   ⍝ Nested matrix (best effort)
+          parts←{⊃{⍺,' ',⍵}/ToAPLAN¨⍵}¨rows
+      :EndIf
+      r←'[',(⊃{⍺,' ⋄ ',⍵}/parts),']'
+    ∇
+
+    ∇ r←NStoAPLAN ns;keys;parts
+      keys←ns.⎕NL ¯2 ¯9
+      :If 0=≢keys
+          r←'()'
+      :Else
+          parts←{⍵,': ',(ToAPLAN ns⍎⍵)}¨keys
+          r←'(',(⊃{⍺,' ⋄ ',⍵}/parts),')'
+      :EndIf
+    ∇
+
+    ∇ r←QuoteStr str
+    ⍝ Quote a character vector for APLAN, doubling internal single quotes
+      r←'''',({⍵/⍨1+⍵=''''}str),''''
+    ∇
+
+:EndNamespace
