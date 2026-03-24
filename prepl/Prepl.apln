@@ -55,7 +55,7 @@
       :While ~_stop
           wres←LDRC.Wait'prepl' 5000
           :If 0≠1⊃wres
-              :If 100=3⊃wres ⋄ :Continue ⋄ :EndIf   ⍝ Timeout
+              :If 100≡1⊃wres ⋄ :Continue ⋄ :EndIf   ⍝ Timeout (rc=100)
               ⎕←'Prepl: wait error ',⍕wres
               :Leave
           :EndIf
@@ -81,7 +81,7 @@
       ⎕←'Prepl stopped'
     ∇
 
-    ∇ obj HandleBlock data;text;idx;expr;response
+    ∇ obj HandleBlock data;text;idx;expr;response;id
     ⍝ Buffer incoming data and process complete lines
       text←'UTF-8'⎕UCS data
       _buf,←text
@@ -93,132 +93,72 @@
               expr←¯1↓expr
           :EndIf
           :If 0<≢expr
-              response←Eval expr
+              id←ExtractID expr
+              response←Eval expr               ⍝ ⍝ID: is a comment — ⍎ ignores it
+              :If 0<≢id
+                  response←'(id: ''',id,''' ⋄ ',(1↓response)
+              :EndIf
               {}LDRC.Send obj('UTF-8'⎕UCS response,⎕UCS 10)
           :EndIf
       :EndWhile
     ∇
 
+    ∇ id←ExtractID expr;pos
+    ⍝ Extract optional ID from trailing comment: expr ⍝ID:uuid
+    ⍝ Returns '' if no ⍝ID: found.
+      id←''
+      pos←('⍝ID:'⍷expr)/⍳≢expr
+      :If 0<≢pos
+          id←((⊃pos)+3)↓expr
+      :EndIf
+    ∇
+
     ⍝ ── Evaluation ──
 
-    ∇ r←Eval expr;val;ok;⎕PW;⎕PP
-      ⎕PW←32767
-      ⎕PP←17
-      ok←0
+    ∇ r←Eval expr;⎕PW;⎕PP
+      ⎕PW←32767 ⋄ ⎕PP←17
+      ⍝ Execute in # context. Result in #.⍙r (not local — Serialise
+      ⍝ can't resolve namespace refs held in local variables).
       :Trap 0
           :With #
-              val←⍎expr
+              ⍙r←⍎expr
           :EndWith
-          ok←1
       :Else
-          :If 6=⎕DMX.EN            ⍝ VALUE ERROR → no result (shy/void)
-              r←RetAPLAN ⍬
+          :If 6=⎕DMX.EN
+              r←'(tag: ''ret'')'
           :Else
               r←ErrAPLAN ⎕DMX
           :EndIf
+          →CLEANUP
       :EndTrap
-      :If ok
+      ⍝ Serialize — three levels: APLAN, display form, literal fallback
+      :Trap 0
+          r←'(tag: ''ret'' ⋄ val: ',(ToAPLAN #.⍙r),')'
+      :Else
           :Trap 0
-              r←RetAPLAN val
+              r←'(tag: ''ret'' ⋄ val: ',(ToAPLAN⍕#.⍙r),')'
           :Else
-              :Trap 0
-                  r←RetAPLAN(⍕val)  ⍝ Fallback to display form string
-              :Else
-                  r←RetAPLAN'[serialization failed]'
-              :EndTrap
+              r←'(tag: ''ret'')'
           :EndTrap
-      :EndIf
+      :EndTrap
+     CLEANUP:
+      :Trap 0 ⋄ #.⎕EX'⍙r' ⋄ :EndTrap
     ∇
 
-    ∇ r←RetAPLAN val;ns
-    ⍝ (tag: 'ret' ⋄ val: <value>)  or  (tag: 'ret')  for void
-      ns←⎕NS''
-      ns.tag←'ret'
-      :If ~(0=≡val)∧(0∊⍴val)∧(' '≠⊃0⍴val)   ⍝ Not ⍬ (void sentinel)
-          ns.val←val
-      :EndIf
-      r←ToAPLAN ns
-    ∇
-
-    ∇ r←ErrAPLAN dmx;ns
-    ⍝ (tag: 'err' ⋄ dm: (...) ⋄ en: 11 ⋄ message: 'DOMAIN ERROR')
-      ns←⎕NS''
-      ns.tag←'err'
-      ns.message←dmx.Message
-      ns.en←dmx.EN
-      ns.dm←dmx.DM
-      r←ToAPLAN ns
+    ∇ r←ErrAPLAN dmx
+    ⍝ (tag: 'err' ⋄ en: 11 ⋄ message: 'DOMAIN ERROR' ⋄ dm: (...))
+      r←'(tag: ''err'''
+      r,←' ⋄ en: ',(⍕dmx.EN)
+      r,←' ⋄ message: ',(ToAPLAN dmx.Message)
+      r,←' ⋄ dm: ',(ToAPLAN dmx.DM)
+      r,←')'
     ∇
 
     ⍝ ── APLAN Serialization ──
-    ⍝ Converts APL values to Array Notation text that gritt's codec can parse.
-    ⍝ Handles scalars, vectors, matrices, namespaces, and nested arrays.
-    ⍝ Higher-rank arrays fall back to ⍕ (display form).
+    ⍝ ⎕SE.Dyalog.Array.Serialise → lines, 62583⌶ → compact single-line.
 
-    ∇ r←ToAPLAN val
-      :If 9=⌊⎕NC'val'                      ⍝ Namespace
-          r←NStoAPLAN val
-      :ElseIf 0∊⍴val                        ⍝ Empty
-          :If ' '=⊃0⍴val ⋄ r←'''''' ⋄ :Else ⋄ r←'⍬' ⋄ :EndIf
-      :ElseIf 0=⍴⍴val                       ⍝ Scalar
-          :If ' '=⊃0⍴val
-              r←'''',val,''''               ⍝ Character scalar
-          :Else
-              r←⍕val                         ⍝ Number (⍕ uses ¯ and J natively)
-          :EndIf
-      :ElseIf 1=⍴⍴val                       ⍝ Vector
-          r←VecToAPLAN val
-      :ElseIf 2=⍴⍴val                       ⍝ Matrix
-          r←MatToAPLAN val
-      :Else
-          r←⍕val                             ⍝ Higher rank: display form fallback
-      :EndIf
-    ∇
-
-    ∇ r←VecToAPLAN val;parts
-      :If 1≥≡val                             ⍝ Simple (not nested)
-          :If ' '=⊃0⍴val                    ⍝ Character vector
-              r←QuoteStr val
-          :ElseIf 1=≢val                     ⍝ Single-element numeric
-              r←'(⋄ ',(⍕⊃val),')'
-          :Else                               ⍝ Numeric strand
-              r←⊃{⍺,' ',⍵}/⍕¨val
-          :EndIf
-      :Else                                   ⍝ Nested vector
-          parts←ToAPLAN¨val
-          :If 1=≢parts
-              r←'(⋄ ',(⊃parts),')'
-          :Else
-              r←'(',(⊃{⍺,' ⋄ ',⍵}/parts),')'
-          :EndIf
-      :EndIf
-    ∇
-
-    ∇ r←MatToAPLAN val;rows;parts
-      rows←↓val
-      :If ' '=⊃0⍴val                        ⍝ Character matrix
-          parts←QuoteStr¨rows
-      :ElseIf 1≥≡val                         ⍝ Simple numeric matrix
-          parts←{⊃{⍺,' ',⍵}/⍕¨⍵}¨rows
-      :Else                                   ⍝ Nested matrix (best effort)
-          parts←{⊃{⍺,' ',⍵}/ToAPLAN¨⍵}¨rows
-      :EndIf
-      r←'[',(⊃{⍺,' ⋄ ',⍵}/parts),']'
-    ∇
-
-    ∇ r←NStoAPLAN ns;keys;parts
-      keys←ns.⎕NL ¯2 ¯9
-      :If 0=≢keys
-          r←'()'
-      :Else
-          parts←{⍵,': ',(ToAPLAN ns⍎⍵)}¨keys
-          r←'(',(⊃{⍺,' ⋄ ',⍵}/parts),')'
-      :EndIf
-    ∇
-
-    ∇ r←QuoteStr str
-    ⍝ Quote a character vector for APLAN, doubling internal single quotes
-      r←'''',({⍵/⍨1+⍵=''''}str),''''
+    ∇ r←ToAPLAN v
+      r←1(62583⌶)⎕SE.Dyalog.Array.Serialise v
     ∇
 
 :EndNamespace

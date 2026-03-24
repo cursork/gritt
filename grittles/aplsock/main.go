@@ -68,8 +68,16 @@ func main() {
 	// 4. Drain RIDE messages in background so the connection doesn't back up.
 	go func() {
 		for {
-			if _, _, err := rc.Recv(); err != nil {
+			msg, _, err := rc.Recv()
+			if err != nil {
 				return
+			}
+			if msg != nil && msg.Command == "AppendSessionOutput" {
+				if result, ok := msg.Args["result"].(string); ok {
+					if t, ok := msg.Args["type"].(float64); !ok || t != 14 {
+						log.Printf("APL: %s", strings.TrimRight(result, "\n"))
+					}
+				}
 			}
 		}
 	}()

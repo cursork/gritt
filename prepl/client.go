@@ -9,6 +9,8 @@ package prepl
 
 import (
 	"bufio"
+	"crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"net"
 	"strings"
@@ -17,6 +19,18 @@ import (
 
 	"github.com/cursork/gritt/codec"
 )
+
+// UUIDv7 generates a v7 UUID (time-ordered, random).
+func UUIDv7() string {
+	var b [16]byte
+	ms := uint64(time.Now().UnixMilli())
+	binary.BigEndian.PutUint64(b[:8], ms<<16) // 48-bit timestamp in top bits
+	rand.Read(b[6:])                           // random fill rest
+	b[6] = (b[6] & 0x0F) | 0x70               // version 7
+	b[8] = (b[8] & 0x3F) | 0x80               // variant 10
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}
 
 // Client connects to an APL prepl server.
 type Client struct {
@@ -27,6 +41,7 @@ type Client struct {
 
 // Response is a parsed response from the prepl server.
 type Response struct {
+	ID  string // Request ID (if client sent one)
 	Tag string // "ret" or "err"
 	Val any    // Parsed APLAN value (for "ret"), nil for void
 	Raw string // APLAN string of the value (for "ret")
@@ -55,11 +70,16 @@ func Connect(addr string) (*Client, error) {
 }
 
 // Eval sends an expression to the prepl server and returns the response.
-func (c *Client) Eval(expr string) (*Response, error) {
+// If id is non-empty, it is sent as a UUID prefix for correlation.
+func (c *Client) Eval(expr string, id ...string) (*Response, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if _, err := fmt.Fprintf(c.conn, "%s\n", expr); err != nil {
+	line := expr
+	if len(id) > 0 && id[0] != "" {
+		line = expr + " ⍝ID:" + id[0]
+	}
+	if _, err := fmt.Fprintf(c.conn, "%s\n", line); err != nil {
 		return nil, fmt.Errorf("send: %w", err)
 	}
 
@@ -88,9 +108,15 @@ func (c *Client) Eval(expr string) (*Response, error) {
 		return nil, fmt.Errorf("tag field is not a string: %T", tagVal)
 	}
 
+	// Extract optional id
+	var respID string
+	if v, ok := ns.Values["id"].(string); ok {
+		respID = v
+	}
+
 	switch tag {
 	case "ret":
-		resp := &Response{Tag: "ret"}
+		resp := &Response{ID: respID, Tag: "ret"}
 		if val, ok := ns.Values["val"]; ok {
 			resp.Val = val
 			resp.Raw = codec.Serialize(val, codec.SerializeOptions{UseDiamond: true})
@@ -98,7 +124,7 @@ func (c *Client) Eval(expr string) (*Response, error) {
 		return resp, nil
 
 	case "err":
-		resp := &Response{Tag: "err", Err: &Error{}}
+		resp := &Response{ID: respID, Tag: "err", Err: &Error{}}
 		if v, ok := ns.Values["message"].(string); ok {
 			resp.Err.Message = v
 		}
