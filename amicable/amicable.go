@@ -78,12 +78,28 @@ func Unmarshal(data []byte) (any, error) {
 	default:
 		return nil, fmt.Errorf("amicable: unknown architecture magic: 0x%02X", data[1])
 	}
+	// Peek at the type code to detect opaque internal types (⎕OR, namespaces).
+	// Type code is at offset: 2 (magic) + ptrSize (size field) + 1 (rank/flags byte).
+	typeOff := 2 + ptrSize + 1
+	if typeOff < len(data) && data[typeOff] == 0x00 {
+		// Opaque Dyalog internal structure — preserve as Raw for round-tripping.
+		raw := make(Raw, len(data))
+		copy(raw, data)
+		return raw, nil
+	}
+
 	r := &reader{data: data, pos: 2, ptrSize: ptrSize}
 	return r.readArray()
 }
 
 // Marshal serializes a Go value into 220⌶ format (64-bit little-endian).
+// Raw values are returned as-is (they already contain the full serialized form).
 func Marshal(v any) ([]byte, error) {
+	if raw, ok := v.(Raw); ok {
+		out := make([]byte, len(raw))
+		copy(out, raw)
+		return out, nil
+	}
 	w := &writer{ptrSize: ptrSize64}
 	w.writeByte(magicByte0)
 	w.writeByte(magic64)
@@ -399,6 +415,11 @@ func (r *reader) decodeDec128(raw []byte, rank int, shape []int, n int) (any, er
 // Decimal128 holds a 128-bit IEEE 754 decimal float as raw bytes.
 // Go has no native decimal128; this preserves the exact bits for round-tripping.
 type Decimal128 [16]byte
+
+// Raw holds the complete serialized bytes of an opaque 220⌶ value (including
+// magic header). Used for types that amicable can't parse structurally — e.g.
+// ⎕OR (object representation) and namespaces — but can round-trip exactly.
+type Raw []byte
 
 // wrapResult converts a flat slice into the appropriate Go type based on rank/shape.
 func wrapResult(vals []any, rank int, shape []int) any {
