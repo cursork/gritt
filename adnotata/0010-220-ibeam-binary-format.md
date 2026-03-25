@@ -127,21 +127,37 @@ Outer product: `38 44 02` = `∘.+` (38=∘, 44=., 02=+).
 ### References (2-byte: index + type marker)
 
 ```
-XX 4C = name/arg reference (00=⍺, 01=⍵, higher=locals by name index)
-XX 57 = literal pool reference (XX is a pool index, NOT the value)
+XX 4C = name/arg reference (00=⍺, 01=⍵, 02=∇, higher=locals)
+XX 57 = literal pool reference (XX is a pool index)
 XX 3E = system variable reference (e.g. 02 3E = ⎕IO)
 ```
 
-**Literal pool**: `XX 57` references a literal stored as a separate sub-array
-in the ⎕OR blob. The actual value (int, float, string, vector) is in the
-sub-array, not in the bytecode. Pool index 01 appears reserved for small common
-values; index 03 is the typical position for function-specific literals.
+### Literal Pool
+
+`XX 57` references a literal stored as a separate sub-array in the ⎕OR blob.
+The actual value (int, float, string, vector) is in the sub-array, not in
+the bytecode.
+
+**The pool is stored in REVERSE order.** All sub-arrays after the bytecode
+(including metadata like int16(220)) form the pool. The LAST sub-array maps
+to pool index 0, second-to-last to index 1, etc.
+
+Example: `{(⍵+1)×2}` has sub-arrays [i8(2), i16(220), i8(1)] after the
+bytecode. Reversed: pool[0]=i8(1), pool[1]=i16(220), pool[2]=i8(2).
+Bytecode `00 57` → pool[0]=1, `02 57` → pool[2]=2.
+
+### Variable Names
+
+Local variable names are encoded as **inline ASCII bytes** in the bytecode.
+For example, variable `r` is encoded as byte 0x72 (ASCII 'r'). This is NOT
+a pool reference — the name is directly in the token stream.
 
 ### Framing
 
 ```
 67 = function body start
 6B = function body end
+01 = line-end marker (appears after each expression, before padding)
 XX 1B 6F = expression/line start marker
 XX 1C 6F = guard (:) — follows the guard condition
 XX 1D 6F = diamond (⋄) separator
@@ -149,28 +165,24 @@ XX 1E 6F = expression/line end marker
 ```
 
 The `XX` byte before `1B/1C/1D/1E 6F` appears to be a byte offset or counter.
+Only the region between `1B 6F` and `1E 6F` markers contains expression tokens.
+Everything outside these markers (prefix, suffix) is function metadata.
 
 ### Bytecode Structure
 
 The bytecode char8 vector starts with a 20-byte header (FF FF + 18 bytes of
 metadata), then the token stream. Zeros (0x00) between tokens are padding.
 
-Example: `{⍵+1}` → `... 4E 1B 6F 01 4C 02 01 57 __ __ 44 1E 6F ...`
-Reading: `01 4C`(⍵) `02`(+) `01 57`(lit@1) — the value 1 is in the literal pool.
-
-Example: `{(⍵+1)×2}` → `60 01 4C 02 01 57 61 04 03 57`
-Reading: `60`(() `01 4C`(⍵) `02`(+) `01 57`(lit@1) `61`()) `04`(×) `03 57`(lit@3)
-
-Example: `{0=⍵:0 ⋄ ⍵}` → `03 57 15 01 4C [1C 6F] 03 57 [1D 6F] 01 4C`
-Reading: `03 57`(lit@3=0) `15`(=) `01 4C`(⍵) [guard] `03 57`(lit@3=0) [⋄] `01 4C`(⍵)
+The decompiler (`decompile.go`) extracts expression regions between markers
+and decodes tokens sequentially. This is implemented and tested against 19
+dfns round-tripped through live Dyalog v20 sessions.
 
 ### Unknowns
 
 - Remaining gaps in primitive table (0x0D, 0x19-0x1D, 0x34-0x35, etc.)
 - Missing operators: ⍤ (rank), ⍣ (power), ⌸ (key), ⌺ (stencil), ⌿, @
-- Literal pool index assignment logic (why 01 vs 03?)
 - Error guards (::)
-- Multi-line dfn structure (multiple lines between 1B/1E markers)
-- How dfn local names map to bytecode indices (the `XX` in `XX 4C`)
-- Namespace and class bytecode (likely different structure)
+- Multi-line dfn structure
+- Tradfn and namespace bytecode (likely different structure)
 - System functions beyond ⎕← and ⎕IO
+- Multi-char variable names (only single ASCII char tested so far)

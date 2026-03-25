@@ -154,6 +154,10 @@ nc localhost 4200                             # Interactive netcat session
 
 Go library for Dyalog's `220⌶` binary array serialization format. Named after 220, the first amicable number. Package: `amicable/`.
 
+**Files:** `amicable.go` (marshal/unmarshal), `decompile.go` (⎕OR bytecode → APL source), `amicable_test.go` (unit tests), `e2e_test.go` (Dyalog round-trip tests), `decompile_test.go` (decompiler e2e tests).
+
+### Array Serialization
+
 **API:** `amicable.Unmarshal([]byte) (any, error)` and `amicable.Marshal(any) ([]byte, error)`. Uses same Go types as `codec` package (`*codec.Array`, `string`, `[]any`, `int`, `float64`, `complex128`).
 
 **Format (reverse-engineered):** 2-byte magic (`DF A4` 64-bit, `DF 94` 32-bit), then ptrSize-aligned fields: size, type/rank, shape, data. Type codes are Dyalog-internal (0x21=bool through 0x2E=decimal128, 0x06=nested, 0x00=opaque). Reads both 32-bit and 64-bit formats, writes 64-bit. Full spec in `adnotata/0010-220-ibeam-binary-format.md`.
@@ -162,17 +166,30 @@ Go library for Dyalog's `220⌶` binary array serialization format. Named after 
 - `amicable.Decimal128` — 16-byte opaque IEEE 754 decimal (no Go equivalent)
 - `amicable.Raw` — opaque blob for types we can't parse structurally (⎕OR, namespaces). Preserves bytes exactly for round-tripping.
 
-**Tests:** Unit tests with exact bytes from Dyalog probing, Go round-trips, byte-exact comparison with Dyalog output, e2e tests (serialize in APL → unmarshal/marshal in Go → deserialize in APL, verify identity). Includes ⎕OR dfn round-trip challenge.
+**Tests:** Unit tests with exact Dyalog v20 bytes, Go round-trips, byte-exact comparison with Dyalog output, e2e tests (serialize in APL → unmarshal/marshal in Go → deserialize in APL, verify `≡` identity for 25 array types). Includes ⎕OR dfn round-trip challenge.
 
-**⎕OR bytecode decompiler** (`decompile.go`): Dfn source is stored as tokenized bytecode, not plain text. Reverse-engineered ~40 primitive token IDs, ~5 operator tokens, brackets, and structural tokens (←, ⎕, arg refs, literals, expression markers). See `adnotata/0010-220-ibeam-binary-format.md` for full token table.
+### ⎕OR Bytecode Decompiler
 
-Decompiler status: **13/13 test cases pass**. Handles: arithmetic, comparison, logic, assignment, operators (reduce/scan/selfie), guards with diamond, parenthesised expressions, bracket indexing, string literals, system variables, local variable names, multi-literal expressions.
+`Raw.Decompile()` reconstructs APL dfn source from opaque ⎕OR binary blobs — no Dyalog interpreter needed. The bytecode format was reverse-engineered by probing Dyalog v20.
 
-**Key discoveries during implementation:**
-- Literal pool is stored in **reverse order** in the blob — last sub-array = pool[0]
-- ALL sub-arrays after bytecode are in the pool (including int16(220) metadata)
-- Variable names are encoded as **inline ASCII bytes** in the bytecode (e.g., 0x72 = 'r')
-- The `01` byte after expressions is a structural line-end marker, not a token
+**19/19 test cases pass.** Each test serializes a dfn via `⎕OR` in a live Dyalog session, unmarshals to `Raw`, decompiles to source, and compares with the original. Tested functions include:
+
+- Arithmetic: `{⍵+1}`, `{⍺+⍵}`, `{⍵-1}`, `{⍵×2}`
+- Operators: `{+/⍵}`, `{+\⍵}`, `{+⍨⍵}`
+- Control flow: `{0=⍵:0 ⋄ ⍵}`, `{r←⍵+1 ⋄ r}`
+- Expressions: `{(⍵+1)×2}`, `{⍵[1]}`, `{⎕IO}`
+- Strings: `{⎕←'hello world'}`
+- Recursion: `{⍵≤1:⍵ ⋄ (∇⍵-1)+∇⍵-2}` (fibonacci), `{0=⍵:⍺ ⋄ ⍵∇⍵|⍺}` (GCD)
+- Real functions: `{0=2|⍵:⍵÷2 ⋄ 1+3×⍵}` (Collatz), `{(+/⍵)÷≢⍵}` (average), `{×/⍵⍴⍺}` (power)
+
+**How it works:**
+1. Finds the bytecode char8 vector inside the ⎕OR blob (FF FF header marker)
+2. Extracts expression regions between `XX 1B 6F` (start) and `XX 1E 6F` (end) markers
+3. Decodes tokens: single-byte primitives (02=+, 03=−, ...), 2-byte refs (XX 4C=name, XX 57=literal, XX 3E=sysvar), operator suffixes (40=/, 42=\\, 47=¨, 4A=⍨)
+4. Resolves literal pool references — sub-arrays after bytecode, stored in **reverse order** (last sub-array = pool[0])
+5. Variable names are inline ASCII bytes, arg refs are 00=⍺ 01=⍵ 02=∇
+
+**Known limitations:** Covers dfns only (not tradfns, operators, namespaces). Missing tokens for some newer primitives (⌸, ⍤, ⍣, ⌺, @). Multi-line dfns not yet tested. System functions beyond ⎕← and ⎕IO not mapped.
 
 ## Recent
 
