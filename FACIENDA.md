@@ -12,7 +12,9 @@
 - [ ] **Multi-line expressions** — framing for `:Namespace`/`:EndNamespace`, nabla
 - [ ] **Multi-connection** — per-connection buffers on APL side (currently single `_buf`)
 - [ ] **System commands** — `)ts`, `)vars` etc. may not serialize via `Serialise`
-- [ ] **220⌶/219⌶** — binary serialization alternative to APLAN (needs Go parser)
+- [x] **220⌶/219⌶** — binary serialization alternative to APLAN → `amicable/` package
+- [ ] **amicable decompiler** — reconstruct dfn source from ⎕OR bytecode tokens (token table in adnotata/0010). Needs: complete primitive table (operators, system fns), literal decoding, multi-line/guard support
+- [ ] **amicable as aplsock transport** — replace APLAN with 220⌶ binary in prepl protocol
 
 ## GitHub Issues (prioritized)
 

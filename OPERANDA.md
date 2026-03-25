@@ -150,6 +150,30 @@ nc localhost 4200                             # Interactive netcat session
 
 **Design decisions:** See `deliberanda/prepl.md`.
 
+## amicable package (new)
+
+Go library for Dyalog's `220⌶` binary array serialization format. Named after 220, the first amicable number. Package: `amicable/`.
+
+**API:** `amicable.Unmarshal([]byte) (any, error)` and `amicable.Marshal(any) ([]byte, error)`. Uses same Go types as `codec` package (`*codec.Array`, `string`, `[]any`, `int`, `float64`, `complex128`).
+
+**Format (reverse-engineered):** 2-byte magic (`DF A4` 64-bit, `DF 94` 32-bit), then ptrSize-aligned fields: size, type/rank, shape, data. Type codes are Dyalog-internal (0x21=bool through 0x2E=decimal128, 0x06=nested, 0x00=opaque). Reads both 32-bit and 64-bit formats, writes 64-bit. Full spec in `adnotata/0010-220-ibeam-binary-format.md`.
+
+**Special types:**
+- `amicable.Decimal128` — 16-byte opaque IEEE 754 decimal (no Go equivalent)
+- `amicable.Raw` — opaque blob for types we can't parse structurally (⎕OR, namespaces). Preserves bytes exactly for round-tripping.
+
+**Tests:** Unit tests with exact bytes from Dyalog probing, Go round-trips, byte-exact comparison with Dyalog output, e2e tests (serialize in APL → unmarshal/marshal in Go → deserialize in APL, verify identity). Includes ⎕OR dfn round-trip challenge.
+
+**⎕OR bytecode decompiler** (`decompile.go`): Dfn source is stored as tokenized bytecode, not plain text. Reverse-engineered ~40 primitive token IDs, ~5 operator tokens, brackets, and structural tokens (←, ⎕, arg refs, literals, expression markers). See `adnotata/0010-220-ibeam-binary-format.md` for full token table.
+
+Decompiler status: **8/13 test cases pass**. Working: `{⍵+1}`, `{⍺+⍵}`, `{⍵-1}`, `{+/⍵}`, `{+\⍵}`, `{+⍨⍵}`, `{⍵[1]}`, `{⎕IO}`. Failing: literal pool index mapping for multi-literal functions, string literal extraction, and local variable name lookup.
+
+**Remaining decompiler issues:**
+- Literal pool addressing: sub-arrays after bytecode include user literals + int16(220) metadata + int8(1) metadata. The mapping from bytecode pool index to sub-array position isn't sequential — the int16(220) is PART of the addressing (pool entries: all sub-arrays including 220 and the trailing int8(1)). Need to figure out the exact index→sub-array mapping.
+- String literals (char8 vectors like 'hello world') are being filtered — need to include them in the pool.
+- Local variable names: byte `72` in bytecode = variable `r`, but name lookup from blob isn't finding the name table. The names appear in char8 scalar sub-arrays but the index mapping is unknown.
+- Operator-as-operand: `{⍵¨1}` — ¨ applied to ⍵ (a name ref, not a primitive) isn't handled.
+
 ## Recent
 
 - **Autolocalise**: Three commands for tradfn variable localisation (`autolocalise.go`):
