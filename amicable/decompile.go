@@ -61,6 +61,8 @@ func (r Raw) Decompile() (string, error) {
 						b.WriteString("⍺")
 					case 0x01:
 						b.WriteString("⍵")
+					case 0x02:
+						b.WriteString("∇")
 					default:
 						name := r.lookupName(idx)
 						if name != "" {
@@ -107,6 +109,14 @@ func (r Raw) Decompile() (string, error) {
 			}
 			if glyph, ok := syntaxGlyph(tok); ok {
 				b.WriteString(glyph)
+				i++
+				continue
+			}
+
+			// Variable names: single-byte ASCII letters used as local names.
+			// In the observed bytecode, variable 'r' = 0x72 (ASCII 'r').
+			if tok >= 'A' && tok <= 'Z' || tok >= 'a' && tok <= 'z' || tok == '_' {
+				b.WriteByte(tok)
 				i++
 				continue
 			}
@@ -305,34 +315,12 @@ func (r Raw) extractLiterals() map[byte]any {
 		j = subR.pos - 1
 	}
 
-	// The literal pool includes ALL sub-arrays after the bytecode (including
-	// metadata like int16(220) and int8(1)). Literals that appear BEFORE
-	// the int16(220) marker are user literals; those after are metadata.
-	// Pool indices are assigned sequentially to user literals only.
-	var userLiterals []any
-	for _, c := range candidates {
-		if v, ok := c.val.(int); ok && v == 220 {
-			break // 220 marks the end of user literals
-		}
-		userLiterals = append(userLiterals, c.val)
-	}
-
-	// If no user literals found before the 220 marker, the entire pool
-	// (including post-220 entries) might contain the literals.
-	// This handles cases like {⍵+1} where the only literal is int8(1)
-	// stored after the 220 metadata.
-	if len(userLiterals) == 0 {
-		for _, c := range candidates {
-			if v, ok := c.val.(int); ok && v == 220 {
-				continue
-			}
-			userLiterals = append(userLiterals, c.val)
-		}
-	}
-
-	// Assign pool indices starting from 0.
-	for i, lit := range userLiterals {
-		result[byte(i)] = lit
+	// The literal pool is stored in REVERSE order in the blob.
+	// All sub-arrays (including int16(220) metadata) are part of the pool.
+	// The LAST sub-array maps to pool index 0, second-to-last to index 1, etc.
+	for i, c := range candidates {
+		revIdx := byte(len(candidates) - 1 - i)
+		result[revIdx] = c.val
 	}
 
 	return result

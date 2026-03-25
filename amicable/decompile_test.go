@@ -29,6 +29,12 @@ func TestDecompile(t *testing.T) {
 		{"hello", "{⎕←'hello world'}"},
 		{"sysio", "{⎕IO}"},
 		{"multi", "{r←⍵+1 ⋄ r}"},
+		{"collatz", "{0=2|⍵:⍵÷2 ⋄ 1+3×⍵}"},
+		{"fib", "{⍵≤1:⍵ ⋄ (∇⍵-1)+∇⍵-2}"},
+		{"gcd", "{0=⍵:⍺ ⋄ ⍵∇⍵|⍺}"},
+		{"avg", "{(+/⍵)÷≢⍵}"},
+		{"reverse", "{⌽⍵}"},
+		{"pow", "{×/⍵⍴⍺}"},
 	}
 
 	for _, tc := range cases {

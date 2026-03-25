@@ -166,13 +166,13 @@ Go library for Dyalog's `220⌶` binary array serialization format. Named after 
 
 **⎕OR bytecode decompiler** (`decompile.go`): Dfn source is stored as tokenized bytecode, not plain text. Reverse-engineered ~40 primitive token IDs, ~5 operator tokens, brackets, and structural tokens (←, ⎕, arg refs, literals, expression markers). See `adnotata/0010-220-ibeam-binary-format.md` for full token table.
 
-Decompiler status: **8/13 test cases pass**. Working: `{⍵+1}`, `{⍺+⍵}`, `{⍵-1}`, `{+/⍵}`, `{+\⍵}`, `{+⍨⍵}`, `{⍵[1]}`, `{⎕IO}`. Failing: literal pool index mapping for multi-literal functions, string literal extraction, and local variable name lookup.
+Decompiler status: **13/13 test cases pass**. Handles: arithmetic, comparison, logic, assignment, operators (reduce/scan/selfie), guards with diamond, parenthesised expressions, bracket indexing, string literals, system variables, local variable names, multi-literal expressions.
 
-**Remaining decompiler issues:**
-- Literal pool addressing: sub-arrays after bytecode include user literals + int16(220) metadata + int8(1) metadata. The mapping from bytecode pool index to sub-array position isn't sequential — the int16(220) is PART of the addressing (pool entries: all sub-arrays including 220 and the trailing int8(1)). Need to figure out the exact index→sub-array mapping.
-- String literals (char8 vectors like 'hello world') are being filtered — need to include them in the pool.
-- Local variable names: byte `72` in bytecode = variable `r`, but name lookup from blob isn't finding the name table. The names appear in char8 scalar sub-arrays but the index mapping is unknown.
-- Operator-as-operand: `{⍵¨1}` — ¨ applied to ⍵ (a name ref, not a primitive) isn't handled.
+**Key discoveries during implementation:**
+- Literal pool is stored in **reverse order** in the blob — last sub-array = pool[0]
+- ALL sub-arrays after bytecode are in the pool (including int16(220) metadata)
+- Variable names are encoded as **inline ASCII bytes** in the bytecode (e.g., 0x72 = 'r')
+- The `01` byte after expressions is a structural line-end marker, not a token
 
 ## Recent
 
