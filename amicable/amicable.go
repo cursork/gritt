@@ -1,4 +1,5 @@
-// Package transfer implements Dyalog APL's 220⌶ binary array serialization format.
+// Package amicable implements Dyalog APL's 220⌶ binary array serialization format.
+// Named after 220, the first amicable number.
 //
 // The format encodes APL arrays as a vector of signed bytes (-128 to 127).
 // It preserves exact types, shapes, and nesting. Often paired with 219⌶
@@ -7,10 +8,10 @@
 // Usage:
 //
 //	// Deserialize bytes from Dyalog
-//	val, err := transfer.Unmarshal(data)
+//	val, err := amicable.Unmarshal(data)
 //
 //	// Serialize Go values for Dyalog
-//	data, err := transfer.Marshal(val)
+//	data, err := amicable.Marshal(val)
 //
 // Go type mapping matches the codec package:
 //   - int, float64, complex128 for numeric scalars
@@ -18,7 +19,7 @@
 //   - []any for nested vectors
 //   - *codec.Array for shaped arrays (rank ≥ 2, or any with explicit shape)
 //   - bool for boolean scalars
-package transfer
+package amicable
 
 import (
 	"encoding/binary"
@@ -63,10 +64,10 @@ const (
 // The input should be the raw bytes (converted from signed to unsigned).
 func Unmarshal(data []byte) (any, error) {
 	if len(data) < 2 {
-		return nil, errors.New("transfer: data too short for magic")
+		return nil, errors.New("amicable: data too short for magic")
 	}
 	if data[0] != magicByte0 {
-		return nil, fmt.Errorf("transfer: invalid magic byte 0: 0x%02X", data[0])
+		return nil, fmt.Errorf("amicable: invalid magic byte 0: 0x%02X", data[0])
 	}
 	var ptrSize int
 	switch data[1] {
@@ -75,7 +76,7 @@ func Unmarshal(data []byte) (any, error) {
 	case magic32:
 		ptrSize = ptrSize32
 	default:
-		return nil, fmt.Errorf("transfer: unknown architecture magic: 0x%02X", data[1])
+		return nil, fmt.Errorf("amicable: unknown architecture magic: 0x%02X", data[1])
 	}
 	r := &reader{data: data, pos: 2, ptrSize: ptrSize}
 	return r.readArray()
@@ -122,7 +123,7 @@ func (r *reader) remaining() int { return len(r.data) - r.pos }
 
 func (r *reader) readBytes(n int) ([]byte, error) {
 	if r.remaining() < n {
-		return nil, fmt.Errorf("transfer: need %d bytes at offset %d, have %d", n, r.pos, r.remaining())
+		return nil, fmt.Errorf("amicable: need %d bytes at offset %d, have %d", n, r.pos, r.remaining())
 	}
 	b := r.data[r.pos : r.pos+n]
 	r.pos += n
@@ -195,7 +196,7 @@ func (r *reader) readSimple(typeCode byte, rank int, shape []int, totalElements 
 	case typeDec128:
 		dataBytes = totalElements * 16
 	default:
-		return nil, fmt.Errorf("transfer: unknown type code 0x%02X", typeCode)
+		return nil, fmt.Errorf("amicable: unknown type code 0x%02X", typeCode)
 	}
 
 	// Empty arrays have no data section
@@ -239,7 +240,7 @@ func (r *reader) readSimple(typeCode byte, rank int, shape []int, totalElements 
 	case typeDec128:
 		return r.decodeDec128(raw, rank, shape, totalElements)
 	default:
-		return nil, fmt.Errorf("transfer: unknown type code 0x%02X", typeCode)
+		return nil, fmt.Errorf("amicable: unknown type code 0x%02X", typeCode)
 	}
 }
 
@@ -254,7 +255,7 @@ func (r *reader) readNested(rank int, shape []int, totalElements int) (any, erro
 	for i := range numChildren {
 		child, err := r.readArray()
 		if err != nil {
-			return nil, fmt.Errorf("transfer: reading nested child %d: %w", i, err)
+			return nil, fmt.Errorf("amicable: reading nested child %d: %w", i, err)
 		}
 		children[i] = child
 	}
@@ -503,7 +504,7 @@ func (w *writer) writeArray(v any) error {
 		return w.writeShapedArray(val)
 
 	default:
-		return fmt.Errorf("transfer: unsupported type %T", v)
+		return fmt.Errorf("amicable: unsupported type %T", v)
 	}
 }
 
@@ -701,7 +702,7 @@ func (w *writer) writeHomogeneousVector(typeCode byte, vals []any) error {
 			binary.LittleEndian.PutUint64(data[i*16+8:], math.Float64bits(imag(c)))
 		}
 	default:
-		return fmt.Errorf("transfer: unsupported homogeneous type 0x%02X", typeCode)
+		return fmt.Errorf("amicable: unsupported homogeneous type 0x%02X", typeCode)
 	}
 
 	dataWords := (len(data) + w.ptrSize - 1) / w.ptrSize
@@ -726,7 +727,7 @@ func (w *writer) writeNestedVector(vals []any) error {
 	w.writePtr(uint64(n))
 	for i, v := range vals {
 		if err := w.writeArray(v); err != nil {
-			return fmt.Errorf("transfer: writing nested element %d: %w", i, err)
+			return fmt.Errorf("amicable: writing nested element %d: %w", i, err)
 		}
 	}
 	return nil
@@ -765,7 +766,7 @@ func (w *writer) writeShapedArray(a *codec.Array) error {
 	} else {
 		for i, v := range a.Data {
 			if err := w.writeArray(v); err != nil {
-				return fmt.Errorf("transfer: writing shaped element %d: %w", i, err)
+				return fmt.Errorf("amicable: writing shaped element %d: %w", i, err)
 			}
 		}
 	}
@@ -848,7 +849,7 @@ func (w *writer) writeHomogeneousShaped(typeCode byte, vals []any, shape []int, 
 			}
 		}
 	default:
-		return fmt.Errorf("transfer: unsupported shaped type 0x%02X", typeCode)
+		return fmt.Errorf("amicable: unsupported shaped type 0x%02X", typeCode)
 	}
 
 	dataWords := (len(data) + w.ptrSize - 1) / w.ptrSize
