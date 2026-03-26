@@ -82,6 +82,67 @@ func TestDecompileTradfn(t *testing.T) {
 	}
 }
 
+func TestDecompileNamespace(t *testing.T) {
+	if _, err := exec.LookPath("gritt"); err != nil {
+		t.Skip("gritt not on PATH")
+	}
+
+	cases := []struct {
+		name, setup, want string
+	}{
+		{"vars", "ns←⎕NS '' ⋄ ns.x←42 ⋄ ns.name←'Neil'",
+			":Namespace\n    x←42\n    name←'Neil'\n:EndNamespace"},
+		{"fn_no_lit", "ns←⎕NS '' ⋄ ns.avg←{(+/⍵)÷≢⍵}",
+			":Namespace ns\n    avg←{(+/⍵)÷≢⍵}\n:EndNamespace"},
+		{"fn_with_lit", "ns←⎕NS '' ⋄ ns.double←{⍵×2}",
+			":Namespace ns\n    double←{⍵×2}\n:EndNamespace"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := nsFromDyalog(t, tc.setup)
+			src, err := raw.Decompile()
+			if err != nil {
+				t.Fatalf("Decompile: %v", err)
+			}
+			if src != tc.want {
+				t.Errorf("want: %q\n got: %q", tc.want, src)
+			}
+		})
+	}
+}
+
+func nsFromDyalog(t *testing.T, setup string) Raw {
+	t.Helper()
+	out, err := exec.Command("gritt", "-l",
+		"-e", setup,
+		"-e", "1(220⌶)⎕OR'ns'",
+	).CombinedOutput()
+	if err != nil {
+		t.Fatalf("gritt: %v\n%s", err, out)
+	}
+	s := strings.TrimSpace(string(out))
+	s = strings.ReplaceAll(s, "¯", "-")
+	fields := strings.Fields(s)
+	data := make([]byte, len(fields))
+	for i, f := range fields {
+		v, err := strconv.Atoi(f)
+		if err != nil {
+			t.Fatalf("parse byte %d %q: %v", i, f, err)
+		}
+		data[i] = byte(int8(v))
+	}
+	val, err := Unmarshal(data)
+	if err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	raw, ok := val.(Raw)
+	if !ok {
+		t.Fatalf("expected Raw, got %T", val)
+	}
+	return raw
+}
+
 // tradfnFromDyalog defines a tradfn via ⎕FX, then serializes its ⎕OR.
 func tradfnFromDyalog(t *testing.T, name string, lines []string) Raw {
 	t.Helper()

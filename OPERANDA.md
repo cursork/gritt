@@ -172,7 +172,7 @@ Go library for Dyalog's `220⌶` binary array serialization format. Named after 
 
 `Raw.Decompile()` reconstructs APL dfn source from opaque ⎕OR binary blobs — no Dyalog interpreter needed. The bytecode format was reverse-engineered by probing Dyalog v20.
 
-**22/22 test cases pass** (19 dfn + 3 tradfn). Each test serializes a function via `⎕OR` in a live Dyalog session, unmarshals to `Raw`, decompiles to source, and compares with the original. Tested functions include:
+**25/25 test cases pass** (19 dfn + 3 tradfn + 3 namespace). Each test serializes via `⎕OR` in a live Dyalog session, unmarshals to `Raw`, decompiles, and compares with the original. Tested:
 
 - Arithmetic: `{⍵+1}`, `{⍺+⍵}`, `{⍵-1}`, `{⍵×2}`
 - Operators: `{+/⍵}`, `{+\⍵}`, `{+⍨⍵}`
@@ -182,6 +182,7 @@ Go library for Dyalog's `220⌶` binary array serialization format. Named after 
 - Recursion: `{⍵≤1:⍵ ⋄ (∇⍵-1)+∇⍵-2}` (fibonacci), `{0=⍵:⍺ ⋄ ⍵∇⍵|⍺}` (GCD)
 - Real functions: `{0=2|⍵:⍵÷2 ⋄ 1+3×⍵}` (Collatz), `{(+/⍵)÷≢⍵}` (average), `{×/⍵⍴⍺}` (power)
 - Tradfns: `r←add x / r←x+1`, `halve x / ⎕←x÷2`, `r←a gcd b` with `:If/:Else/:EndIf`
+- Namespaces: variable-only (`ns.x←42 ⋄ ns.name←'Neil'`), function-only (`ns.double←{⍵×2}`), no-literal (`ns.avg←{(+/⍵)÷≢⍵}`)
 
 **How it works:**
 1. Finds the bytecode char8 vector inside the ⎕OR blob (FF FF header marker)
@@ -196,7 +197,7 @@ Go library for Dyalog's `220⌶` binary array serialization format. Named after 
 
 **Vision:** With amicable as transport and aplor for decompilation, Dyalog can live on a remote server while Go tooling on the client side can: parse arrays into native types, decompile function source, and eventually synthesize/modify bytecode — all without a local Dyalog installation.
 
-**Known limitations:** No namespace decompilation yet. Missing tokens for some newer primitives (⌸, ⍤, ⍣, ⌺, @). Multi-line dfns not yet tested. System functions beyond ⎕← and ⎕IO not mapped. Tradfn string literals not yet supported.
+**Known limitations:** Missing tokens for some newer primitives (⌸, ⍤, ⍣, ⌺, @). Multi-line dfns not yet tested. System functions beyond ⎕← and ⎕IO not mapped. Tradfn string literals not yet supported. Namespace function literals may fail in mixed (var+fn) namespaces. Nested namespaces not tested.
 
 ## Recent
 
