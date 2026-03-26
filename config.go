@@ -3,6 +3,7 @@ package main
 import (
 	_ "embed"
 	"encoding/json"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -102,8 +103,30 @@ type legacyTracerKeysConfig struct {
 	EditMode  string `json:"edit_mode"`
 }
 
-// LoadConfig loads configuration from first found config file
-func LoadConfig() Config {
+// LoadConfig loads configuration. If cfgFile is non-nil, it overrides the
+// default search hierarchy:
+//   - *cfgFile == "" → use embedded defaults only (no file)
+//   - *cfgFile == "path" → load that specific file
+//   - cfgFile == nil → search gritt.json, ~/.config/gritt/gritt.json, gritt.default.json
+func LoadConfig(cfgFile *string) Config {
+	if cfgFile != nil {
+		if *cfgFile == "" {
+			// Explicit empty: use embedded defaults
+			var cfg Config
+			if err := json.Unmarshal(defaultConfigJSON, &cfg); err != nil {
+				panic("embedded default config is invalid: " + err.Error())
+			}
+			return cfg
+		}
+		// Explicit path
+		cfg, err := loadConfigFile(*cfgFile)
+		if err != nil {
+			log.Fatalf("Failed to load config %s: %v", *cfgFile, err)
+		}
+		return cfg
+	}
+
+	// Default hierarchy
 	paths := []string{
 		"gritt.json",
 		filepath.Join(os.Getenv("HOME"), ".config", "gritt", "gritt.json"),

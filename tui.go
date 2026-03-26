@@ -202,8 +202,8 @@ func connectCmd(addr string) tea.Cmd {
 }
 
 // NewModel creates a Model that will connect to the given address.
-func NewModel(addr string, logFile io.Writer, profile colorprofile.Profile) Model {
-	cfg := LoadConfig()
+func NewModel(addr string, logFile io.Writer, profile colorprofile.Profile, cfgFile *string) Model {
+	cfg := LoadConfig(cfgFile)
 	initColors(profile, cfg.Accent)
 	m := Model{
 		addr:         addr,
