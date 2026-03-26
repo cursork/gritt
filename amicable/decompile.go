@@ -197,12 +197,13 @@ func extractExpressions(tokens []byte) []expression {
 						expr.tokens = append([]byte{}, remaining...)
 					}
 					exprs = append(exprs, expr)
-					i = j // advance outer loop
-					goto nextExpr
+					// Stop after the first complete expression group.
+					// Additional 1B..1E groups are operator/closure context,
+					// not part of the function body.
+					return exprs
 				}
 			}
 		}
-	nextExpr:
 	}
 
 	return exprs
