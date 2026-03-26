@@ -245,6 +245,9 @@ func buildCommands(cfg *Config) *CommandRegistry {
 	reg.add("doc-search", "Search documentation", true, "", func(m *Model) (tea.Model, tea.Cmd) {
 		return m.openDocSearch()
 	})
+	reg.add("ibeam", "I-beam ⌶ lookup", true, "", func(m *Model) (tea.Model, tea.Cmd) {
+		return m.openIBeamSearch()
+	})
 	reg.add("focus-mode", "Toggle focus mode", true, "", func(m *Model) (tea.Model, tea.Cmd) {
 		m.focusMode = !m.focusMode
 		return *m, nil

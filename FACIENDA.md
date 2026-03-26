@@ -14,7 +14,7 @@
 - [ ] **System commands** — `)ts`, `)vars` etc. may not serialize via `Serialise`
 - [x] **220⌶/219⌶** — binary serialization alternative to APLAN → `amicable/` package
 - [x] **amicable decompiler** — `Raw.Decompile()` reconstructs dfn and tradfn source from ⎕OR bytecode (22 test cases)
-- [ ] **amicable decompiler: extend** — missing tokens for ⌸ ⍤ ⍣ ⌺ @, multi-line dfns, namespaces, operators-as-functions, more system variables, tradfn string literals
+- [ ] **amicable decompiler: extend** — multi-line dfns, more system variables, tradfn string literals/locals, namespace member-value ordering for mixed (var+fn) namespaces, nested namespaces
 - [ ] **amicable as aplsock transport** — replace APLAN with 220⌶ binary in prepl protocol
 - [ ] **amicable bytecode synthesis** — generate/modify ⎕OR bytecode in Go, send to Dyalog via `0(220⌶)` — enables code generation, instrumentation, function patching without local Dyalog
 

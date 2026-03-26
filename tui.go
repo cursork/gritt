@@ -728,6 +728,20 @@ routeToPane:
 			return m.openDocFromSearch(result)
 		}
 
+		// I-beam selection → open its documentation or show description
+		if ib, ok := fp.Content.(*IBeamSearch); ok && ib.SelectedEntry != nil {
+			entry := ib.SelectedEntry
+			ib.SelectedEntry = nil
+			if entry.DocPath != "" {
+				m.panes.Remove("ibeam")
+				m.restoreOverlayFocus()
+				return m.openDocFromSearch(&docs.Result{Title: entry.Name, Path: entry.DocPath})
+			}
+			// Private entry — show description inline in the pane
+			ib.showDescription(entry)
+			return m, nil
+		}
+
 		// Check if rebind pane has a pending change
 		if rp, ok := fp.Content.(*RebindPane); ok && rp.PendingApply {
 			rp.PendingApply = false
@@ -2281,6 +2295,32 @@ func (m *Model) openDocSearch() (tea.Model, tea.Cmd) {
 	m.panes.Focus("docsearch")
 
 	return *m, m.docsStaleRefresh()
+}
+
+func (m *Model) openIBeamSearch() (tea.Model, tea.Cmd) {
+	if m.panes.Get("ibeam") != nil {
+		m.panes.Remove("ibeam")
+		return *m, nil
+	}
+
+	m.saveOverlayFocus()
+
+	if m.docsDB == nil {
+		m.openDocsDB()
+	}
+
+	ib := NewIBeamSearch(m.docsDB) // nil db is fine — falls back to CSV only
+
+	paneW := 70
+	paneH := min(20, m.height-4)
+	paneX := (m.width - paneW) / 2
+	paneY := 2
+
+	pane := NewPane("ibeam", ib, paneX, paneY, paneW, paneH)
+	m.panes.Add(pane)
+	m.panes.Focus("ibeam")
+
+	return *m, nil
 }
 
 func (m *Model) openDocFromSearch(result *docs.Result) (tea.Model, tea.Cmd) {
