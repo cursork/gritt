@@ -174,8 +174,29 @@ The bytecode char8 vector starts with a 20-byte header (FF FF + 18 bytes of
 metadata), then the token stream. Zeros (0x00) between tokens are padding.
 
 The decompiler (`decompile.go`) extracts expression regions between markers
-and decodes tokens sequentially. This is implemented and tested against 19
-dfns round-tripped through live Dyalog v20 sessions.
+and decodes tokens sequentially. Only the FIRST `1B`→`1E` group is the function
+body — subsequent groups are operator/closure context (ignored).
+
+Tested against 19 dfns and 3 tradfns round-tripped through live Dyalog v20.
+
+## Tradfn Bytecode
+
+Tradfns use the same token codes but different framing:
+
+- No FF FF bytecode header — token stream is embedded in an opaque sub-structure
+- Lines separated by `0x67` (same byte as dfn fn-start)
+- First line is the header: `result ← name arg` or `name arg` (no result)
+- Names indexed from `0x70` in **reverse order** of char16 entries in the blob
+  - char16 name entries follow `01 XX 00 88 00 00 00 00` metadata markers
+  - Last entry in blob = index 0x70, second-to-last = 0x71, etc.
+- Literal pool offset = number of names (bytecode index N+i → pool[i])
+- Control keywords use `XX YY 6F` pattern (same as expression markers):
+  - `YY=0x00` → `:If`
+  - `YY=0x04` → `:Else`
+  - `YY=0x05` → `:EndIf`
+
+Token stream located by finding first `0x67` byte followed by a name-range
+byte (`0x70`+), ending at first run of 3+ zero bytes.
 
 ### Unknowns
 
@@ -183,6 +204,9 @@ dfns round-tripped through live Dyalog v20 sessions.
 - Missing operators: ⍤ (rank), ⍣ (power), ⌸ (key), ⌺ (stencil), ⌿, @
 - Error guards (::)
 - Multi-line dfn structure
-- Tradfn and namespace bytecode (likely different structure)
+- Namespace decompilation
 - System functions beyond ⎕← and ⎕IO
 - Multi-char variable names (only single ASCII char tested so far)
+- Tradfn string literals
+- More control keywords: `:While`, `:Until`, `:For`, `:Select`, `:Case`, etc.
+- Tradfn locals (`;x;y` in header)

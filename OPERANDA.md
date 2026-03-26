@@ -192,6 +192,10 @@ Go library for Dyalog's `220⌶` binary array serialization format. Named after 
 
 **Tradfn decompiler** uses the same token codes but different framing: names indexed from 0x70 in reverse order (extracted from char16 entries in blob), lines separated by 0x67, control keywords (`:If`=0x00, `:Else`=0x04, `:EndIf`=0x05) in `XX YY 6F` markers. Literal pool offset = number of names.
 
+**Grittle: `aplor`** — standalone CLI tool (`grittles/aplor/`) that reads 220⌶ bytes from stdin or file and prints decompiled APL source. No Dyalog installation needed on the machine running aplor. Usage: `gritt -l -e "1(220⌶)⎕OR'fn'" | aplor`.
+
+**Vision:** With amicable as transport and aplor for decompilation, Dyalog can live on a remote server while Go tooling on the client side can: parse arrays into native types, decompile function source, and eventually synthesize/modify bytecode — all without a local Dyalog installation.
+
 **Known limitations:** No namespace decompilation yet. Missing tokens for some newer primitives (⌸, ⍤, ⍣, ⌺, @). Multi-line dfns not yet tested. System functions beyond ⎕← and ⎕IO not mapped. Tradfn string literals not yet supported.
 
 ## Recent

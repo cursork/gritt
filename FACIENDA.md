@@ -16,6 +16,7 @@
 - [x] **amicable decompiler** — `Raw.Decompile()` reconstructs dfn and tradfn source from ⎕OR bytecode (22 test cases)
 - [ ] **amicable decompiler: extend** — missing tokens for ⌸ ⍤ ⍣ ⌺ @, multi-line dfns, namespaces, operators-as-functions, more system variables, tradfn string literals
 - [ ] **amicable as aplsock transport** — replace APLAN with 220⌶ binary in prepl protocol
+- [ ] **amicable bytecode synthesis** — generate/modify ⎕OR bytecode in Go, send to Dyalog via `0(220⌶)` — enables code generation, instrumentation, function patching without local Dyalog
 
 ## GitHub Issues (prioritized)
 
@@ -54,6 +55,7 @@
 
 ## Grittles follow-up
 - [x] **TUI switch to library packages** — `aplcart.go` and `doc_search.go` now delegate to `aplcart/` and `docs/` packages; all duplicated data functions removed
+- [ ] **aplor grittle** — built, needs adding to grittles README and release workflow
 - [ ] **aplfmt printed-files feedback** — currently silent on unchanged files; gritt's `runFormat` prints changed filenames
 - [ ] **aplcart output formatting** — APL syntax column needs display-width-aware padding (same `padRight` fix as TUI)
 
