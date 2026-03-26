@@ -13,8 +13,8 @@
 - [ ] **Multi-connection** — per-connection buffers on APL side (currently single `_buf`)
 - [ ] **System commands** — `)ts`, `)vars` etc. may not serialize via `Serialise`
 - [x] **220⌶/219⌶** — binary serialization alternative to APLAN → `amicable/` package
-- [x] **amicable decompiler** — `Raw.Decompile()` reconstructs dfn source from ⎕OR bytecode (19 test cases)
-- [ ] **amicable decompiler: extend** — missing tokens for ⌸ ⍤ ⍣ ⌺ @, multi-line dfns, tradfns, operators-as-functions, more system variables
+- [x] **amicable decompiler** — `Raw.Decompile()` reconstructs dfn and tradfn source from ⎕OR bytecode (22 test cases)
+- [ ] **amicable decompiler: extend** — missing tokens for ⌸ ⍤ ⍣ ⌺ @, multi-line dfns, namespaces, operators-as-functions, more system variables, tradfn string literals
 - [ ] **amicable as aplsock transport** — replace APLAN with 220⌶ binary in prepl protocol
 
 ## GitHub Issues (prioritized)

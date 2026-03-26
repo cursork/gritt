@@ -172,7 +172,7 @@ Go library for Dyalog's `220⌶` binary array serialization format. Named after 
 
 `Raw.Decompile()` reconstructs APL dfn source from opaque ⎕OR binary blobs — no Dyalog interpreter needed. The bytecode format was reverse-engineered by probing Dyalog v20.
 
-**19/19 test cases pass.** Each test serializes a dfn via `⎕OR` in a live Dyalog session, unmarshals to `Raw`, decompiles to source, and compares with the original. Tested functions include:
+**22/22 test cases pass** (19 dfn + 3 tradfn). Each test serializes a function via `⎕OR` in a live Dyalog session, unmarshals to `Raw`, decompiles to source, and compares with the original. Tested functions include:
 
 - Arithmetic: `{⍵+1}`, `{⍺+⍵}`, `{⍵-1}`, `{⍵×2}`
 - Operators: `{+/⍵}`, `{+\⍵}`, `{+⍨⍵}`
@@ -181,6 +181,7 @@ Go library for Dyalog's `220⌶` binary array serialization format. Named after 
 - Strings: `{⎕←'hello world'}`
 - Recursion: `{⍵≤1:⍵ ⋄ (∇⍵-1)+∇⍵-2}` (fibonacci), `{0=⍵:⍺ ⋄ ⍵∇⍵|⍺}` (GCD)
 - Real functions: `{0=2|⍵:⍵÷2 ⋄ 1+3×⍵}` (Collatz), `{(+/⍵)÷≢⍵}` (average), `{×/⍵⍴⍺}` (power)
+- Tradfns: `r←add x / r←x+1`, `halve x / ⎕←x÷2`, `r←a gcd b` with `:If/:Else/:EndIf`
 
 **How it works:**
 1. Finds the bytecode char8 vector inside the ⎕OR blob (FF FF header marker)
@@ -189,7 +190,9 @@ Go library for Dyalog's `220⌶` binary array serialization format. Named after 
 4. Resolves literal pool references — sub-arrays after bytecode, stored in **reverse order** (last sub-array = pool[0])
 5. Variable names are inline ASCII bytes, arg refs are 00=⍺ 01=⍵ 02=∇
 
-**Known limitations:** Covers dfns only (not tradfns, operators, namespaces). Missing tokens for some newer primitives (⌸, ⍤, ⍣, ⌺, @). Multi-line dfns not yet tested. System functions beyond ⎕← and ⎕IO not mapped.
+**Tradfn decompiler** uses the same token codes but different framing: names indexed from 0x70 in reverse order (extracted from char16 entries in blob), lines separated by 0x67, control keywords (`:If`=0x00, `:Else`=0x04, `:EndIf`=0x05) in `XX YY 6F` markers. Literal pool offset = number of names.
+
+**Known limitations:** No namespace decompilation yet. Missing tokens for some newer primitives (⌸, ⍤, ⍣, ⌺, @). Multi-line dfns not yet tested. System functions beyond ⎕← and ⎕IO not mapped. Tradfn string literals not yet supported.
 
 ## Recent
 

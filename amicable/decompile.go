@@ -6,17 +6,17 @@ import (
 )
 
 // Decompile attempts to reconstruct APL source code from a Raw ⎕OR blob.
-// Returns the source string and any error. Works for dfns; tradfns and
-// namespaces are not yet supported.
+// Returns the source string and any error. Works for dfns and tradfns.
 func (r Raw) Decompile() (string, error) {
 	if len(r) < 20 {
 		return "", fmt.Errorf("decompile: blob too short")
 	}
 
-	// Find the bytecode char8 vector (1F 27 type_rank marker)
+	// Try dfn first (has FF FF bytecode header)
 	bc, err := r.bytecode()
 	if err != nil {
-		return "", err
+		// No dfn bytecode — try tradfn
+		return r.decompileTradfn()
 	}
 
 	// Find literal sub-arrays in the blob
@@ -455,4 +455,302 @@ func sysVarName(idx byte) string {
 		return name
 	}
 	return fmt.Sprintf("⎕_sys%d", idx)
+}
+
+// --- Tradfn decompiler ---
+
+// decompileTradfn reconstructs tradfn source from an ⎕OR blob.
+// Tradfns use the same token codes as dfns but different framing:
+// no FF FF bytecode header, lines separated by 0x67, names indexed from 0x70.
+func (r Raw) decompileTradfn() (string, error) {
+	data := []byte(r)
+
+	// Find the token stream FIRST (needed to bound the name scan)
+	tokenStart, tokenEnd := r.findTradfnTokens(data)
+	if tokenStart < 0 {
+		return "", fmt.Errorf("decompile: no token stream found (not a tradfn?)")
+	}
+
+	// Extract name table: char16 strings BEFORE the token stream only
+	names := r.extractNamesBeforeOffset(tokenStart)
+	if len(names) == 0 {
+		return "", fmt.Errorf("decompile: no name table found")
+	}
+
+	// Build name map: indices start at 0x70, assigned in reverse order
+	nameMap := make(map[byte]string)
+	for i, name := range names {
+		idx := byte(0x70 + len(names) - 1 - i)
+		nameMap[idx] = name
+	}
+
+	// Extract literal pool — tradfn literal indices start AFTER the names
+	// (bytecode index = num_names + literal_number)
+	literals := r.extractTradfnLiterals()
+	// Re-key literals with name offset
+	offsetLiterals := make(map[byte]any)
+	numNames := len(names)
+	for k, v := range literals {
+		offsetLiterals[byte(numNames)+k] = v
+	}
+	literals = offsetLiterals
+	if tokenStart < 0 {
+		return "", fmt.Errorf("decompile: no token stream found in tradfn blob")
+	}
+
+	tokens := data[tokenStart:tokenEnd]
+
+	// Split into lines at 0x67 boundaries
+	var lines [][]byte
+	start := 0
+	for i := 0; i < len(tokens); i++ {
+		if tokens[i] == 0x67 {
+			if i > start {
+				lines = append(lines, tokens[start:i])
+			}
+			start = i + 1
+		}
+	}
+	if start < len(tokens) {
+		lines = append(lines, tokens[start:])
+	}
+
+	// Decode each line
+	var result []string
+	for _, line := range lines {
+		decoded := r.decodeTradfnLine(line, nameMap, literals)
+		if decoded != "" {
+			result = append(result, decoded)
+		}
+	}
+
+	return strings.Join(result, "\n"), nil
+}
+
+// extractNamesBeforeOffset finds char16 name entries before the given offset.
+// Names follow the pattern: ... 01 XX 00 88 00 00 00 00 [char16 data] ...
+func (r Raw) extractNamesBeforeOffset(limit int) []string {
+	data := []byte(r)
+	var names []string
+
+	for j := 0; j < limit-12 && j < len(data)-12; j++ {
+		if data[j] == 0x01 && data[j+2] == 0x00 && data[j+3] == 0x88 &&
+			data[j+4] == 0x00 && data[j+5] == 0x00 && data[j+6] == 0x00 && data[j+7] == 0x00 {
+			var runes []rune
+			for k := j + 8; k < len(data)-1; k += 2 {
+				ch := rune(data[k]) | rune(data[k+1])<<8
+				if ch == 0 {
+					break
+				}
+				runes = append(runes, ch)
+			}
+			if len(runes) > 0 {
+				names = append(names, string(runes))
+				j += 8 + len(runes)*2 - 1
+			}
+		}
+	}
+	return names
+}
+
+// findTradfnTokens locates the token stream in a tradfn blob.
+// Tradfn tokens start with 0x67 followed by a name-range byte (0x70+)
+// and end at a run of 3+ zero bytes.
+func (r Raw) findTradfnTokens(data []byte) (int, int) {
+	for j := 0; j < len(data)-4; j++ {
+		// Token stream starts: 67 followed by name byte (0x70+)
+		if data[j] != 0x67 || data[j+1] < 0x70 {
+			continue
+		}
+		// Find end: first run of 3+ zero bytes
+		end := len(data)
+		zeros := 0
+		for k := j; k < len(data); k++ {
+			if data[k] == 0x00 {
+				zeros++
+				if zeros >= 3 {
+					end = k - 2 // back up to before the zero run
+					break
+				}
+			} else {
+				zeros = 0
+			}
+		}
+		return j, end
+	}
+	return -1, -1
+}
+
+// extractTradfnLiterals finds literal values for tradfn pool references.
+func (r Raw) extractTradfnLiterals() map[byte]any {
+	data := []byte(r)
+	result := make(map[byte]any)
+
+	// Find all standard sub-arrays, collect numeric ones
+	var candidates []any
+	for j := 2; j < len(data)-17; j++ {
+		rankFlags := data[j+8]
+		flags := rankFlags & 0x0F
+		rank := int(rankFlags >> 4)
+		if flags != 0x0F || rank > 4 {
+			continue
+		}
+		size := le64(data[j:])
+		if size == 0 || size > 500 {
+			continue
+		}
+		allZero := true
+		for _, b := range data[j+10 : min(j+16, len(data))] {
+			if b != 0 {
+				allZero = false
+			}
+		}
+		if !allZero {
+			continue
+		}
+		subR := &reader{data: data, pos: j, ptrSize: 8}
+		val, err := subR.readArray()
+		if err != nil {
+			continue
+		}
+		// Only numeric scalars (strings in tradfn pool are workspace metadata)
+		switch val.(type) {
+		case int, float64, complex128:
+			candidates = append(candidates, val)
+		}
+		j = subR.pos - 1
+	}
+
+	// Reverse order, same as dfn literals
+	for i, c := range candidates {
+		revIdx := byte(len(candidates) - 1 - i)
+		result[revIdx] = c
+	}
+	return result
+}
+
+// decodeTradfnLine decodes a single line of tradfn tokens.
+func (r Raw) decodeTradfnLine(tokens []byte, names map[byte]string, literals map[byte]any) string {
+	var b strings.Builder
+	i := 0
+	for i < len(tokens) {
+		tok := tokens[i]
+
+		// Skip padding
+		if tok == 0x00 || tok == 0x01 {
+			i++
+			continue
+		}
+
+		// Keyword markers: XX YY 6F (control flow)
+		if i+2 < len(tokens) && tokens[i+2] == 0x6F {
+			kw := tokens[i+1]
+			if kwStr, ok := keywordGlyph(kw); ok {
+				b.WriteString(kwStr)
+				i += 3
+				continue
+			}
+		}
+		// Also check if tok itself starts a keyword pattern
+		if i+1 < len(tokens) && tokens[i+1] == 0x6F {
+			// XX 6F where XX might be a keyword sub-code
+			// Skip these structural markers
+			i += 2
+			continue
+		}
+
+		// Two-byte references
+		if i+1 < len(tokens) {
+			idx := tok
+			typ := tokens[i+1]
+
+			if typ == 0x57 { // literal
+				if lit, ok := literals[idx]; ok {
+					b.WriteString(formatLiteral(lit))
+				} else {
+					b.WriteString(fmt.Sprintf("_lit%d", idx))
+				}
+				i += 2
+				continue
+			}
+			if typ == 0x3E { // system variable
+				b.WriteString(sysVarName(idx))
+				i += 2
+				continue
+			}
+
+			// Operator applied to primitive
+			if op, ok := operatorGlyph(typ); ok {
+				if prim, ok := primitiveGlyph(tok); ok {
+					b.WriteString(prim)
+					b.WriteString(op)
+					i += 2
+					continue
+				}
+			}
+		}
+
+		// Name reference (0x70+)
+		if tok >= 0x70 {
+			// Insert space before name if previous output was a name/letter
+			if s := b.String(); len(s) > 0 {
+				runes := []rune(s)
+				last := runes[len(runes)-1]
+				if last >= 'A' && last <= 'Z' || last >= 'a' && last <= 'z' ||
+					last == '∇' || last >= 0x2300 {
+					b.WriteByte(' ')
+				}
+			}
+			if name, ok := names[tok]; ok {
+				b.WriteString(name)
+			} else {
+				b.WriteString(fmt.Sprintf("_n%d", tok-0x70))
+			}
+			i++
+			continue
+		}
+
+		// Single-byte tokens
+		if glyph, ok := primitiveGlyph(tok); ok {
+			b.WriteString(glyph)
+			i++
+			continue
+		}
+		if glyph, ok := syntaxGlyph(tok); ok {
+			b.WriteString(glyph)
+			i++
+			continue
+		}
+
+		// Unknown — skip silently for 6F (structural)
+		if tok == 0x6F {
+			i++
+			continue
+		}
+
+		b.WriteString(fmt.Sprintf("«%02X»", tok))
+		i++
+	}
+	return b.String()
+}
+
+// keywordGlyph maps control flow keyword codes to their APL text.
+// These appear in the XX YY 6F pattern where YY is the keyword code.
+func keywordGlyph(code byte) (string, bool) {
+	m := map[byte]string{
+		0x00: ":If",
+		0x01: ":While",
+		0x02: ":Repeat",
+		0x03: ":For",
+		0x04: ":Else", // also :ElseIf?
+		0x05: ":EndIf",
+		0x06: ":EndWhile",
+		0x07: ":EndRepeat",
+		0x08: ":EndFor",
+		0x09: ":Select",
+		0x0A: ":Case",
+		0x0B: ":EndSelect",
+	}
+	g, ok := m[code]
+	return g, ok
 }
