@@ -44,6 +44,19 @@ func TestTUI(t *testing.T) {
 		t.Logf("Docs DB not found at %s - docs tests will verify no-db behavior", realDocsDB)
 	}
 
+	// Create test I-beams CSV (tests generate their own fixtures)
+	testConfigDir := "/tmp/.config/gritt"
+	os.MkdirAll(testConfigDir, 0755)
+	testIbeamsCSV := filepath.Join(testConfigDir, "ibeams.csv")
+	os.Remove(testIbeamsCSV) // Remove any stale symlink from previous runs
+	if err := os.WriteFile(testIbeamsCSV, []byte(
+		"120,Generate UUID,R←120⌶Y,Generates a UUID\n"+
+			"600,Disable Traps,R←600⌶Y,Disables error traps\n"+
+			"62583,APLAN formatter,R←{X}(62583⌶)Y,Pretty-prints APLAN\n"+
+			"9999,UNKNOWN,9999⌶,\n"), 0644); err != nil {
+		t.Logf("Warning: could not write test ibeams CSV: %v", err)
+	}
+
 	// Check if Dyalog is running, if not try to start it
 	var dyalogCmd *exec.Cmd
 	if err := uitest.RequireDyalog(dyalogPort); err != nil {
@@ -1936,6 +1949,89 @@ func TestTUI(t *testing.T) {
 	runner.Sleep(200 * time.Millisecond)
 	runner.SendKeys("Escape")
 	runner.Sleep(200 * time.Millisecond)
+
+	// =========================================================================
+	// === I-BEAM LOOKUP TESTS ===
+	// =========================================================================
+
+	// Open I-beam search via command palette
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys(":")
+	runner.Sleep(300 * time.Millisecond)
+	runner.SendText("ibeam")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Enter")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("I-beam pane opened")
+
+	runner.Test("I-beam pane opens", func() bool {
+		return runner.Contains("I-Beam") && runner.Contains("Lookup")
+	})
+
+	// Search by number — 120 is in both docs and our test CSV
+	runner.SendText("120")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("I-beam search 120")
+
+	runner.Test("Search 120 finds UUID", func() bool {
+		return runner.Contains("120") && runner.Contains("UUID")
+	})
+
+	// Clear and search by text
+	runner.SendKeys("BSpace")
+	runner.SendKeys("BSpace")
+	runner.SendKeys("BSpace")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendText("APLAN")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("I-beam search APLAN")
+
+	runner.Test("Search APLAN finds 62583", func() bool {
+		return runner.Contains("62583") && runner.Contains("APLAN")
+	})
+
+	// Page down works
+	runner.SendKeys("BSpace")
+	runner.SendKeys("BSpace")
+	runner.SendKeys("BSpace")
+	runner.SendKeys("BSpace")
+	runner.SendKeys("BSpace")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("PgDn")
+	runner.Sleep(200 * time.Millisecond)
+	runner.Snapshot("I-beam page down")
+
+	runner.Test("Page down keeps pane open", func() bool {
+		return runner.Contains("Lookup")
+	})
+
+	// Enter on private entry shows description inline
+	runner.SendText("62583")
+	runner.Sleep(300 * time.Millisecond)
+	runner.SendKeys("Enter")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("I-beam 62583 detail view")
+
+	runner.Test("Enter on private entry shows detail", func() bool {
+		return runner.Contains("62583") && runner.Contains("APLAN")
+	})
+
+	// Escape returns to search list
+	runner.SendKeys("Escape")
+	runner.Sleep(200 * time.Millisecond)
+
+	runner.Test("Escape returns from detail to list", func() bool {
+		return runner.Contains("Lookup")
+	})
+
+	// Close I-beam pane
+	runner.SendKeys("Escape")
+	runner.Sleep(200 * time.Millisecond)
+
+	runner.Test("I-beam pane closed", func() bool {
+		return !runner.Contains("Lookup") || !runner.Contains("I-Beam")
+	})
 
 	// Final snapshot
 	runner.Snapshot("Final state")

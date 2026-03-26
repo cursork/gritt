@@ -614,6 +614,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if rp, ok := fp.Content.(*RebindPane); ok && rp.capturing {
 				goto routeToPane
 			}
+			// I-beam pane in detail view — Escape returns to list, not close
+			if ib, ok := fp.Content.(*IBeamSearch); ok && ib.detail != nil {
+				goto routeToPane
+			}
 			if fp.ID == "tracer" {
 				// Check if tracer is in edit mode - if so, let the pane handle it
 				if ep, ok := fp.Content.(*EditorPane); ok && ep.editMode {

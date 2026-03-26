@@ -79,7 +79,13 @@ func main() {
 	flag.BoolVar(launch, "l", false, "Launch Dyalog automatically")
 	version := flag.String("version", "", "Dyalog version (e.g. 20.0) or path to binary")
 	fmtMode := flag.Bool("fmt", false, "Format APL files in place")
-	cfgFile := flag.String("cfg", "", "Config file path (empty string '' = no config, use defaults)")
+	var cfgFlag string
+	var cfgSet bool
+	flag.Func("cfg", "Config file path ('' = no config, use defaults)", func(s string) error {
+		cfgFlag = s
+		cfgSet = true
+		return nil
+	})
 	flag.Parse()
 
 	// Launch Dyalog if requested
@@ -191,7 +197,11 @@ func main() {
 		colorProfile = colorprofile.TrueColor
 	}
 
-	p := tea.NewProgram(NewModel(*addr, logWriter, colorProfile, cfgFile), tea.WithAltScreen(), tea.WithMouseCellMotion())
+	var cfgArg *string
+	if cfgSet {
+		cfgArg = &cfgFlag
+	}
+	p := tea.NewProgram(NewModel(*addr, logWriter, colorProfile, cfgArg), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
 	}
