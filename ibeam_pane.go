@@ -241,6 +241,21 @@ func (ib *IBeamSearch) HandleKey(msg tea.KeyMsg) bool {
 			ib.selected++
 		}
 		return true
+	case tea.KeyPgUp:
+		ib.selected -= 10
+		if ib.selected < 0 {
+			ib.selected = 0
+		}
+		return true
+	case tea.KeyPgDown:
+		ib.selected += 10
+		if ib.selected >= len(ib.results) {
+			ib.selected = len(ib.results) - 1
+		}
+		if ib.selected < 0 {
+			ib.selected = 0
+		}
+		return true
 	case tea.KeyEnter:
 		if ib.selected >= 0 && ib.selected < len(ib.results) {
 			e := ib.results[ib.selected]

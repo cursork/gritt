@@ -93,17 +93,14 @@ func searchDocs(db *sql.DB, query string) []Entry {
 
 	if query == "" {
 		rows, err = db.Query(`SELECT title, path FROM docs WHERE path LIKE '%i-beam%' AND title LIKE '%⌶%' ORDER BY rowid`)
+	} else if _, err2 := strconv.Atoi(query); err2 == nil {
+		// Numeric: prefix match — "62" finds 620⌶, 625⌶, 62583⌶, etc.
+		pattern := "%" + query + "%⌶%"
+		rows, err = db.Query(`SELECT title, path FROM docs WHERE path LIKE '%i-beam%' AND title LIKE ? ORDER BY rowid`, pattern)
 	} else {
-		// Search by number or name
-		if n, err2 := strconv.Atoi(query); err2 == nil {
-			// Numeric: exact match on I-beam number
-			pattern := fmt.Sprintf("%%%d⌶%%", n)
-			rows, err = db.Query(`SELECT title, path FROM docs WHERE path LIKE '%i-beam%' AND title LIKE ? ORDER BY rowid`, pattern)
-		} else {
-			// Text: search title and content (case-insensitive)
-			like := "%" + strings.ToLower(query) + "%"
-			rows, err = db.Query(`SELECT title, path FROM docs WHERE path LIKE '%i-beam%' AND (LOWER(title) LIKE ? OR LOWER(content) LIKE ?) ORDER BY rowid`, like, like)
-		}
+		// Text: search title and content (case-insensitive)
+		like := "%" + strings.ToLower(query) + "%"
+		rows, err = db.Query(`SELECT title, path FROM docs WHERE path LIKE '%i-beam%' AND (LOWER(title) LIKE ? OR LOWER(content) LIKE ?) ORDER BY rowid`, like, like)
 	}
 	if err != nil {
 		return nil
@@ -238,20 +235,25 @@ func searchCSV(query string) []Entry {
 	}
 
 	q := strings.ToLower(query)
+	seen := make(map[int]bool)
 	var results []Entry
 
-	// Numeric: exact match
-	if n, err := strconv.Atoi(query); err == nil {
+	// Numeric prefix: match I-beams whose number starts with the query
+	if _, err := strconv.Atoi(query); err == nil {
 		for _, e := range entries {
-			if e.Number == n {
+			numStr := strconv.Itoa(e.Number)
+			if strings.HasPrefix(numStr, query) {
 				results = append(results, e)
+				seen[e.Number] = true
 			}
 		}
-		return results
 	}
 
 	// Text: fuzzy match on name, description, and signature
 	for _, e := range entries {
+		if seen[e.Number] {
+			continue
+		}
 		if strings.Contains(strings.ToLower(e.Name), q) ||
 			strings.Contains(strings.ToLower(e.Description), q) ||
 			strings.Contains(strings.ToLower(e.Signature), q) {
