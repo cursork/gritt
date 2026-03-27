@@ -549,6 +549,9 @@ func cellShape(value any) []int {
 			return []int{0}
 		}
 		return []int{len(v)}
+	case string:
+		// In a bracketed matrix context, a string row like 'abc' has shape [3]
+		return []int{len([]rune(v))}
 	default:
 		return nil // scalar
 	}
@@ -567,6 +570,14 @@ func flattenValue(value any) []any {
 		var result []any
 		for _, row := range v.Data {
 			result = append(result, flattenValue(row)...)
+		}
+		return result
+	case string:
+		// In matrix context, flatten string to individual characters
+		runes := []rune(v)
+		result := make([]any, len(runes))
+		for i, r := range runes {
+			result[i] = string(r)
 		}
 		return result
 	default:

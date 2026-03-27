@@ -131,16 +131,24 @@
           :EndIf
           →CLEANUP
       :EndTrap
-      ⍝ Serialize — three levels: APLAN, display form, literal fallback
-      :Trap 0
-          r←'(tag: ''ret'' ⋄ val: ',(ToAPLAN #.⍙r),')'
-      :Else
+      ⍝ Serialize — namespace, APLAN, display form, or literal fallback
+      :If 9.1=⎕NC⊂'#.⍙r'                          ⍝ Namespace instance?
           :Trap 0
-              r←'(tag: ''ret'' ⋄ val: ',(ToAPLAN⍕#.⍙r),')'
+              r←'(tag: ''ret'' ⋄ val: ',(NsToAPLAN #.⍙r),')'
           :Else
               r←'(tag: ''ret'')'
           :EndTrap
-      :EndTrap
+      :Else
+          :Trap 0
+              r←'(tag: ''ret'' ⋄ val: ',(ToAPLAN #.⍙r),')'
+          :Else
+              :Trap 0
+                  r←'(tag: ''ret'' ⋄ val: ',(ToAPLAN⍕#.⍙r),')'
+              :Else
+                  r←'(tag: ''ret'')'
+              :EndTrap
+          :EndTrap
+      :EndIf
      CLEANUP:
       :Trap 0 ⋄ #.⎕EX'⍙r' ⋄ :EndTrap
     ∇
@@ -160,6 +168,29 @@
     ∇ r←ToAPLAN v
       r←1(62583⌶)⎕SE.Dyalog.Array.Serialise v
       r←(r≠⎕UCS 13)/r                        ⍝ Strip CR — protocol is LF-delimited
+    ∇
+
+    ∇ r←NsToAPLAN ns;names;n;v
+    ⍝ Serialize a namespace instance as (key1: val1 ⋄ key2: val2 ⋄ ...)
+      names←{(⌽∨\' '≠⌽⍵)/⍵}¨↓ns.⎕NL 2 3 4 9      ⍝ trimmed name list
+      names←(0<≢¨names)/names                       ⍝ drop empties
+      :If 0=≢names
+          r←'()'
+          :Return
+      :EndIf
+      r←'('
+      :For n :In names
+          :If r≢'('
+              r,←' ⋄ '
+          :EndIf
+          :Trap 0
+              v←ToAPLAN ns⍎n
+          :Else
+              v←'''<err:',⎕DMX.Message,'>'''
+          :EndTrap
+          r,←n,': ',v
+      :EndFor
+      r,←')'
     ∇
 
 :EndNamespace
