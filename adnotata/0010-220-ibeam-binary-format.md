@@ -177,7 +177,8 @@ The decompiler (`decompile.go`) extracts expression regions between markers
 and decodes tokens sequentially. Only the FIRST `1B`→`1E` group is the function
 body — subsequent groups are operator/closure context (ignored).
 
-Tested against 19 dfns and 3 tradfns round-tripped through live Dyalog v20.
+Tested against dfns (all primitives), tradfns, and namespaces round-tripped
+through live Dyalog v20. All primitive and operator tokens mapped via `(2031⌶)6`.
 
 ## Tradfn Bytecode
 
@@ -200,13 +201,11 @@ byte (`0x70`+), ending at first run of 3+ zero bytes.
 
 ### Unknowns
 
-- Remaining gaps in primitive table (0x0D, 0x19-0x1D, 0x34-0x35, etc.)
-- Missing operators: ⍤ (rank), ⍣ (power), ⌸ (key), ⌺ (stencil), ⌿, @
 - Error guards (::)
 - Multi-line dfn structure
-- Namespace decompilation
 - System functions beyond ⎕← and ⎕IO
 - Multi-char variable names (only single ASCII char tested so far)
 - Tradfn string literals
-- More control keywords: `:While`, `:Until`, `:For`, `:Select`, `:Case`, etc.
 - Tradfn locals (`;x;y` in header)
+- Namespace member-value ordering for mixed (var+fn) namespaces
+- Nested namespaces

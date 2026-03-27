@@ -197,6 +197,10 @@ Critical path (approved):
 
 **Flat project structure.** Minimize number of packages. Splitting into files is fine, but avoid deep package hierarchies. Prefer a handful of well-organized packages over many small ones.
 
+Library packages: `codec/` (APLAN parser), `amicable/` (220⌶ binary format + ⎕OR decompiler), `ibeam/` (I-beam lookup), `prepl/` (prepl client), `session/` (Dyalog launcher), `cache/` (cache utils), `aplcart/` (APLcart data), `docs/` (Dyalog docs), `mcp/` (MCP server).
+
+Grittles (standalone CLIs): `grittles/aplor/` (⎕OR decompiler), `grittles/aplsock/` (prepl server), `grittles/aplanconv/`, `grittles/aplcart/`, `grittles/apldocs/`, `grittles/aplfmt/`, `grittles/aplmcp/`.
+
 ## Non-Goals
 
 - Being a general-purpose terminal library

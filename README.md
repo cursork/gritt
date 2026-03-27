@@ -120,7 +120,7 @@ gritt looks for `gritt.json` in order:
 2. `~/.config/gritt/gritt.json` (user)
 3. Embedded default
 
-These are not merged - first found, wins.
+These are not merged - first found, wins. Override with `-cfg path` to load a specific file, or `-cfg ''` for embedded defaults only.
 
 The `accent` field sets the UI accent color (borders, highlights, selections). Default is Dyalog orange (`#F2A74F`). For a neutral grey:
 

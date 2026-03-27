@@ -10,7 +10,7 @@ Terminal limitation: ctrl+shift+backspace and ctrl+shift+enter (BK/FD defaults) 
 
 ## codec package (new)
 
-APLAN parser+serializer ported from dapple/parse (Go) and japlan (JS) into `codec/`. Supports full roundtripping: parse APLAN → Go values → serialize back to APLAN. Handles scalars, vectors, matrices (arbitrary rank), namespaces, complex numbers, zilde. 97 tests. Also includes display-form parser (`Auto()`, `Int()`, etc.) for raw session output. Plus `Equal()` and `Get()` utilities.
+APLAN parser+serializer ported from dapple/parse (Go) and japlan (JS) into `codec/`. Supports full roundtripping: parse APLAN → Go values → serialize back to APLAN. Handles scalars, vectors, matrices (arbitrary rank), namespaces, complex numbers, zilde. Also includes display-form parser (`Auto()`, `Int()`, etc.) for raw session output. Plus `Equal()` and `Get()` utilities.
 
 See FACIENDA "codec package" section for planned uses (structured variable viewer/editor, .apla formatting, -json output).
 
@@ -172,7 +172,7 @@ Go library for Dyalog's `220⌶` binary array serialization format. Named after 
 
 `Raw.Decompile()` reconstructs APL dfn source from opaque ⎕OR binary blobs — no Dyalog interpreter needed. The bytecode format was reverse-engineered by probing Dyalog v20.
 
-**25/25 test cases pass** (19 dfn + 3 tradfn + 3 namespace). Each test serializes via `⎕OR` in a live Dyalog session, unmarshals to `Raw`, decompiles, and compares with the original. Tested:
+**All decompiler test cases pass** (dfns including all primitives, tradfns, namespaces). Each test serializes via `⎕OR` in a live Dyalog session, unmarshals to `Raw`, decompiles, and compares with the original. Tested:
 
 - Arithmetic: `{⍵+1}`, `{⍺+⍵}`, `{⍵-1}`, `{⍵×2}`
 - Operators: `{+/⍵}`, `{+\⍵}`, `{+⍨⍵}`
@@ -197,7 +197,22 @@ Go library for Dyalog's `220⌶` binary array serialization format. Named after 
 
 **Vision:** With amicable as transport and aplor for decompilation, Dyalog can live on a remote server while Go tooling on the client side can: parse arrays into native types, decompile function source, and eventually synthesize/modify bytecode — all without a local Dyalog installation.
 
-**Known limitations:** Missing tokens for some newer primitives (⌸, ⍤, ⍣, ⌺, @). Multi-line dfns not yet tested. System functions beyond ⎕← and ⎕IO not mapped. Tradfn string literals not yet supported. Namespace function literals may fail in mixed (var+fn) namespaces. Nested namespaces not tested.
+**Known limitations:** Multi-line dfns not yet tested. System functions beyond ⎕← and ⎕IO not mapped. Tradfn string literals not yet supported. Namespace function literals may fail in mixed (var+fn) namespaces. Nested namespaces not tested.
+
+## ibeam package + TUI pane (new)
+
+I-beam (⌶) lookup library at `ibeam/` with TUI pane integration. Two-tier search:
+
+1. **Public Dyalog docs** — queries the cached docs DB (same as doc search). Full-text search over titles and content.
+2. **Private/undocumented I-beams** — reads `~/.config/gritt/ibeams.csv`. CSV format: `number,name,signature,description`.
+
+**TUI:** Command palette `ibeam` opens a searchable pane. Type to filter (number prefix match or text search). Enter on public entries opens the full docs page. Enter on private entries shows the description inline with word-wrap and scrolling. Escape from detail returns to list. Page up/down for navigation.
+
+**CSV generator:** `ibeam/cmd/gen-ibeams-csv/` builds the CSV from a Dyalog internal wiki webarchive + a text file of known I-beam numbers. Numbers not in the wiki get "UNKNOWN" entries. 9000–9996 range marked "Allocated to RH".
+
+## `-cfg` flag (new)
+
+`gritt -cfg path` loads a specific config file. `gritt -cfg ''` uses embedded defaults only (no file). Without `-cfg`, the existing hierarchy applies: `./gritt.json` → `~/.config/gritt/gritt.json` → embedded defaults.
 
 ## Recent
 

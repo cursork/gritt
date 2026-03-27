@@ -107,6 +107,19 @@ Tests: `grittles/aplsock/test.sh`
 Flags: `-l` (launch Dyalog), `-addr HOST:PORT`, `-sock :PORT` or
 `-sock /path`, `-version VERSION`, `-repl`.
 
+### aplor
+
+Decompile Dyalog `⎕OR` binary blobs back to APL source. No Dyalog needed
+on the machine running aplor.
+
+```
+gritt -l -e "1(220⌶)⎕OR'myfn'" | aplor        # pipe from gritt
+aplor dump.txt                                   # from file of signed ints
+aplor -raw saved.220                             # from raw binary file
+```
+
+Handles dfns, tradfns (with `:If`/`:Else`/`:EndIf`), and namespaces.
+
 ### aplmcp
 
 MCP server for LLM-driven APL interaction over stdio.
@@ -127,6 +140,7 @@ go build ./grittles/aplcart
 go build ./grittles/apldocs
 go build ./grittles/aplfmt
 go build ./grittles/aplmcp
+go build ./grittles/aplor
 go build ./grittles/aplsock
 ```
 
