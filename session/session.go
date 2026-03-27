@@ -19,7 +19,6 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/cursork/gritt/ride"
@@ -99,7 +98,7 @@ func launchOnce(ctx context.Context, opt LaunchOptions) (*ride.Client, *exec.Cmd
 	for k, v := range opt.Env {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	setProcAttr(cmd)
 
 	if err := cmd.Start(); err != nil {
 		return nil, nil, fmt.Errorf("start dyalog (%s): %w", exe, err)
@@ -584,23 +583,3 @@ func makeAPLError(lines []string) *APLError {
 	}
 }
 
-func kill(cmd *exec.Cmd) {
-	if cmd.Process == nil {
-		return
-	}
-	syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
-
-	done := make(chan struct{})
-	go func() {
-		cmd.Wait()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-		return
-	case <-time.After(3 * time.Second):
-		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-		<-done
-	}
-}

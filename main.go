@@ -12,7 +12,6 @@ import (
 	"os/signal"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -30,7 +29,7 @@ func launchDyalog(version string) (*exec.Cmd, int) {
 	cmd := exec.Command(exe, "+s", "-q")
 	cmd.Env = append(os.Environ(), fmt.Sprintf("RIDE_INIT=SERVE:*:%d", port))
 	cmd.Env = append(cmd.Env, session.DyalogEnv(exe)...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	setProcessGroup(cmd)
 	if err := cmd.Start(); err != nil {
 		log.Fatalf("Failed to start Dyalog (%s): %v", exe, err)
 	}
@@ -98,7 +97,7 @@ func main() {
 		// Cleanup function to kill Dyalog process group
 		killDyalog := func() {
 			if dyalogCmd.Process != nil {
-				syscall.Kill(-dyalogCmd.Process.Pid, syscall.SIGKILL)
+				killProcessGroup(dyalogCmd)
 				dyalogCmd.Wait() // Reap zombie
 			}
 		}
@@ -106,7 +105,7 @@ func main() {
 
 		// Handle signals to ensure cleanup on Ctrl+C, etc.
 		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		signal.Notify(sigCh, termSignals()...)
 		go func() {
 			<-sigCh
 			killDyalog()
@@ -243,7 +242,7 @@ func runSocket(client *ride.Client, sockPath string) {
 
 	// Handle signals for cleanup
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigCh, termSignals()...)
 	go func() {
 		<-sigCh
 		listener.Close()

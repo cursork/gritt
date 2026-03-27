@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"syscall"
 
 	"github.com/cursork/gritt/session"
 )
@@ -21,14 +20,14 @@ func main() {
 	cmd.Env = append(os.Environ(), "RIDE_INIT=SERVE:*:14502")
 	cmd.Env = append(cmd.Env, "RIDE_SPAWNED=1", "DYALOG_LINEEDITOR_MODE=1")
 	cmd.Env = append(cmd.Env, session.DyalogEnv(exe)...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	setProcessGroup(cmd)
 	if err := cmd.Start(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 	fmt.Println(cmd.Process.Pid)
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigCh, termSignals()...)
 	<-sigCh
-	syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	killProcessGroup(cmd)
 }

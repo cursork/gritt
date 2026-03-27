@@ -23,7 +23,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/cursork/gritt/prepl"
@@ -49,7 +48,7 @@ func main() {
 	}
 	cleanup := func() {
 		if dyalogCmd != nil && dyalogCmd.Process != nil {
-			syscall.Kill(-dyalogCmd.Process.Pid, syscall.SIGKILL)
+			killProcessGroup(dyalogCmd)
 			dyalogCmd.Wait()
 		}
 	}
@@ -104,7 +103,7 @@ func launchDyalog(version string) (*exec.Cmd, int) {
 	cmd.Env = append(os.Environ(), fmt.Sprintf("RIDE_INIT=SERVE:*:%d", port))
 	cmd.Env = append(cmd.Env, "RIDE_SPAWNED=1", "DYALOG_LINEEDITOR_MODE=1")
 	cmd.Env = append(cmd.Env, session.DyalogEnv(exe)...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	setProcessGroup(cmd)
 	if err := cmd.Start(); err != nil {
 		log.Fatalf("start Dyalog (%s): %v", exe, err)
 	}
@@ -188,7 +187,7 @@ func serve(pc *prepl.Client, sockAddr string, replMode bool, cleanup func()) {
 	log.Printf("serving on %s", sockAddr)
 
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigCh, termSignals()...)
 	go func() {
 		<-sigCh
 		listener.Close()

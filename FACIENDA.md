@@ -6,7 +6,7 @@
 - [ ] **Multi-line expressions** — framing for `:Namespace`/`:EndNamespace`, nabla
 - [ ] **Multi-connection** — per-connection buffers on APL side (currently single `_buf`)
 - [ ] **System commands** — `)ts`, `)vars` etc. may not serialize via `Serialise`
-- [ ] **amicable as aplsock transport** — replace APLAN with 220⌶ binary in prepl protocol
+- [ ] **amicable as aplsock transport** — low priority. APLAN has fidelity issues (`Serialise`+`62583⌶` loses char matrix shapes, namespaces needed custom handler). 220⌶ avoids these but is undocumented and comes with no stability guarantees. Either could be the right choice depending on what breaks next.
 
 ## amicable
 - [ ] **decompiler: extend** — multi-line dfns, more system variables, tradfn string literals/locals, namespace member-value ordering for mixed namespaces, nested namespaces
