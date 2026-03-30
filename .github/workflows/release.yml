@@ -26,6 +26,14 @@ jobs:
           - goos: linux
             goarch: arm64
             suffix: linux-arm64
+          - goos: windows
+            goarch: amd64
+            suffix: windows-amd64
+            ext: .exe
+          - goos: windows
+            goarch: arm64
+            suffix: windows-arm64
+            ext: .exe
 
     steps:
       - uses: actions/checkout@v4
@@ -39,7 +47,7 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
-          go build -o gritt-${{ matrix.suffix }} .
+          go build -o gritt-${{ matrix.suffix }}${{ matrix.ext }} .
 
       - name: Build grittles
         env:
@@ -49,7 +57,7 @@ jobs:
           mkdir -p grittles-${{ matrix.suffix }}
           for tool in grittles/*/; do
             name=$(basename "$tool")
-            go build -o grittles-${{ matrix.suffix }}/"$name" ./"$tool"
+            go build -o grittles-${{ matrix.suffix }}/"$name"${{ matrix.ext }} ./"$tool"
           done
           zip -j grittles-${{ matrix.suffix }}.zip grittles-${{ matrix.suffix }}/*
 
@@ -57,7 +65,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: gritt-${{ matrix.suffix }}
-          path: gritt-${{ matrix.suffix }}
+          path: gritt-${{ matrix.suffix }}${{ matrix.ext }}
 
       - name: Upload grittles artifact
         uses: actions/upload-artifact@v4
