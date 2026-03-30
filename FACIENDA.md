@@ -6,7 +6,8 @@
 - [ ] **Multi-line expressions** — framing for `:Namespace`/`:EndNamespace`, nabla
 - [ ] **Multi-connection** — per-connection buffers on APL side (currently single `_buf`)
 - [ ] **System commands** — `)ts`, `)vars` etc. may not serialize via `Serialise`
-- [ ] **amicable as aplsock transport** — low priority. APLAN has fidelity issues (`Serialise`+`62583⌶` loses char matrix shapes, namespaces needed custom handler). 220⌶ avoids these but is undocumented and comes with no stability guarantees. Either could be the right choice depending on what breaks next.
+- [x] **aplsock transport modes** — `-mode plain`, `-mode aplan` (default), `-mode aplor` (220⌶ binary)
+- [ ] **`Raw.Members()` API** — programmatic access to namespace members from `amicable.Raw` blobs. Currently only accessible via `Decompile()` (text). Needed for aplor consumers to extract `tag`/`val` from response namespaces without string parsing.
 
 ## amicable
 - [ ] **decompiler: extend** — multi-line dfns, more system variables, tradfn string literals/locals, namespace member-value ordering for mixed namespaces, nested namespaces

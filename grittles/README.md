@@ -68,10 +68,11 @@ protocol over TCP or Unix sockets. Default mode returns raw APLAN for
 tooling; `-repl` mode decodes to plain text.
 
 ```
-aplsock -l -sock :4200              # launch Dyalog, serve on TCP 4200
+aplsock -l -sock :4200              # launch Dyalog, serve APLAN (default)
+aplsock -l -sock :4200 -mode plain  # plain text for interactive use
+aplsock -l -sock :4200 -mode aplor  # 220⌶ binary (exact fidelity, functions round-trip)
 aplsock -addr host:4502 -sock :4200 # connect to existing Dyalog
 aplsock -l -sock /tmp/apl.sock      # Unix socket
-aplsock -l -sock :4200 -repl        # plain text mode for interactive use
 ```
 
 Protocol (raw mode — each response is a single-line APLAN namespace):
@@ -105,7 +106,7 @@ Prepl.Start 4200
 Tests: `grittles/aplsock/test.sh`
 
 Flags: `-l` (launch Dyalog), `-addr HOST:PORT`, `-sock :PORT` or
-`-sock /path`, `-version VERSION`, `-repl`.
+`-sock /path`, `-version VERSION`, `-mode plain|aplan|aplor`.
 
 ### aplor
 

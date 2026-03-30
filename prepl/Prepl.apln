@@ -22,6 +22,7 @@
     LDRC←⍬           ⍝ Conga instance (set by LoadConga)
     _stop←0          ⍝ Stop flag
     _buf←''          ⍝ Receive buffer (v1: single connection)
+    _mode←'aplan'    ⍝ Output mode: 'plain' 'aplan' 'aplor'
 
     ⍝ ── Server Lifecycle ──
 
@@ -115,6 +116,10 @@
 
     ⍝ ── Evaluation ──
 
+    ∇ SetMode mode
+      _mode←mode
+    ∇
+
     ∇ r←Eval expr;⎕PW;⎕PP
       ⎕PW←32767 ⋄ ⎕PP←17
       ⍝ Execute in # context. Result in #.⍙r (not local — Serialise
@@ -125,32 +130,68 @@
           :EndWith
       :Else
           :If 6=⎕DMX.EN
-              r←'(tag: ''ret'')'
+              r←FmtVoid
           :Else
-              r←ErrAPLAN ⎕DMX
+              r←FmtErr ⎕DMX
           :EndIf
           →CLEANUP
       :EndTrap
-      ⍝ Serialize — namespace, APLAN, display form, or literal fallback
-      :If 9.1=⎕NC⊂'#.⍙r'                          ⍝ Namespace instance?
-          :Trap 0
-              r←'(tag: ''ret'' ⋄ val: ',(NsToAPLAN #.⍙r),')'
-          :Else
-              r←'(tag: ''ret'')'
-          :EndTrap
+      :Trap 0
+          r←FmtRet #.⍙r
       :Else
-          :Trap 0
-              r←'(tag: ''ret'' ⋄ val: ',(ToAPLAN #.⍙r),')'
-          :Else
-              :Trap 0
-                  r←'(tag: ''ret'' ⋄ val: ',(ToAPLAN⍕#.⍙r),')'
-              :Else
-                  r←'(tag: ''ret'')'
-              :EndTrap
-          :EndTrap
-      :EndIf
+          r←FmtVoid
+      :EndTrap
      CLEANUP:
       :Trap 0 ⋄ #.⎕EX'⍙r' ⋄ :EndTrap
+    ∇
+
+    ⍝ ── Response Formatters (dispatched by _mode) ──
+
+    ⍝ ── Response Formatters (dispatched by _mode) ──
+
+    ∇ r←FmtRet val;ns
+      :Select _mode
+      :Case 'aplor'
+          ns←⎕NS ⍬
+          ns.tag←'ret'
+          ns.val←val
+          r←To220 ns
+      :Else ⍝ 'aplan' (also used for 'plain' — Go decodes)
+          :If 9.1=⎕NC⊂'#.⍙r'
+              r←'(tag: ''ret'' ⋄ val: ',(NsToAPLAN val),')'
+          :Else
+              r←'(tag: ''ret'' ⋄ val: ',(ToAPLAN val),')'
+          :EndIf
+      :EndSelect
+    ∇
+
+    ∇ r←FmtVoid;ns
+      :Select _mode
+      :Case 'aplor'
+          ns←⎕NS ⍬
+          ns.tag←'ret'
+          r←To220 ns
+      :Else
+          r←'(tag: ''ret'')'
+      :EndSelect
+    ∇
+
+    ∇ r←FmtErr dmx;ns
+      :Select _mode
+      :Case 'aplor'
+          ns←⎕NS ⍬
+          ns.tag←'err'
+          ns.en←dmx.EN
+          ns.message←dmx.Message
+          r←To220 ns
+      :Else
+          r←ErrAPLAN dmx
+      :EndSelect
+    ∇
+
+    ∇ r←To220 val
+    ⍝ Serialize via 220⌶ → space-separated signed ints (one line)
+      r←1↓∊' ',¨⍕¨1(220⌶)val
     ∇
 
     ∇ r←ErrAPLAN dmx

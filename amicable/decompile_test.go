@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/cursork/gritt/codec"
 )
 
 // TestDecompile tests dfn decompilation. One Dyalog session for all cases.
@@ -184,6 +186,140 @@ func TestDecompileNamespace(t *testing.T) {
 	}
 }
 
+// TestUnmarshalNamespace tests namespace unmarshal into *codec.Namespace.
+func TestUnmarshalNamespace(t *testing.T) {
+	if _, err := exec.LookPath("gritt"); err != nil {
+		t.Skip("gritt not on PATH")
+	}
+
+	type checkFn func(t *testing.T, ns *codec.Namespace)
+
+	cases := []struct {
+		name, setup string
+		check       checkFn
+	}{
+		{"two_vars", "ns←⎕NS '' ⋄ ns.x←42 ⋄ ns.name←'Neil'", func(t *testing.T, ns *codec.Namespace) {
+			if ns.Values["x"] != 42 {
+				t.Errorf("x=%v, want 42", ns.Values["x"])
+			}
+			if ns.Values["name"] != "Neil" {
+				t.Errorf("name=%v, want 'Neil'", ns.Values["name"])
+			}
+		}},
+		{"three_vars", "ns←⎕NS '' ⋄ ns.a←1 ⋄ ns.b←'two' ⋄ ns.c←3", func(t *testing.T, ns *codec.Namespace) {
+			if ns.Values["a"] != 1 {
+				t.Errorf("a=%v, want 1", ns.Values["a"])
+			}
+			if ns.Values["b"] != "two" {
+				t.Errorf("b=%v, want 'two'", ns.Values["b"])
+			}
+			if ns.Values["c"] != 3 {
+				t.Errorf("c=%v, want 3", ns.Values["c"])
+			}
+		}},
+		{"vector_val", "ns←⎕NS '' ⋄ ns.v←1 2 3", func(t *testing.T, ns *codec.Namespace) {
+			v, ok := ns.Values["v"].([]any)
+			if !ok {
+				t.Fatalf("v is %T, want []any", ns.Values["v"])
+			}
+			if len(v) != 3 || v[0] != 1 || v[1] != 2 || v[2] != 3 {
+				t.Errorf("v=%v, want [1 2 3]", v)
+			}
+		}},
+		{"matrix_val", "ns←⎕NS '' ⋄ ns.m←2 3⍴⍳6", func(t *testing.T, ns *codec.Namespace) {
+			m, ok := ns.Values["m"].(*codec.Array)
+			if !ok {
+				t.Fatalf("m is %T, want *codec.Array", ns.Values["m"])
+			}
+			if len(m.Shape) != 2 || m.Shape[0] != 2 || m.Shape[1] != 3 {
+				t.Errorf("shape=%v, want [2 3]", m.Shape)
+			}
+		}},
+		{"fn_member", "ns←⎕NS '' ⋄ ns.f←{⍵+1}", func(t *testing.T, ns *codec.Namespace) {
+			r, ok := ns.Values["f"].(Raw)
+			if !ok {
+				t.Fatalf("f is %T, want Raw", ns.Values["f"])
+			}
+			src, err := r.Decompile()
+			if err != nil {
+				t.Fatalf("Decompile: %v", err)
+			}
+			if src != "{⍵+1}" {
+				t.Errorf("decompiled=%q, want {⍵+1}", src)
+			}
+		}},
+		{"mixed_var_fn", "ns←⎕NS '' ⋄ ns.tag←'hello' ⋄ ns.f←{⍵×2}", func(t *testing.T, ns *codec.Namespace) {
+			if ns.Values["tag"] != "hello" {
+				t.Errorf("tag=%v, want 'hello'", ns.Values["tag"])
+			}
+			r, ok := ns.Values["f"].(Raw)
+			if !ok {
+				t.Fatalf("f is %T, want Raw", ns.Values["f"])
+			}
+			src, err := r.Decompile()
+			if err != nil {
+				t.Fatalf("Decompile: %v", err)
+			}
+			if src != "{⍵×2}" {
+				t.Errorf("decompiled=%q, want {⍵×2}", src)
+			}
+		}},
+	}
+
+	// One session: each case sets up ns, serializes, then erases.
+	args := []string{"-l"}
+	for i, tc := range cases {
+		args = append(args, "-e", tc.setup)
+		args = append(args, "-e", fmt.Sprintf("'=%d=' ⋄ 1(220⌶)⎕OR'ns'", i))
+		args = append(args, "-e", ")erase ns")
+	}
+
+	out, err := exec.Command("gritt", args...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("gritt: %v\n%s", err, out)
+	}
+	content := string(out)
+
+	for i, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			delim := fmt.Sprintf("=%d=", i)
+			idx := strings.Index(content, delim)
+			if idx < 0 {
+				t.Fatalf("delimiter %q not found", delim)
+			}
+			after := content[idx+len(delim):]
+			after = strings.TrimLeft(after, " \n\r")
+
+			end := len(after)
+			if ni := strings.Index(after, "\n="); ni >= 0 {
+				end = ni
+			}
+			chunk := strings.TrimSpace(after[:end])
+			chunk = strings.ReplaceAll(chunk, "¯", "-")
+			fields := strings.Fields(chunk)
+
+			data := make([]byte, len(fields))
+			for j, f := range fields {
+				v, err := strconv.Atoi(f)
+				if err != nil {
+					t.Fatalf("parse byte %d %q: %v", j, f, err)
+				}
+				data[j] = byte(int8(v))
+			}
+
+			val, err := Unmarshal(data)
+			if err != nil {
+				t.Fatalf("Unmarshal: %v", err)
+			}
+			ns, ok := val.(*codec.Namespace)
+			if !ok {
+				t.Fatalf("expected *codec.Namespace, got %T", val)
+			}
+			tc.check(t, ns)
+		})
+	}
+}
+
 // --- Helpers ---
 
 // batchSerializeDfns serializes all dfn cases in one Dyalog session.
@@ -226,7 +362,7 @@ func parseDelimitedBlobs(t *testing.T, args []string, n int) []Raw {
 		chunk = strings.ReplaceAll(chunk, "¯", "-")
 		fields := strings.Fields(chunk)
 
-		data := make([]byte, len(fields))
+		data := make(Raw, len(fields))
 		for j, f := range fields {
 			v, err := strconv.Atoi(f)
 			if err != nil {
@@ -234,16 +370,7 @@ func parseDelimitedBlobs(t *testing.T, args []string, n int) []Raw {
 			}
 			data[j] = byte(int8(v))
 		}
-
-		val, err := Unmarshal(data)
-		if err != nil {
-			t.Fatalf("case %d: Unmarshal: %v", i, err)
-		}
-		raw, ok := val.(Raw)
-		if !ok {
-			t.Fatalf("case %d: expected Raw, got %T", i, val)
-		}
-		blobs[i] = raw
+		blobs[i] = data
 	}
 	return blobs
 }

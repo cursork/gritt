@@ -128,11 +128,19 @@ ID is optional (`⍝ID:uuid` trailing comment — `⍎` ignores it). For tooling
 **Usage:**
 ```
 aplsock -l -sock :4200                       # Launch Dyalog, serve on TCP 4200
+aplsock -l -sock :4200 -mode plain           # Plain text output (for netcat)
+aplsock -l -sock :4200 -mode aplor           # 220⌶ binary output
 aplsock -addr host:4502 -sock /tmp/apl.sock  # Connect to existing, Unix socket
-nc localhost 4200                             # Interactive netcat session
 ```
 
-**Test suite:** `grittles/aplsock/test.sh` — tests both `-l` and existing-Dyalog modes. Covers scalars, vectors, matrices, strings, namespaces, nested/mixed arrays, errors, dfn assignment, error recovery, complex numbers, booleans, raw protocol with `⍝ID:`.
+**Three output modes** (input is always APL expression text):
+- `-mode aplan` (default): APLAN text `(tag: 'ret' ⋄ val: 1 2 3)`. Parsed by `codec.APLAN` in Go.
+- `-mode plain`: Display text `1 2 3`. APL side sends APLAN, Go handler decodes for the external client.
+- `-mode aplor`: 220⌶ binary (signed int vector). APL side builds a response namespace (`ns.tag←'ret' ⋄ ns.val←result`), serializes with `1(220⌶)`. Go client gets `amicable.Raw`. Functions/⎕OR round-trip exactly. No stability guarantee across Dyalog versions.
+
+aplan and aplor serialize the same logical structure in different formats and never mix. Errors and void use the same format as results in each mode.
+
+**Tests:** Go integration tests in `prepl/modes_test.go` cover all three modes. Also `prepl/integration_test.go` for comprehensive type coverage in aplan mode. Shell tests in `grittles/aplsock/test.sh`.
 
 **Key learnings:**
 - `RIDE_SPAWNED=1` env var is critical when launching Dyalog — without it, threads spawned with `&` don't get scheduled.
@@ -199,7 +207,7 @@ Go library for Dyalog's `220⌶` binary array serialization format. Named after 
 
 **Vision:** With amicable as transport and aplor for decompilation, Dyalog can live on a remote server while Go tooling on the client side can: parse arrays into native types, decompile function source, and eventually synthesize/modify bytecode — all without a local Dyalog installation.
 
-**Known limitations:** Multi-line dfns not yet tested. System functions beyond ⎕← and ⎕IO not mapped. Tradfn string literals not yet supported. Namespace function literals may fail in mixed (var+fn) namespaces. Nested namespaces not tested.
+**Known limitations:** Multi-line dfns not yet tested. System functions beyond ⎕← and ⎕IO not mapped. Tradfn string literals not yet supported. Nested namespaces not tested. `Unmarshal` returns `Raw` for namespaces instead of `*codec.Namespace` — `unmarshalNamespace` exists but has broken value extraction for mixed (var+fn) namespaces. Plan in `deliberanda/namespace-unmarshal.md`.
 
 ## ibeam package + TUI pane (new)
 

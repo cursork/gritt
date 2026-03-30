@@ -82,14 +82,206 @@ func Unmarshal(data []byte) (any, error) {
 	// Type code is at offset: 2 (magic) + ptrSize (size field) + 1 (rank/flags byte).
 	typeOff := 2 + ptrSize + 1
 	if typeOff < len(data) && data[typeOff] == 0x00 {
-		// Opaque Dyalog internal structure — preserve as Raw for round-tripping.
 		raw := make(Raw, len(data))
 		copy(raw, data)
+		// Namespaces (byte 0x22 high nibble >= 0xA0) have parseable structure.
+		// Parse into *codec.Namespace. Functions/⎕OR stay as Raw.
+		if len(data) > 0x22 && data[0x22]&0xF0 >= 0xA0 {
+			return raw.unmarshalNamespace()
+		}
 		return raw, nil
 	}
 
 	r := &reader{data: data, pos: 2, ptrSize: ptrSize}
 	return r.readArray()
+}
+
+// unmarshalNamespace parses a Raw namespace blob into *codec.Namespace.
+// Extracts member values directly from the blob as typed Go values.
+//
+// Blob layout after the name table: member values in reverse name-table order,
+// then metadata tail (settings, translation table, workspace info).
+func (r Raw) unmarshalNamespace() (any, error) {
+	data := []byte(r)
+	members := r.extractNsMembers()
+	nameTableEnd := r.findNameTableEnd()
+
+	// Separate namespace name from value members.
+	var memberList []nsMember
+	for _, m := range members {
+		if m.class != 9 {
+			memberList = append(memberList, m)
+		}
+	}
+
+	// Values are stored in reverse name-table order.
+	reversed := make([]nsMember, len(memberList))
+	for i, m := range memberList {
+		reversed[len(memberList)-1-i] = m
+	}
+
+	// Walk sequentially from nameTableEnd, collecting one value per member.
+	values := make([]any, 0, len(memberList))
+	pos := nameTableEnd
+	for _, m := range reversed {
+		var val any
+		var newPos int
+		var ok bool
+		switch m.class {
+		case 3: // function — embedded ⎕OR sub-blob
+			val, newPos, ok = findNextFnBlob(data, pos)
+		default: // variable — standard sub-array
+			val, newPos, ok = findNextSubArray(data, pos)
+		}
+		if !ok {
+			break
+		}
+		values = append(values, val)
+		pos = newPos
+	}
+
+	// Reverse back to name-table order.
+	for i, j := 0, len(values)-1; i < j; i, j = i+1, j-1 {
+		values[i], values[j] = values[j], values[i]
+	}
+
+	ns := &codec.Namespace{
+		Keys:   make([]string, 0, len(memberList)),
+		Values: make(map[string]any, len(memberList)),
+	}
+	for i, m := range memberList {
+		ns.Keys = append(ns.Keys, m.name)
+		if i < len(values) {
+			ns.Values[m.name] = values[i]
+		}
+	}
+	return ns, nil
+}
+
+// findNextSubArray scans forward from 'from' for the next standard sub-array
+// (simple or nested) and parses it. Returns (value, posAfter, true) on success.
+func findNextSubArray(data []byte, from int) (any, int, bool) {
+	for j := from; j < len(data)-17; j++ {
+		rf := data[j+8]
+		tc := data[j+9]
+		flags := rf & 0x0F
+		rank := int(rf >> 4)
+
+		// Accept simple (0x0F) and nested (0x07) sub-arrays.
+		if flags != flagSimple && flags != flagNested {
+			continue
+		}
+		if rank > 15 {
+			continue
+		}
+		// Validate type code for simple arrays.
+		if flags == flagSimple && !validTypeCode(tc) {
+			continue
+		}
+		// Nested must be typePointer (0x06).
+		if flags == flagNested && tc != typePointer {
+			continue
+		}
+		// Zero padding after type/rank.
+		allZero := true
+		for _, b := range data[j+10 : min(j+16, len(data))] {
+			if b != 0 {
+				allZero = false
+			}
+		}
+		if !allZero {
+			continue
+		}
+
+		subR := &reader{data: data, pos: j, ptrSize: 8}
+		val, err := subR.readArray()
+		if err != nil {
+			continue
+		}
+
+		// Skip bytecode char8 vectors (FF FF header — these are inside function blobs).
+		if tc == typeChar8 && rank == 1 {
+			if s, ok := val.(string); ok && len(s) >= 2 && s[0] == 0xFF && s[1] == 0xFF {
+				j = subR.pos - 1
+				continue
+			}
+		}
+
+		return val, subR.pos, true
+	}
+	return nil, from, false
+}
+
+// findNextFnBlob scans forward from 'from' for an embedded function ⎕OR sub-blob.
+// Identifies it by the FF FF bytecode marker, then determines extent by scanning
+// for literal pool sub-arrays after the bytecode. Returns (Raw, posAfter, true).
+// The returned Raw has a magic header prepended so it's a valid standalone blob.
+func findNextFnBlob(data []byte, from int) (Raw, int, bool) {
+	// Find the FF FF bytecode marker.
+	bcStart := -1
+	for j := from; j < len(data)-1; j++ {
+		if data[j] == 0xFF && data[j+1] == 0xFF {
+			bcStart = j
+			break
+		}
+	}
+	if bcStart < 0 {
+		return nil, from, false
+	}
+
+	// Find the char8 vector containing the bytecode.
+	// The vector header is at bcStart - 24 (size:8 + type_rank:8 + shape:8).
+	// But we need to find the actual header by scanning backwards for the
+	// type signature: 0x1F 0x27 (rank=1, flags=0x0F, type=char8).
+	vecStart := -1
+	for j := bcStart; j >= from && j >= bcStart-40; j-- {
+		if j+9 < len(data) && data[j+8] == 0x1F && data[j+9] == 0x27 {
+			vecStart = j
+			break
+		}
+	}
+	if vecStart < 0 {
+		// Can't find vector header; skip past FF FF and try to continue.
+		return nil, bcStart + 2, false
+	}
+
+	// Parse the bytecode vector to find its end.
+	subR := &reader{data: data, pos: vecStart, ptrSize: 8}
+	_, err := subR.readArray()
+	if err != nil {
+		return nil, bcStart + 2, false
+	}
+	bcEnd := subR.pos
+
+	// After bytecode: scan for literal pool sub-arrays. They follow immediately.
+	// Keep consuming sub-arrays until we can't find one within a short window.
+	litEnd := bcEnd
+	for {
+		_, newPos, ok := findNextSubArray(data, litEnd)
+		if !ok || newPos-litEnd > 64 {
+			break
+		}
+		litEnd = newPos
+	}
+
+	// The function blob spans from 'from' to litEnd.
+	// Wrap as a standalone Raw with magic header.
+	blobData := data[from:litEnd]
+	raw := make(Raw, 2+len(blobData))
+	raw[0] = magicByte0
+	raw[1] = magic64
+	copy(raw[2:], blobData)
+
+	return raw, litEnd, true
+}
+
+func validTypeCode(tc byte) bool {
+	switch tc {
+	case typeBool, typeInt8, typeInt16, typeInt32, typeFloat64,
+		typeChar8, typeChar16, typeChar32, typeComplex, typeDec128:
+		return true
+	}
+	return false
 }
 
 // Marshal serializes a Go value into 220⌶ format (64-bit little-endian).

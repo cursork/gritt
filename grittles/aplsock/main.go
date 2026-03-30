@@ -36,8 +36,14 @@ func main() {
 	flag.BoolVar(launch, "l", false, "Launch Dyalog automatically")
 	version := flag.String("version", "", "Dyalog version or path to binary")
 	sock := flag.String("sock", ":4200", "Socket to serve on (:port or /path)")
-	repl := flag.Bool("repl", false, "REPL mode: decode APLAN, return plain text")
+	mode := flag.String("mode", "aplan", "Output mode: plain, aplan, aplor")
+	// Legacy alias
+	repl := flag.Bool("repl", false, "Legacy alias for -mode plain")
 	flag.Parse()
+
+	if *repl {
+		*mode = "plain"
+	}
 
 	// 1. Launch Dyalog if requested
 	var dyalogCmd *exec.Cmd
@@ -61,9 +67,9 @@ func main() {
 	}
 	log.Printf("RIDE connected to %s", *addr)
 
-	// 3. Bootstrap: inject APL prepl code and start server on a thread
+	// 3. Bootstrap: inject APL prepl code, set mode, start server on a thread
 	internalPort := 10000 + rand.Intn(50000)
-	bootstrap(rc, internalPort)
+	bootstrap(rc, internalPort, *mode)
 
 	// 4. Drain RIDE messages in background so the connection doesn't back up.
 	go func() {
@@ -88,7 +94,7 @@ func main() {
 	log.Printf("prepl connected on internal port %d", internalPort)
 
 	// 6. Serve external clients (pc shared across all client connections)
-	serve(pc, *sock, *repl, cleanup)
+	serve(pc, *sock, *mode, cleanup)
 }
 
 // launchDyalog starts Dyalog APL with RIDE on a random port.
@@ -122,8 +128,8 @@ func launchDyalog(version string) (*exec.Cmd, int) {
 	return nil, 0
 }
 
-// bootstrap injects the APL prepl namespace and starts the server on a new thread.
-func bootstrap(rc *ride.Client, port int) {
+// bootstrap injects the APL prepl namespace, sets mode, and starts the server.
+func bootstrap(rc *ride.Client, port int, mode string) {
 	f, err := os.CreateTemp("", "prepl-*.apln")
 	if err != nil {
 		log.Fatalf("create temp file: %v", err)
@@ -139,6 +145,15 @@ func bootstrap(rc *ride.Client, port int) {
 		log.Fatalf("⎕FIX failed: %v", err)
 	}
 	log.Printf("⎕FIX: %s", strings.Join(out, ""))
+
+	// Set output mode before starting
+	if mode != "aplan" {
+		out, err = rc.Execute(fmt.Sprintf("Prepl.SetMode '%s'", mode))
+		if err != nil {
+			log.Fatalf("SetMode failed: %v", err)
+		}
+		log.Printf("SetMode: %s", mode)
+	}
 
 	out, err = rc.Execute("Prepl.LoadConga")
 	if err != nil {
@@ -167,7 +182,7 @@ func waitForPrepl(addr string) *prepl.Client {
 }
 
 // serve listens on the given address and proxies client connections to the APL prepl.
-func serve(pc *prepl.Client, sockAddr string, replMode bool, cleanup func()) {
+func serve(pc *prepl.Client, sockAddr string, mode string, cleanup func()) {
 	var listener net.Listener
 	var err error
 	var isUnix bool
@@ -204,9 +219,14 @@ func serve(pc *prepl.Client, sockAddr string, replMode bool, cleanup func()) {
 		if err != nil {
 			return
 		}
-		if replMode {
-			go handleConnRepl(pc, conn)
-		} else {
+		switch mode {
+		case "plain":
+			go handleConnPlain(pc, conn)
+		default:
+			// Both 'aplan' and 'aplor' use raw APLAN passthrough.
+			// The difference is what the APL side puts in val:
+			// aplan → APLAN text, aplor → 220⌶ signed int vector.
+			// The consumer knows which mode and parses accordingly.
 			go handleConn(pc, conn)
 		}
 	}
@@ -231,8 +251,8 @@ func handleConn(pc *prepl.Client, conn net.Conn) {
 	}
 }
 
-// handleConnRepl decodes APLAN and returns plain text — for interactive use.
-func handleConnRepl(pc *prepl.Client, conn net.Conn) {
+// handleConnPlain decodes APLAN and returns plain text — for interactive use.
+func handleConnPlain(pc *prepl.Client, conn net.Conn) {
 	defer conn.Close()
 	scanner := bufio.NewScanner(conn)
 	for scanner.Scan() {
