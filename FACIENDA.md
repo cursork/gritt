@@ -7,10 +7,10 @@
 - [ ] **Multi-connection** — per-connection buffers on APL side (currently single `_buf`)
 - [ ] **System commands** — `)ts`, `)vars` etc. may not serialize via `Serialise`
 - [x] **aplsock transport modes** — `-mode plain`, `-mode aplan` (default), `-mode aplor` (220⌶ binary)
-- [ ] **`Raw.Members()` API** — programmatic access to namespace members from `amicable.Raw` blobs. Currently only accessible via `Decompile()` (text). Needed for aplor consumers to extract `tag`/`val` from response namespaces without string parsing.
+- [x] **`Unmarshal` namespace support** — `amicable.Unmarshal` returns `*codec.Namespace` for namespace blobs. Variable members extracted as typed Go values, function members as opaque `Raw` bytes. aplor mode scalar/string/error tests pass.
 
 ## amicable
-- [ ] **decompiler: extend** — multi-line dfns, more system variables, tradfn string literals/locals, namespace member-value ordering for mixed namespaces, nested namespaces
+- [ ] **decompiler: extend** — multi-line dfns, more system variables, tradfn string literals/locals, embedded function decompilation (different encoding from standalone ⎕OR — see §5.7), nested namespaces
 - [ ] **bytecode synthesis** — generate/modify ⎕OR bytecode in Go, send to Dyalog via `0(220⌶)`
 
 ## GitHub Issues
@@ -47,6 +47,7 @@
 - [ ] APL keycode aliases (BK, FD, SR etc.)
 - [ ] Clipboard support (Ctrl+C copy, Ctrl+V paste)
 - [ ] Status bar (connection info, workspace name)
+- [ ] Per-directory/project history — currently one global history file, might want separate histories per workspace
 
 ---
 

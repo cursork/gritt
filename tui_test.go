@@ -1299,6 +1299,87 @@ func TestTUI(t *testing.T) {
 	})
 
 	// ==========================================
+	// Test: History search pane (ctrl+r)
+	// ==========================================
+
+	// History has hist1←101, hist2←202, hist3←303 from above
+	runner.SendKeys("C-r")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("History search pane opened")
+
+	runner.Test("History pane opens with title", func() bool {
+		return runner.Contains("History")
+	})
+
+	runner.Test("History pane shows all entries", func() bool {
+		return runner.Contains("hist3") && runner.Contains("hist2") && runner.Contains("hist1")
+	})
+
+	// Type to filter
+	runner.SendText("hist2")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("History search filtered to hist2")
+
+	runner.Test("Filter narrows to hist2", func() bool {
+		return runner.Contains("hist2←202") && !runner.Contains("hist3")
+	})
+
+	// Select with Enter
+	runner.SendKeys("Enter")
+	runner.Sleep(300 * time.Millisecond)
+
+	runner.Test("History pane closed after selection", func() bool {
+		return !runner.Contains("╭─ History")
+	})
+
+	runner.Test("Selected entry placed on input line", func() bool {
+		return runner.Contains("hist2←202")
+	})
+
+	// Clear input for next test
+	runner.SendKeys("C-l")
+	runner.Sleep(300 * time.Millisecond)
+
+	// Test: Escape closes without selecting
+	runner.SendKeys("C-r")
+	runner.Sleep(300 * time.Millisecond)
+	runner.SendKeys("Escape")
+	runner.Sleep(300 * time.Millisecond)
+
+	runner.Test("Escape closes history pane", func() bool {
+		return !runner.Contains("╭─ History")
+	})
+
+	// ==========================================
+	// Test: History survives Ctrl+L
+	// ==========================================
+
+	// Navigate into history (most recent executed command is hist3)
+	runner.SendKeys(string([]byte{0x1b}), "[1;6A") // ctrl+shift+up
+	runner.Sleep(300 * time.Millisecond)
+
+	runner.Test("History entry recalled before clear", func() bool {
+		return runner.Contains("hist3←303")
+	})
+
+	// Clear screen — history position should survive
+	runner.SendKeys("C-l")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("After Ctrl+L while navigating history")
+
+	runner.Test("History entry preserved after Ctrl+L", func() bool {
+		return runner.Contains("hist3←303")
+	})
+
+	// Navigate forward should still work
+	runner.SendKeys(string([]byte{0x1b}), "[1;6B") // ctrl+shift+down
+	runner.Sleep(300 * time.Millisecond)
+
+	runner.Test("History forward works after Ctrl+L", func() bool {
+		return !runner.Contains("hist3←303")
+	})
+
+	// ==========================================
 	// Test: Focus mode (C-] f) — session
 	// ==========================================
 

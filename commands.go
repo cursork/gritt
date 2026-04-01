@@ -283,6 +283,10 @@ func buildCommands(cfg *Config) *CommandRegistry {
 		m.historyForward()
 		return *m, nil
 	})
+	reg.add("reverse-search", "Search command history", false, "", func(m *Model) (tea.Model, tea.Cmd) {
+		m.openHistorySearch()
+		return *m, nil
+	})
 
 	// --- Palette-only commands (no default binding) ---
 	reg.add("symbols", "Search APL symbols", false, "", func(m *Model) (tea.Model, tea.Cmd) {

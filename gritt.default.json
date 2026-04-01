@@ -17,6 +17,7 @@
     "doc-search":      { "keys": ["/"], "leader": true },
     "history-back":    { "keys": ["ctrl+shift+up"] },
     "history-forward": { "keys": ["ctrl+shift+down"] },
+    "reverse-search":  { "keys": ["ctrl+r"] },
     "clear":           { "keys": ["ctrl+l"] },
     "focus-mode":      { "keys": ["f"], "leader": true },
     "symbols":         {},

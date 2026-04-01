@@ -35,6 +35,10 @@ Grab a binary from [Releases](https://github.com/cursork/gritt/releases):
 - `gritt-darwin-amd64` - macOS Intel
 - `gritt-linux-arm64` - Linux ARM64
 - `gritt-linux-amd64` - Linux x86_64
+- `gritt-windows-amd64.exe` - Windows x86_64
+- `gritt-windows-arm64.exe` - Windows ARM64
+
+**Windows note:** SmartScreen will block the download (click "Keep" in Edge, or "Keep anyway" in the dialog). Defender may also flag the binary — right-click → Properties → Unblock. Both are false positives from unsigned Go binaries.
 
 ### go install
 
@@ -53,7 +57,8 @@ go build -o gritt .
 ## Requirements
 
 - Dyalog APL with RIDE enabled
-- tmux (for running tests)
+- macOS, Linux, or Windows
+- tmux (for running tests — macOS/Linux only)
 
 ## Usage
 
@@ -99,7 +104,7 @@ Works on function files (`.aplf`) and namespace/class files (`.apln`). Uses Dyal
 
 ## Caching
 
-gritt caches APLcart idioms and Dyalog documentation locally for fast offline access. Caches live in your OS cache directory (`~/Library/Caches/gritt/` on macOS, `~/.cache/gritt/` on Linux).
+gritt caches APLcart idioms and Dyalog documentation locally for fast offline access. Caches live in your OS cache directory (`~/Library/Caches/gritt/` on macOS, `~/.cache/gritt/` on Linux, `%LocalAppData%\gritt\` on Windows).
 
 Nothing is downloaded until you use a feature that needs it:
 - **APLcart** (`Ctrl+]` `:` → `aplcart`): downloads on first open
@@ -117,7 +122,7 @@ See [KEYBINDINGS.md](KEYBINDINGS.md) for full reference. When in doubt: `Ctrl+]`
 
 gritt looks for `gritt.json` in order:
 1. `./gritt.json` (local)
-2. `~/.config/gritt/gritt.json` (user)
+2. `~/.config/gritt/gritt.json` (user — `%USERPROFILE%\.config\gritt\` on Windows)
 3. Embedded default
 
 These are not merged - first found, wins. Override with `-cfg path` to load a specific file, or `-cfg ''` for embedded defaults only.

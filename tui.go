@@ -223,6 +223,9 @@ func NewModel(addr string, logFile io.Writer, profile colorprofile.Profile, cfgF
 	// Docs database opened lazily on first use from cache dir
 	m.openDocsDB()
 
+	// Load command history from cache
+	m.loadHistory()
+
 	return m
 }
 
@@ -453,6 +456,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.confirmQuit {
 		m.confirmQuit = false
 		if msg.String() == "y" || msg.String() == "Y" {
+			m.saveHistory()
 			return m, tea.Quit
 		}
 		return m, nil
@@ -698,6 +702,21 @@ routeToPane:
 			if cmd := m.commands.ByName(action); cmd != nil && cmd.Action != nil {
 				return cmd.Action(&m)
 			}
+			return m, nil
+		}
+
+		// Check if history search selected an entry
+		if hp, ok := fp.Content.(*HistoryPane); ok && hp.Selected != "" {
+			selected := hp.Selected
+			hp.Selected = ""
+			m.panes.Remove("history")
+			m.restoreOverlayFocus()
+			// Place the selected command on the input line
+			m.cursorRow = len(m.lines) - 1
+			m.setCurrentLine(selected)
+			m.cursorCol = len(m.currentLineRunes())
+			m.historyIdx = 0
+			m.historySaved = ""
 			return m, nil
 		}
 
@@ -1108,9 +1127,53 @@ func (m *Model) historyForward() {
 func (m *Model) clearScreen() {
 	m.lines = []Line{{Text: aplIndent}}
 	m.cursorRow = 0
-	m.cursorCol = len(aplIndent)
-	m.historyIdx = 0
-	m.historySaved = ""
+	// Preserve history navigation — re-place the current entry
+	if m.historyIdx > 0 && m.historyIdx <= len(m.history) {
+		m.setCurrentLine(m.history[m.historyIdx-1])
+		m.cursorCol = len(m.currentLineRunes())
+	} else {
+		m.cursorCol = len(aplIndent)
+	}
+}
+
+const historyFile = "history"
+const maxHistory = 500
+
+func (m *Model) loadHistory() {
+	path := cachePath(historyFile)
+	if path == "" {
+		return
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return // No history file yet
+	}
+	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
+	// Filter empty lines
+	for _, line := range lines {
+		if line != "" {
+			m.history = append(m.history, line)
+		}
+	}
+	if len(m.history) > maxHistory {
+		m.history = m.history[:maxHistory]
+	}
+}
+
+func (m *Model) saveHistory() {
+	path := cachePath(historyFile)
+	if path == "" {
+		return
+	}
+	if len(m.history) == 0 {
+		return
+	}
+	var sb strings.Builder
+	for _, h := range m.history {
+		sb.WriteString(h)
+		sb.WriteString("\n")
+	}
+	os.WriteFile(path, []byte(sb.String()), 0644)
 }
 
 func (m Model) execute() (tea.Model, tea.Cmd) {
@@ -2166,6 +2229,25 @@ func (m *Model) openSymbolSearch() {
 	m.panes.Focus("symbols")
 }
 
+func (m *Model) openHistorySearch() {
+	if m.panes.Get("history") != nil {
+		m.panes.Remove("history")
+		return
+	}
+
+	m.saveOverlayFocus()
+	hp := NewHistoryPane(m.history)
+
+	paneW := min(70, m.width-4)
+	paneH := min(20, m.height-4)
+	paneX := (m.width - paneW) / 2
+	paneY := (m.height - paneH) / 2
+
+	pane := NewPane("history", hp, paneX, paneY, paneW, paneH)
+	m.panes.Add(pane)
+	m.panes.Focus("history")
+}
+
 // warnOldDocsCache logs a warning if the old ~/.config/gritt/dyalog-docs.db exists.
 func (m *Model) warnOldDocsCache() {
 	oldPath := filepath.Join(os.Getenv("HOME"), ".config", "gritt", "dyalog-docs.db")
@@ -2563,6 +2645,7 @@ func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
 		// If last command was )off, this is intentional shutdown - exit cleanly
 		if m.pendingQuit {
 			m.log("Session ended with )off")
+			m.saveHistory()
 			return m, tea.Quit
 		}
 

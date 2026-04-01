@@ -64,7 +64,7 @@ TUI deduplication complete: `aplcart.go` and `doc_search.go` now delegate to lib
 
 ## Cache Infrastructure
 
-APLcart and docs now use `os.UserCacheDir()/gritt/` (`~/Library/Caches/gritt/` on macOS). Generic cache utilities in `cache/` package (`Dir()`, `Path()`, `IsStale()`). Feature-specific fetch/cache logic in `aplcart/` and `docs/` library packages (TUI pane code still in `package main`).
+APLcart and docs now use `os.UserCacheDir()/gritt/` (`~/Library/Caches/gritt/` on macOS, `~/.cache/gritt/` on Linux, `%LocalAppData%\gritt\` on Windows). Generic cache utilities in `cache/` package (`Dir()`, `Path()`, `IsStale()`). Feature-specific fetch/cache logic in `aplcart/` and `docs/` library packages (TUI pane code still in `package main`).
 
 - **APLcart**: TSV fetched from GitHub, parsed, stored in `aplcart.db` (SQLite). Loaded synchronously from cache on open (instant). If cache missing, shows "Loading..." and fetches. If stale (>7 days), serves stale immediately, refreshes in background.
 - **Docs**: `dyalog-docs.db` downloaded from `xpqz/bundle-docs` GitHub releases. Opened lazily on first docs use. Old location `~/.config/gritt/` no longer used — startup warns if old file exists.
@@ -172,9 +172,11 @@ Go library for Dyalog's `220⌶` binary array serialization format. Named after 
 
 **Format (reverse-engineered):** 2-byte magic (`DF A4` 64-bit, `DF 94` 32-bit), then ptrSize-aligned fields: size, type/rank, shape, data. Type codes are Dyalog-internal (0x21=bool through 0x2E=decimal128, 0x06=nested, 0x00=opaque). Reads both 32-bit and 64-bit formats, writes 64-bit. Full spec in `adnotata/0010-220-ibeam-binary-format.md`.
 
+**Namespace unmarshal:** `Unmarshal` returns `*codec.Namespace` for namespace blobs. Variable members are extracted as typed Go values (int, string, []any, *codec.Array, etc.). Function members are extracted as opaque `Raw` bytes — the namespace-embedded encoding differs from standalone `⎕OR` so they can't yet be decompiled. Sequential walk from `nameTableEnd` via `findNextSubArray` (variables) and `skipFnBlob` (functions). Tests: `TestUnmarshalNamespace` in `decompile_test.go` (6 cases).
+
 **Special types:**
 - `amicable.Decimal128` — 16-byte opaque IEEE 754 decimal (no Go equivalent)
-- `amicable.Raw` — opaque blob for types we can't parse structurally (⎕OR, namespaces). Preserves bytes exactly for round-tripping.
+- `amicable.Raw` — opaque blob for types we can't parse structurally (standalone ⎕OR). Preserves bytes exactly for round-tripping.
 
 **Tests:** Unit tests with exact Dyalog v20 bytes, Go round-trips, byte-exact comparison with Dyalog output, e2e tests (serialize in APL → unmarshal/marshal in Go → deserialize in APL, verify `≡` identity for 25 array types). Includes ⎕OR dfn round-trip challenge.
 
@@ -207,7 +209,7 @@ Go library for Dyalog's `220⌶` binary array serialization format. Named after 
 
 **Vision:** With amicable as transport and aplor for decompilation, Dyalog can live on a remote server while Go tooling on the client side can: parse arrays into native types, decompile function source, and eventually synthesize/modify bytecode — all without a local Dyalog installation.
 
-**Known limitations:** Multi-line dfns not yet tested. System functions beyond ⎕← and ⎕IO not mapped. Tradfn string literals not yet supported. Nested namespaces not tested. `Unmarshal` returns `Raw` for namespaces instead of `*codec.Namespace` — `unmarshalNamespace` exists but has broken value extraction for mixed (var+fn) namespaces. Plan in `deliberanda/namespace-unmarshal.md`.
+**Known limitations:** Multi-line dfns not yet tested. System functions beyond ⎕← and ⎕IO not mapped. Tradfn string literals not yet supported. Nested namespaces not tested. Embedded function members are extracted as opaque `Raw` bytes but can't yet be decompiled standalone — the namespace-embedded encoding differs from standalone `⎕OR` (different literal indices, tradfn-style bytecode structure). See `deliberanda/namespace-unmarshal.md`.
 
 ## ibeam package + TUI pane (new)
 
@@ -226,6 +228,7 @@ I-beam (⌶) lookup library at `ibeam/` with TUI pane integration. Two-tier sear
 
 ## Recent
 
+- **History search pane + persistent history**: Ctrl+R opens an overlay pane showing all command history entries. Type to filter, Up/Down to navigate, Enter to select (places command on input line), Escape to close. Deduplicates entries in display. Command history persists across restarts via `~/.cache/gritt/history` (loaded in `NewModel`, saved on quit/`)off`). Capped at 500 entries. Also fixed: Ctrl+L no longer resets history navigation position — if you're scrolling through history with Ctrl+Shift+Up/Down and clear the screen, your position is preserved.
 - **Autolocalise**: Three commands for tradfn variable localisation (`autolocalise.go`):
   - **Autolocalise mode**: Toggle via command palette (`autolocalise`). When enabled, updates header on Enter and save. Supports `⍝ GLOBALS: foo bar` comment to exclude intentional globals. Handles simple assignment (`x←`), modified assignment (`x+←`), chained (`x←y←`), destructuring (`(a b)←`), and `:For` loop variables. Skips comments, strings, system variables (`⎕IO←`), namespace members (`ns.x←`). Config option `"autolocalise": true` in `gritt.json` to default on (per-session, toggle doesn't persist). Title bar shows `[AL]` when active.
   - **Toggle localisation**: Command palette `toggle-local` (like RIDE's Ctrl+Up `TL`). Cursor on a variable name → toggles it in/out of the header. When removing: adds to `⍝ GLOBALS:` (creates comment if autolocalise on; adds to existing comment if autolocalise off). When adding: removes from `⍝ GLOBALS:`. Empty GLOBALS comment is kept as a signal.

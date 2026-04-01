@@ -124,21 +124,28 @@ func (r Raw) unmarshalNamespace() (any, error) {
 	values := make([]any, 0, len(memberList))
 	pos := nameTableEnd
 	for _, m := range reversed {
-		var val any
-		var newPos int
-		var ok bool
 		switch m.class {
-		case 3: // function — embedded ⎕OR sub-blob
-			val, newPos, ok = findNextFnBlob(data, pos)
+		case 3: // function — embedded sub-blob, different format from standalone ⎕OR
+			fnStart := pos
+			newPos, ok := skipFnBlob(data, pos)
+			if !ok {
+				goto done
+			}
+			// Store the raw embedded bytes for future use.
+			blob := make(Raw, newPos-fnStart)
+			copy(blob, data[fnStart:newPos])
+			values = append(values, blob)
+			pos = newPos
 		default: // variable — standard sub-array
-			val, newPos, ok = findNextSubArray(data, pos)
+			val, newPos, ok := findNextSubArray(data, pos)
+			if !ok {
+				goto done
+			}
+			values = append(values, val)
+			pos = newPos
 		}
-		if !ok {
-			break
-		}
-		values = append(values, val)
-		pos = newPos
 	}
+done:
 
 	// Reverse back to name-table order.
 	for i, j := 0, len(values)-1; i < j; i, j = i+1, j-1 {
@@ -212,11 +219,15 @@ func findNextSubArray(data []byte, from int) (any, int, bool) {
 	return nil, from, false
 }
 
-// findNextFnBlob scans forward from 'from' for an embedded function ⎕OR sub-blob.
-// Identifies it by the FF FF bytecode marker, then determines extent by scanning
-// for literal pool sub-arrays after the bytecode. Returns (Raw, posAfter, true).
-// The returned Raw has a magic header prepended so it's a valid standalone blob.
-func findNextFnBlob(data []byte, from int) (Raw, int, bool) {
+// skipFnBlob scans forward from 'from' past an embedded function sub-blob.
+// Identifies the blob by the FF FF bytecode marker, parses the bytecode vector
+// to find its end, then skips past any trailing sub-arrays (literal pool).
+// Returns the position after the function blob.
+//
+// Embedded functions use a different internal encoding than standalone ⎕OR blobs
+// so we don't attempt to extract them as Raw. The caller stores the raw bytes
+// for future use.
+func skipFnBlob(data []byte, from int) (int, bool) {
 	// Find the FF FF bytecode marker.
 	bcStart := -1
 	for j := from; j < len(data)-1; j++ {
@@ -226,53 +237,40 @@ func findNextFnBlob(data []byte, from int) (Raw, int, bool) {
 		}
 	}
 	if bcStart < 0 {
-		return nil, from, false
+		return from, false
 	}
 
-	// Find the char8 vector containing the bytecode.
-	// The vector header is at bcStart - 24 (size:8 + type_rank:8 + shape:8).
-	// But we need to find the actual header by scanning backwards for the
-	// type signature: 0x1F 0x27 (rank=1, flags=0x0F, type=char8).
+	// Find the char8 vector containing the bytecode by scanning backwards
+	// for 0x1F 0x27 (rank=1, flags=0x0F, type=char8).
 	vecStart := -1
 	for j := bcStart; j >= from && j >= bcStart-40; j-- {
-		if j+9 < len(data) && data[j+8] == 0x1F && data[j+9] == 0x27 {
+		if j+9 < len(data) && data[j+8] == 0x1F && data[j+9] == typeChar8 {
 			vecStart = j
 			break
 		}
 	}
 	if vecStart < 0 {
-		// Can't find vector header; skip past FF FF and try to continue.
-		return nil, bcStart + 2, false
+		return bcStart + 2, false
 	}
 
 	// Parse the bytecode vector to find its end.
 	subR := &reader{data: data, pos: vecStart, ptrSize: 8}
 	_, err := subR.readArray()
 	if err != nil {
-		return nil, bcStart + 2, false
+		return bcStart + 2, false
 	}
-	bcEnd := subR.pos
+	end := subR.pos
 
-	// After bytecode: scan for literal pool sub-arrays. They follow immediately.
-	// Keep consuming sub-arrays until we can't find one within a short window.
-	litEnd := bcEnd
+	// Skip past trailing sub-arrays (literal pool + footer values).
 	for {
-		_, newPos, ok := findNextSubArray(data, litEnd)
-		if !ok || newPos-litEnd > 64 {
+		_, newPos, ok := findNextSubArray(data, end)
+		if !ok || newPos-end > 64 {
 			break
 		}
-		litEnd = newPos
+		end = newPos
 	}
 
-	// The function blob spans from 'from' to litEnd.
-	// Wrap as a standalone Raw with magic header.
-	blobData := data[from:litEnd]
-	raw := make(Raw, 2+len(blobData))
-	raw[0] = magicByte0
-	raw[1] = magic64
-	copy(raw[2:], blobData)
-
-	return raw, litEnd, true
+	return end, true
 }
 
 func validTypeCode(tc byte) bool {

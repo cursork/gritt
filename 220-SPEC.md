@@ -447,18 +447,51 @@ Namespace ⎕ORs use type code `0x00` with byte `0x22` having high nibble
 
 The name table uses the same `01 XX 00 88` entry format as tradfns, listing
 all namespace members. Entries are contiguous; a gap of >40 bytes indicates
-the end of the name table.
+the end of the name table. The namespace name itself appears as a
+`01 08 00 88` entry.
 
-Member values follow the name table:
-- **Functions** are serialized as complete ⎕OR sub-blobs (with their own
-  bytecode, literal pool, etc.)
-- **Variables** are serialized as standard sub-arrays (matching §2–§4)
+#### Variable-only namespaces
 
-Variable values appear in **reverse name-table order** relative to the name
-table entries.
+Member values follow the name table in **reverse name-table order** as
+standard sub-arrays (matching §2–§4). After the last value comes metadata:
+settings (⎕IO, ⎕ML, etc.), translation table, workspace info.
 
-The namespace name itself appears as a `01 08 00 88` entry when function
-members are present.
+`findNextSubArray` scans forward from `nameTableEnd` for valid sub-array
+headers (flags 0x0F or 0x07, valid type code, zero padding). Collecting
+exactly N values (where N = number of non-sentinel members) avoids picking
+up metadata. Verified for 2- and 3-member namespaces with int, string,
+vector, and matrix values.
+
+#### Mixed namespaces (variables + functions)
+
+Function members are stored as **embedded sub-blobs** with a completely
+different internal encoding from standalone `⎕OR` blobs:
+
+1. **152-byte header** (19 × 8-byte fields): starts with 8 zero bytes,
+   then `07` (type), `D5 50` (magic), then metadata including `EQ\x30`
+   version marker, function flags (`0x40002`), and content size.
+
+2. **Bytecode char8 vector**: standard sub-array (size + 0x1F27 + shape +
+   data starting with `FF FF`). Parseable with `readArray()`.
+
+3. **Footer + literal pool**: metadata fields, then literal sub-arrays.
+
+4. **Literal index offset**: bytecodes use tradfn-style indexing where
+   literal pool indices are offset by the number of names (⍺=0, ⍵=1,
+   ∇=2). For `{⍵+1}`, standalone `⎕OR` uses `00 57` (index 0) but
+   namespace-embedded uses `03 57` (index 3).
+
+After the function blob, the name table entries appear a **second time**
+with variable values inline between entries. A third repetition follows
+(duplicates). Variable value extraction works by scanning forward past
+the function blob — `findNextSubArray` skips the function's bytecode
+(FF FF) and finds variable values in the second name-table region.
+
+**Consequence**: embedded function blobs cannot be trivially extracted
+as standalone `⎕OR` `Raw` values. The header structure, bytecode literal
+indices, and overall framing all differ. Decompiling embedded functions
+requires either reconstructing a standalone `⎕OR` (adjusting indices) or
+a dedicated embedded-function decompiler.
 
 ---
 
@@ -541,7 +574,7 @@ reverse-engineered:
 - Multi-line dfns
 - Multi-character variable names in dfns
 - Tradfn string literals and locals (`;x;y` in header)
-- Namespace member-value ordering when multiple functions and variables coexist
+- Embedded function decompilation (different encoding from standalone ⎕OR, see §5.7)
 - Nested namespaces
 - Class instances
 - Operator ⎕ORs (as distinct from function ⎕ORs)

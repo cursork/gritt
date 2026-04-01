@@ -35,7 +35,7 @@ aplcart "matrix inverse"
 aplcart -refresh                    # force cache update from GitHub
 ```
 
-Shares cache with gritt at `~/.cache/gritt/aplcart.db`.
+Shares cache with gritt (`~/Library/Caches/gritt/` on macOS, `~/.cache/gritt/` on Linux, `%LocalAppData%\gritt\` on Windows).
 
 ### apldocs
 
@@ -49,7 +49,7 @@ apldocs -refresh                    # download latest docs DB
 ```
 
 Renders markdown with glamour, same as gritt's doc pane.
-Shares cache with gritt at `~/.cache/gritt/dyalog-docs.db`.
+Shares cache with gritt (same OS cache directory as aplcart).
 
 ### aplfmt
 

@@ -30,6 +30,7 @@ Leader key: `Ctrl+]` (keeps all keys free for APL input)
 | Left/Right | Move cursor |
 | Home/End | Start/end of line |
 | PgUp/PgDn | Scroll page |
+| Ctrl+R | Search command history (overlay pane) |
 
 ## Tracer Keys (when tracer pane focused)
 
@@ -125,7 +126,7 @@ The old `keys` + `tracer_keys` format is automatically migrated on load.
 
 Config lookup order:
 1. `./gritt.json` (local)
-2. `~/.config/gritt/gritt.json` (user)
+2. `~/.config/gritt/gritt.json` (user — `%USERPROFILE%\.config\gritt\` on Windows)
 3. Embedded default
 
 ### Runtime Rebinding
@@ -134,4 +135,4 @@ Open command palette (`C-] :`) → `rebind` to interactively change keybindings.
 
 ### Saving Config
 
-Open command palette → `save-config` to write the current config (including any rebindings) to disk. If `./gritt.json` or `~/.config/gritt/gritt.json` exists, it overwrites that file. If neither exists, prompts to choose [l]ocal or [g]lobal.
+Open command palette → `save-config` to write the current config (including any rebindings) to disk. If `./gritt.json` or the user config exists, it overwrites that file. If neither exists, prompts to choose [l]ocal or [g]lobal.
