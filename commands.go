@@ -252,6 +252,9 @@ func buildCommands(cfg *Config) *CommandRegistry {
 		m.focusMode = !m.focusMode
 		return *m, nil
 	})
+	reg.add("multiline", "Toggle multiline input mode", true, "", func(m *Model) (tea.Model, tea.Cmd) {
+		return m.toggleMultiline()
+	})
 
 	// --- Direct commands (no leader) ---
 	reg.add("doc-help", "Context-sensitive documentation", false, "", func(m *Model) (tea.Model, tea.Cmd) {

@@ -104,6 +104,11 @@ type Model struct {
 	historyIdx   int      // 0 = live input, 1+ = history position
 	historySaved string   // Saved live input when navigating
 
+	// Multiline mode (C-] l): Enter adds lines, toggle off sends all
+	multilineMode  bool
+	multilineStart int      // Index in m.lines where multiline input began
+	pendingLines   []string // Lines queued for sequential Execute (one per SetPromptType)
+
 	// Focus mode
 	focusMode bool
 
@@ -1127,6 +1132,7 @@ func (m *Model) historyForward() {
 func (m *Model) clearScreen() {
 	m.lines = []Line{{Text: aplIndent}}
 	m.cursorRow = 0
+	m.multilineMode = false
 	// Preserve history navigation — re-place the current entry
 	if m.historyIdx > 0 && m.historyIdx <= len(m.history) {
 		m.setCurrentLine(m.history[m.historyIdx-1])
@@ -1176,9 +1182,102 @@ func (m *Model) saveHistory() {
 	os.WriteFile(path, []byte(sb.String()), 0644)
 }
 
+func (m Model) toggleMultiline() (tea.Model, tea.Cmd) {
+	if m.multilineMode {
+		// Toggling OFF — collect lines, build queue, send first
+		m.multilineMode = false
+		if m.multilineStart >= len(m.lines) {
+			return m, nil
+		}
+		var rawLines []string
+		for i := m.multilineStart; i < len(m.lines); i++ {
+			text := m.lines[i].Text
+			trimmed := strings.TrimSpace(text)
+			if trimmed != "" {
+				rawLines = append(rawLines, trimmed)
+			}
+		}
+		if len(rawLines) == 0 {
+			return m, nil
+		}
+		if !m.ready {
+			m.log("Multiline execute blocked: not ready")
+			return m, nil
+		}
+
+		// Build queue with correct prefixes
+		queue := m.buildMultilineQueue(rawLines)
+		if len(queue) == 0 {
+			return m, nil
+		}
+
+		// Send first line, queue the rest
+		first := queue[0]
+		m.pendingLines = queue[1:]
+		m.ready = false
+		m.spinnerFrame = 0
+		m.lastExecute = first
+		m.historyIdx = 0
+		m.historySaved = ""
+		m.log("→ Execute (multiline, %d queued) %q", len(m.pendingLines), first)
+
+		if err := m.send("Execute", map[string]any{"text": first, "trace": 0}); err != nil {
+			return m, nil
+		}
+		return m, tea.Tick(spinnerInterval, func(time.Time) tea.Msg { return spinnerTickMsg{} })
+	}
+
+	// Toggling ON — mark the start
+	m.multilineMode = true
+	m.multilineStart = len(m.lines) - 1
+	if m.cursorRow != len(m.lines)-1 {
+		m.cursorRow = len(m.lines) - 1
+		m.cursorCol = len(m.currentLineRunes())
+	}
+	m.log("Multiline mode ON (start=%d)", m.multilineStart)
+	return m, nil
+}
+
+// buildMultilineQueue transforms raw user lines into correctly prefixed Execute texts.
+// Nabla (∇) body lines need [n] prefixes. Namespace lines keep 6-space indent.
+// Plain multi-statement lines get 6-space indent.
+func (m *Model) buildMultilineQueue(lines []string) []string {
+	if len(lines) == 0 {
+		return nil
+	}
+
+	first := lines[0]
+	isNabla := strings.HasPrefix(first, "∇") || strings.HasPrefix(first, "∇")
+
+	var queue []string
+	// First line always gets aplIndent
+	queue = append(queue, aplIndent+first+"\n")
+
+	for i := 1; i < len(lines); i++ {
+		body := lines[i]
+		if isNabla {
+			// Nabla body/close lines need [n]  prefix
+			queue = append(queue, fmt.Sprintf("[%d]  %s\n", i, body))
+		} else {
+			// Namespace and plain expressions use 6-space indent
+			queue = append(queue, aplIndent+body+"\n")
+		}
+	}
+
+	return queue
+}
+
 func (m Model) execute() (tea.Model, tea.Cmd) {
-	if !m.ready {
+	if !m.ready && !m.multilineMode {
 		m.log("Execute blocked: not ready")
+		return m, nil
+	}
+
+	// In multiline mode, Enter adds a new line instead of executing
+	if m.multilineMode {
+		m.lines = append(m.lines, Line{Text: aplIndent})
+		m.cursorRow = len(m.lines) - 1
+		m.cursorCol = len(aplIndent)
 		return m, nil
 	}
 
@@ -2677,6 +2776,11 @@ func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
 
 	switch msg.Command {
 	case "AppendSessionOutput":
+		// Skip multiline body echo (type 11) when draining queue
+		if t, ok := msg.Args["type"].(float64); ok && int(t) == 11 {
+			m.log("  (skipped: multiline body echo)")
+			return m, waitForRide(m.msgs)
+		}
 		// Skip input echo (type 14) only if it matches what we sent
 		if t, ok := msg.Args["type"].(float64); ok && int(t) == 14 {
 			if result, ok := msg.Args["result"].(string); ok && result == m.lastExecute {
@@ -2723,6 +2827,17 @@ func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
 			wasReady := m.ready
 			m.ready = t > 0
 			m.log("  ready: %v → %v", wasReady, m.ready)
+
+			// Drain pending multiline queue — one line per prompt
+			if t > 0 && len(m.pendingLines) > 0 {
+				next := m.pendingLines[0]
+				m.pendingLines = m.pendingLines[1:]
+				m.ready = false
+				m.lastExecute = next
+				m.log("→ Execute (queued, %d remaining) %q", len(m.pendingLines), next)
+				m.send("Execute", map[string]any{"text": next, "trace": 0})
+				return m, waitForRide(m.msgs)
+			}
 
 			// Complete internal query if one was pending
 			// Only on not-ready→ready transition (type=0→1), not duplicate type=1→1
@@ -3159,6 +3274,9 @@ func (m Model) viewSession(w, h int) string {
 	}
 	if m.autolocalise {
 		title += " [AL]"
+	}
+	if m.multilineMode {
+		title += " [ML]"
 	}
 
 	return m.renderBox(title, content, contentW, contentH, borderColor)

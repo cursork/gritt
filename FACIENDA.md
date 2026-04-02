@@ -16,7 +16,7 @@
 ## GitHub Issues
 - **#3 Multithreaded tracing** — switch between suspended functions in different threads
 - **#4 Inline tracing** — `IT` command: left/right args, current fn, axis spec, previous result
-- **#5 Proper multiline mode** — explicit multiline input, required for namespaces/classes
+- **#5 Proper multiline mode** — basic client-side multiline done (C-] l toggle). Still needed: interpreter-level multiline (nabla/namespace protocol with SetPromptType type=3)
 - **#6 Syntax highlighting** — `)` commands, `]` commands, `⎕` fns, `:Keywords`, glyphs
 
 ## Protocol
@@ -30,6 +30,7 @@
 - [ ] Symbol search / APLcart rendering cleanup (consistent gray colors)
 
 ## Tracer
+- [ ] **Token reuse in nested tracer** — Dyalog sometimes reuses token=1 for all stack frames, sending Y/X as UpdateWindow (not OpenWindow) with ~6s delay. tracerStack only records OpenWindow, so stack depth shows 1 instead of 3. Need virtual tokens or UpdateWindow-aware stack tracking.
 - [ ] Test: popping stack frame should update variables pane
 - [ ] Test: large values in variables pane should truncate but still allow editing
 

@@ -11,7 +11,8 @@ Leader key: `Ctrl+]` (keeps all keys free for APL input)
 | Enter | Execute current line |
 | C-] d | Toggle debug pane |
 | C-] s | Toggle stack pane |
-| C-] l | Toggle variables pane (~ toggles [local]/[all]) |
+| C-] l | Toggle multiline mode (Enter adds lines, toggle off sends) |
+| C-] v | Toggle variables pane (~ toggles [local]/[all]) |
 | C-] b | Toggle breakpoint (in editor/tracer) |
 | C-] : | Command palette |
 | C-] m | Pane move mode |
