@@ -36,6 +36,34 @@ type tokenContext struct {
 	tradfn   bool            // true: 0x70+ are name table refs; false: ASCII var names
 }
 
+// collectExprLiteralRefs walks a single expression's token stream with
+// the same alignment rules as decodeTokens and records every literal
+// pool reference (XX 57 pair) into out.
+//
+// Must be called on EXPRESSION tokens (from extractExpressions), not raw
+// bytecode: the header region between markers contains byte pairs that
+// look like 0x57 refs but are never walked by decodeTokens.
+func collectExprLiteralRefs(toks []byte, out map[byte]bool) {
+	i := 0
+	for i < len(toks) {
+		if i+1 < len(toks) {
+			typ := toks[i+1]
+			// Two-byte "index + type marker" forms consume exactly two
+			// bytes. 0x57 literal pool, 0x4C name/arg, 0x3E system variable.
+			if typ == 0x57 {
+				out[toks[i]] = true
+				i += 2
+				continue
+			}
+			if typ == 0x4C || typ == 0x3E {
+				i += 2
+				continue
+			}
+		}
+		i++
+	}
+}
+
 // decodeTokens decodes a slice of expression tokens into APL source.
 func decodeTokens(toks []byte, ctx *tokenContext) string {
 	var b strings.Builder
@@ -533,19 +561,46 @@ func (r Raw) extractNsValues(members []nsMember) []string {
 			if data[j] == 0xFF && data[j+1] == 0xFF {
 				bc := r.findBytecodeNear(j)
 				if bc != nil && len(bc) >= 20 {
-					// Extract literals from sub-arrays after this bytecode
 					bcEndPos := j + len(bc)
 					padded := ((bcEndPos + 7) / 8) * 8
-					// Scan a tight window after bytecode for literals only.
-					// Offset by 3 (⍺=0, ⍵=1, ∇=2 are reserved dfn name slots).
-					lits := scanSubArrays(data, padded, min(padded+100, len(data)), false)
+
+					tokens := bc[20:]
+					exprs := extractExpressions(tokens)
+
+					// Walk only the expression token spans (not the full
+					// bc[20:]) to discover literal pool references.
+					// Embedded dfns use an offset of 2+num_locals — we
+					// observe the minimum index actually referenced and
+					// use it as the base.
+					refIndices := make(map[byte]bool)
+					for _, expr := range exprs {
+						collectExprLiteralRefs(expr.tokens, refIndices)
+					}
+					var xBase int
+					nLits := len(refIndices)
+					if nLits > 0 {
+						xBase = 255
+						for idx := range refIndices {
+							if int(idx) < xBase {
+								xBase = int(idx)
+							}
+						}
+					}
+
+					// Wider scan window than the old 100-byte one: dfns
+					// with several literals span up to ~40 bytes each and
+					// the metadata tail sits ~250 bytes past the last
+					// literal. 300 covers the realistic range.
+					lits := scanSubArrays(data, padded, min(padded+300, len(data)), false)
+					if nLits > 0 && len(lits) > nLits {
+						lits = lits[:nLits]
+					}
 					litMap := make(map[byte]any)
 					for i, c := range lits {
-						litMap[byte(3+len(lits)-1-i)] = c
+						litMap[byte(xBase+len(lits)-1-i)] = c
 					}
 
 					ctx := &tokenContext{literals: litMap}
-					exprs := extractExpressions(bc[20:])
 					var sb strings.Builder
 					sb.WriteByte('{')
 					for ei, expr := range exprs {

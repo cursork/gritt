@@ -22,6 +22,11 @@ type Namespace struct {
 	Values map[string]any // key -> value
 }
 
+// FnSource holds raw APL source text for a function member of a namespace.
+// It exists so Serialize can render function bodies inline without quoting
+// (APLAN has no native function representation — this is a grittles-ism).
+type FnSource string
+
 // Zilde is the sentinel for APL's empty numeric vector (⍬).
 var Zilde = &zilde{}
 

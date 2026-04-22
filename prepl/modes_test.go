@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -17,19 +19,33 @@ import (
 func startAplsock(t *testing.T, mode string) (*Client, func()) {
 	t.Helper()
 
-	if err := exec.Command("go", "build", "-o", "/tmp/test-aplsock-modes", "../grittles/aplsock/").Run(); err != nil {
+	aplsockBin := filepath.Join(t.TempDir(), "aplsock")
+	if err := exec.Command("go", "build", "-o", aplsockBin, "../grittles/aplsock/").Run(); err != nil {
 		t.Fatalf("build aplsock: %v", err)
 	}
 
 	port := 14300 + os.Getpid()%1000
-	cmd := exec.Command("/tmp/test-aplsock-modes", "-l", "-sock", fmt.Sprintf(":%d", port), "-mode", mode)
+	// GRITT_TEST_RUNNER, if set, is prepended to the command line so the
+	// user can wrap aplsock with a supervisor that forwards SIGTERM and
+	// reaps the Dyalog child on abnormal exits. Unset = launch directly.
+	args := append(runnerPrefix(), aplsockBin, "-l", "-sock", fmt.Sprintf(":%d", port), "-mode", mode)
+	cmd := exec.Command(args[0], args[1:]...)
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("start aplsock: %v", err)
 	}
 
 	cleanup := func() {
-		cmd.Process.Kill()
-		cmd.Wait()
+		if cmd.Process != nil {
+			_ = cmd.Process.Signal(syscall.SIGTERM)
+		}
+		done := make(chan error, 1)
+		go func() { done <- cmd.Wait() }()
+		select {
+		case <-done:
+		case <-time.After(15 * time.Second):
+			_ = cmd.Process.Kill()
+			<-done
+		}
 	}
 
 	var client *Client
@@ -262,6 +278,17 @@ func aplorEval(t *testing.T, client *Client, expr string) *codec.Namespace {
 		t.Fatalf("expected *codec.Namespace, got %T", val)
 	}
 	return ns
+}
+
+// runnerPrefix returns the tokens from GRITT_TEST_RUNNER (split on spaces)
+// to prepend to a test subprocess command line. Empty/unset → no prefix,
+// launch directly.
+func runnerPrefix() []string {
+	v := strings.TrimSpace(os.Getenv("GRITT_TEST_RUNNER"))
+	if v == "" {
+		return nil
+	}
+	return strings.Fields(v)
 }
 
 func parseSignedInts(t *testing.T, s string) []byte {

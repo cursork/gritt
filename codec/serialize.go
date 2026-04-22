@@ -48,6 +48,9 @@ func serializeValue(value any, depth int, opt *SerializeOptions) string {
 		return serializeComplex(v)
 	case string:
 		return serializeString(v)
+	case FnSource:
+		// Raw APL source — pass through unquoted.
+		return string(v)
 	case *Array:
 		return serializeMatrix(v, depth, opt)
 	case *Namespace:
@@ -147,28 +150,46 @@ func serializeMatrix(m *Array, depth int, opt *SerializeOptions) string {
 		return "[]"
 	}
 
-	rows := make([]string, len(m.Data))
+	// Normalise Data via Shape so both layouts are supported:
+	//   - nested rows: Data[i] is a row slice (codec.APLAN parser output)
+	//   - fully flat:  Data holds all elements in row-major order
+	//                  (amicable.Unmarshal output for rank ≥ 2 arrays)
+	// flattenValue on an *Array walks Data recursively, giving a uniform
+	// flat view in either case.
+	flat := flattenValue(m)
+
+	numRows := m.Shape[0]
+	cellSize := 1
+	for _, d := range m.Shape[1:] {
+		cellSize *= d
+	}
+
+	rows := make([]string, numRows)
 
 	if len(m.Shape) > 2 {
 		// Higher rank: each major cell is itself an array with shape Shape[1:]
 		subShape := make([]int, len(m.Shape)-1)
 		copy(subShape, m.Shape[1:])
-		for i, row := range m.Data {
-			sub := &Array{Shape: subShape}
-			if s, ok := row.([]any); ok {
-				sub.Data = s
-			} else {
-				sub.Data = []any{row}
+		for i := 0; i < numRows; i++ {
+			start := i * cellSize
+			end := start + cellSize
+			if end > len(flat) {
+				end = len(flat)
 			}
+			sub := &Array{Data: flat[start:end], Shape: subShape}
 			rows[i] = serializeValue(sub, depth+1, opt)
 		}
 	} else {
-		// Rank 2: each row is a flat vector of scalars
-		for i, row := range m.Data {
-			flat := flattenValue(row)
-			parts := make([]string, len(flat))
-			for j, el := range flat {
-				parts[j] = serializeValue(el, depth+1, opt)
+		// Rank 2: each row is cellSize contiguous scalars
+		for i := 0; i < numRows; i++ {
+			parts := make([]string, cellSize)
+			for j := 0; j < cellSize; j++ {
+				idx := i*cellSize + j
+				if idx >= len(flat) {
+					parts[j] = ""
+					continue
+				}
+				parts[j] = serializeValue(flat[idx], depth+1, opt)
 			}
 			rows[i] = strings.Join(parts, " ")
 		}

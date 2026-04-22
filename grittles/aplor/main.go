@@ -1,12 +1,15 @@
-// aplor decompiles Dyalog ⎕OR binary blobs back to APL source.
+// aplor decodes Dyalog 220⌶ binary blobs.
 //
-// It reads 220⌶-serialized bytes (as signed integers from stdin or a file,
-// or raw binary with -raw) and reconstructs the original dfn or tradfn source.
+// Function ⎕OR blobs decompile back to APL source; plain arrays and
+// namespaces round-trip to APLAN.
 //
 // Usage:
 //
 //	# From Dyalog: serialize a function and pipe to aplor
 //	gritt -l -e "1(220⌶)⎕OR'myfn'" | aplor
+//
+//	# Recover values from aplsock running in aplor mode
+//	printf '%s\n' '⍳5' "'hello world'" '2 3⍴⍳6' | nc localhost 4212 | aplor -stream
 //
 //	# From a binary file
 //	aplor -raw saved.220
@@ -16,6 +19,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"os"
@@ -23,20 +27,25 @@ import (
 	"strings"
 
 	"github.com/cursork/gritt/amicable"
+	"github.com/cursork/gritt/codec"
 )
 
-const usage = `Usage: aplor [-raw] [FILE]
+const usage = `Usage: aplor [-raw] [-stream] [FILE]
 
-Decompile Dyalog ⎕OR blobs to APL source.
+Decode Dyalog 220⌶ binary blobs. Function ⎕OR blobs are decompiled to
+APL source; plain arrays and namespaces are recovered as APLAN.
 
 Input is 220⌶ output: signed integers (-128..127) separated by spaces,
-as produced by "1(220⌶)⎕OR'name'" in Dyalog. Reads from FILE or stdin.
+as produced by "1(220⌶)⎕OR'name'" in Dyalog or by aplsock's aplor mode.
+Reads from FILE or stdin.
 
 Flags:
-  -raw    Input is raw binary bytes (not text integers)`
+  -raw     Input is raw binary bytes (not text integers)
+  -stream  Input contains multiple blobs, one per line`
 
 func main() {
 	raw := false
+	stream := false
 	var filename string
 
 	for _, arg := range os.Args[1:] {
@@ -46,6 +55,8 @@ func main() {
 			os.Exit(0)
 		case "-raw":
 			raw = true
+		case "-stream":
+			stream = true
 		default:
 			if strings.HasPrefix(arg, "-") {
 				fmt.Fprintf(os.Stderr, "unknown flag: %s\n", arg)
@@ -55,14 +66,50 @@ func main() {
 		}
 	}
 
-	var input []byte
-	var err error
-
-	if filename != "" {
-		input, err = os.ReadFile(filename)
-	} else {
-		input, err = io.ReadAll(os.Stdin)
+	if raw && stream {
+		fmt.Fprintln(os.Stderr, "-raw and -stream are mutually exclusive")
+		os.Exit(1)
 	}
+
+	var reader io.Reader = os.Stdin
+	if filename != "" {
+		f, err := os.Open(filename)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "read: %v\n", err)
+			os.Exit(1)
+		}
+		defer f.Close()
+		reader = f
+	}
+
+	if stream {
+		scanner := bufio.NewScanner(reader)
+		// Responses from aplsock aplor mode can be quite large (namespaces
+		// carry a full atoms table); allow lines up to 16 MB.
+		scanner.Buffer(make([]byte, 64*1024), 16*1024*1024)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" {
+				continue
+			}
+			data, err := parseSignedInts(line)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "parse: %v\n", err)
+				os.Exit(1)
+			}
+			if err := decodeAndPrint(data); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			fmt.Fprintf(os.Stderr, "read: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	input, err := io.ReadAll(reader)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "read: %v\n", err)
 		os.Exit(1)
@@ -79,25 +126,34 @@ func main() {
 		}
 	}
 
+	if err := decodeAndPrint(data); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+// decodeAndPrint unmarshals a 220⌶ blob and prints the result.
+//
+// Top-level function blobs come back as amicable.Raw and go through
+// Decompile() to APL source. Everything else — plain arrays, namespaces,
+// namespaces containing functions — goes through codec.Serialize. amicable
+// decompiles embedded function members inline during unmarshal, so the
+// serialize path renders them as raw APL source inside the namespace.
+func decodeAndPrint(data []byte) error {
 	val, err := amicable.Unmarshal(data)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "unmarshal: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("unmarshal: %w", err)
 	}
-
-	r, ok := val.(amicable.Raw)
-	if !ok {
-		fmt.Fprintf(os.Stderr, "not an ⎕OR blob (got %T — this is a plain array, not a function)\n", val)
-		os.Exit(1)
+	if r, ok := val.(amicable.Raw); ok {
+		src, err := r.Decompile()
+		if err != nil {
+			return fmt.Errorf("decompile: %w", err)
+		}
+		fmt.Println(src)
+		return nil
 	}
-
-	src, err := r.Decompile()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "decompile: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Println(src)
+	fmt.Println(codec.Serialize(val, codec.SerializeOptions{UseDiamond: true}))
+	return nil
 }
 
 func parseSignedInts(s string) ([]byte, error) {

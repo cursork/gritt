@@ -1,12 +1,16 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 )
 
 // --- parseSignedInts tests ---
@@ -216,6 +220,17 @@ func buildAplor(t *testing.T) string {
 	return bin
 }
 
+// runnerPrefix returns the tokens from GRITT_TEST_RUNNER (split on spaces)
+// to prepend to a test subprocess command line. Empty/unset → no prefix,
+// launch directly.
+func runnerPrefix() []string {
+	v := strings.TrimSpace(os.Getenv("GRITT_TEST_RUNNER"))
+	if v == "" {
+		return nil
+	}
+	return strings.Fields(v)
+}
+
 func projectRoot() string {
 	// Walk up from this test file to find go.mod
 	dir, _ := os.Getwd()
@@ -240,7 +255,7 @@ func TestCLI_Help(t *testing.T) {
 	if err != nil {
 		t.Fatalf("aplor -help failed: %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), "Decompile Dyalog") {
+	if !strings.Contains(string(out), "Dyalog 220⌶") {
 		t.Errorf("help output missing expected text:\n%s", out)
 	}
 }
@@ -286,20 +301,21 @@ func TestCLI_InvalidInput(t *testing.T) {
 	}
 }
 
-func TestCLI_PlainArrayNotOR(t *testing.T) {
+func TestCLI_PlainArrayScalar(t *testing.T) {
 	bin := buildAplor(t)
 
-	// Feed it a valid 220⌶ serialized scalar (42) — this is a plain array, not ⎕OR.
+	// Feed it a valid 220⌶ serialized scalar (42). It's not a ⎕OR function
+	// blob, so aplor falls through to codec.Serialize and recovers "42".
 	// From amicable_test.go TestUnmarshalScalarInt8.
 	input := "-33 -92 4 0 0 0 0 0 0 0 15 34 0 0 0 0 0 0 42 0 0 0 0 0 0 0"
 	cmd := exec.Command(bin)
 	cmd.Stdin = strings.NewReader(input)
 	out, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatal("expected nonzero exit for plain array (not ⎕OR)")
+	if err != nil {
+		t.Fatalf("aplor failed: %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), "not an ⎕OR blob") {
-		t.Errorf("expected 'not an ⎕OR blob' error, got:\n%s", out)
+	if strings.TrimSpace(string(out)) != "42" {
+		t.Errorf("got %q, want '42'", out)
 	}
 }
 
@@ -311,11 +327,11 @@ func TestCLI_PlainArrayHighBar(t *testing.T) {
 	cmd := exec.Command(bin)
 	cmd.Stdin = strings.NewReader(input)
 	out, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatal("expected nonzero exit for plain array (not ⎕OR)")
+	if err != nil {
+		t.Fatalf("aplor failed: %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), "not an ⎕OR blob") {
-		t.Errorf("expected 'not an ⎕OR blob' error, got:\n%s", out)
+	if strings.TrimSpace(string(out)) != "42" {
+		t.Errorf("got %q, want '42'", out)
 	}
 }
 
@@ -336,26 +352,26 @@ func TestCLI_OutOfRangeInput(t *testing.T) {
 func TestCLI_FileInput(t *testing.T) {
 	bin := buildAplor(t)
 
-	// Write a signed int file with scalar 42 (not ⎕OR, but tests file reading path).
+	// Write a signed-int file with scalar 42 and read it back out via
+	// the FILE argument path. Plain arrays are recovered via APLAN.
 	tmp := filepath.Join(t.TempDir(), "test.txt")
 	if err := os.WriteFile(tmp, []byte("-33 -92 4 0 0 0 0 0 0 0 15 34 0 0 0 0 0 0 42 0 0 0 0 0 0 0"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	cmd := exec.Command(bin, tmp)
 	out, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatal("expected nonzero exit for plain array")
+	if err != nil {
+		t.Fatalf("aplor failed: %v\n%s", err, out)
 	}
-	// It should get past parsing and fail at the "not an ⎕OR blob" stage.
-	if !strings.Contains(string(out), "not an ⎕OR blob") {
-		t.Errorf("expected 'not an ⎕OR blob', got:\n%s", out)
+	if strings.TrimSpace(string(out)) != "42" {
+		t.Errorf("got %q, want '42'", out)
 	}
 }
 
 func TestCLI_RawBinaryInput(t *testing.T) {
 	bin := buildAplor(t)
 
-	// Write raw binary bytes for scalar 42 (same as above but actual bytes, not text).
+	// Write raw binary bytes for scalar 42 and decode via -raw.
 	rawBytes := []byte{0xDF, 0xA4, 0x04, 0, 0, 0, 0, 0, 0, 0, 0x0F, 0x22, 0, 0, 0, 0, 0, 0, 42, 0, 0, 0, 0, 0, 0, 0}
 	tmp := filepath.Join(t.TempDir(), "test.220")
 	if err := os.WriteFile(tmp, rawBytes, 0644); err != nil {
@@ -363,11 +379,11 @@ func TestCLI_RawBinaryInput(t *testing.T) {
 	}
 	cmd := exec.Command(bin, "-raw", tmp)
 	out, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatal("expected nonzero exit for plain array (not ⎕OR)")
+	if err != nil {
+		t.Fatalf("aplor failed: %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), "not an ⎕OR blob") {
-		t.Errorf("expected 'not an ⎕OR blob', got:\n%s", out)
+	if strings.TrimSpace(string(out)) != "42" {
+		t.Errorf("got %q, want '42'", out)
 	}
 }
 
@@ -379,11 +395,11 @@ func TestCLI_RawStdin(t *testing.T) {
 	cmd := exec.Command(bin, "-raw")
 	cmd.Stdin = strings.NewReader(string(rawBytes))
 	out, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatal("expected nonzero exit for plain array")
+	if err != nil {
+		t.Fatalf("aplor failed: %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), "not an ⎕OR blob") {
-		t.Errorf("expected 'not an ⎕OR blob', got:\n%s", out)
+	if strings.TrimSpace(string(out)) != "42" {
+		t.Errorf("got %q, want '42'", out)
 	}
 }
 
@@ -537,5 +553,116 @@ func TestCLI_DecompileRaw(t *testing.T) {
 	got := strings.TrimSpace(string(decompiled))
 	if got != "{⍵+1}" {
 		t.Errorf("want: {⍵+1}\n got: %s", got)
+	}
+}
+
+// TestCLI_AplsockAplorPipe drives the full `printf | nc aplsock:aplor | aplor
+// -stream` pipeline: each expression goes over the socket as APL, aplsock
+// returns 220⌶-encoded namespaces as signed ints, and the aplor binary
+// recovers each value back into APLAN.
+func TestCLI_AplsockAplorPipe(t *testing.T) {
+	if _, err := exec.LookPath("gritt"); err != nil {
+		t.Skip("gritt not on PATH")
+	}
+	aplorBin := buildAplor(t)
+
+	// Build aplsock into a temp dir so we don't step on any installed binary.
+	aplsockBin := filepath.Join(t.TempDir(), "aplsock")
+	build := exec.Command("go", "build", "-o", aplsockBin, ".")
+	build.Dir = filepath.Join(projectRoot(), "grittles", "aplsock")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build aplsock: %v\n%s", err, out)
+	}
+
+	port := 14700 + os.Getpid()%300
+	sock := fmt.Sprintf(":%d", port)
+	// GRITT_TEST_RUNNER, if set, is prepended to the command line. It lets
+	// the user wrap aplsock with a supervisor (e.g. a SIGTERM→SIGKILL
+	// escalator) so the Dyalog child is reliably reaped on abnormal test
+	// exits. Unset = launch aplsock directly.
+	aplsockArgs := append(runnerPrefix(), aplsockBin, "-l", "-sock", sock, "-mode", "aplor")
+	aplsock := exec.Command(aplsockArgs[0], aplsockArgs[1:]...)
+	aplsock.Stderr = os.Stderr
+	if err := aplsock.Start(); err != nil {
+		t.Fatalf("start aplsock: %v", err)
+	}
+	defer func() {
+		if aplsock.Process != nil {
+			_ = aplsock.Process.Signal(syscall.SIGTERM)
+		}
+		done := make(chan error, 1)
+		go func() { done <- aplsock.Wait() }()
+		select {
+		case <-done:
+		case <-time.After(15 * time.Second):
+			_ = aplsock.Process.Kill()
+			<-done
+		}
+	}()
+
+	// Wait for the socket to accept.
+	addr := fmt.Sprintf("localhost:%d", port)
+	var conn net.Conn
+	var dialErr error
+	for i := 0; i < 150; i++ {
+		conn, dialErr = net.DialTimeout("tcp", addr, 500*time.Millisecond)
+		if dialErr == nil {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	if dialErr != nil {
+		t.Fatalf("dial aplsock %s: %v", addr, dialErr)
+	}
+	defer conn.Close()
+
+	// Send the demo batch in one go: printf '%s\n' '⍳5' "'hello world'" '2 3⍴⍳6' '○1' '1÷0'
+	exprs := []struct {
+		expr string
+		want string
+	}{
+		{"⍳5", "(val: 1 2 3 4 5 ⋄ tag: 'ret')"},
+		{"'hello world'", "(val: 'hello world' ⋄ tag: 'ret')"},
+		{"2 3⍴⍳6", "(val: [1 2 3 ⋄ 4 5 6] ⋄ tag: 'ret')"},
+		{"○1", "(val: 3.141592653589793 ⋄ tag: 'ret')"},
+		{"1÷0", "'Divide by zero'"},
+	}
+	var payload strings.Builder
+	for _, e := range exprs {
+		payload.WriteString(e.expr)
+		payload.WriteByte('\n')
+	}
+	if _, err := conn.Write([]byte(payload.String())); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// Read one response line per expression. Namespace blobs carry a full
+	// atoms table, so lines are large.
+	reader := bufio.NewReaderSize(conn, 1<<20)
+	var piped strings.Builder
+	for i := range exprs {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			t.Fatalf("read response %d: %v", i, err)
+		}
+		piped.WriteString(line)
+	}
+
+	// Pipe all five blobs through `aplor -stream` in one invocation.
+	aplor := exec.Command(aplorBin, "-stream")
+	aplor.Stdin = strings.NewReader(piped.String())
+	out, err := aplor.CombinedOutput()
+	if err != nil {
+		t.Fatalf("aplor -stream failed: %v\n%s", err, out)
+	}
+
+	recovered := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+	if len(recovered) != len(exprs) {
+		t.Fatalf("got %d recovered lines, want %d\n--- output ---\n%s", len(recovered), len(exprs), out)
+	}
+	for i, e := range exprs {
+		if !strings.Contains(recovered[i], e.want) {
+			t.Errorf("expr %q:\n  want contains: %s\n  got:           %s", e.expr, e.want, recovered[i])
+		}
 	}
 }
