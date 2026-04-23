@@ -1,6 +1,10 @@
 package main
 
 import (
+	"fmt"
+	"log"
+	"unicode"
+
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -76,7 +80,8 @@ func (r *CommandRegistry) applyBindings(bindings map[string]BindingDef) {
 }
 
 // buildIndexes partitions commands into leader/direct/tracer slices.
-func (r *CommandRegistry) buildIndexes() {
+// Returns warnings about suspect bindings (e.g. bare letter keys as direct commands).
+func (r *CommandRegistry) buildIndexes() []string {
 	r.byName = make(map[string]*CommandDef, len(r.commands))
 	r.leaderCmds = nil
 	r.directCmds = nil
@@ -95,6 +100,19 @@ func (r *CommandRegistry) buildIndexes() {
 			}
 		}
 	}
+	// Warn about single ASCII alphanumeric direct bindings — they eat that key
+	// in session input, which is almost never intentional.
+	var warnings []string
+	for _, cmd := range r.directCmds {
+		keys := cmd.Binding.Keys()
+		if len(keys) == 1 {
+			runes := []rune(keys[0])
+			if len(runes) == 1 && (unicode.IsLetter(runes[0]) || unicode.IsDigit(runes[0])) && runes[0] < 128 {
+				warnings = append(warnings, fmt.Sprintf("command %q is bound to bare %q without leader — this will consume that key in session input", cmd.Name, keys[0]))
+			}
+		}
+	}
+	return warnings
 }
 
 // MatchLeader returns the command matching a key press after leader, or nil.
@@ -140,7 +158,7 @@ func (r *CommandRegistry) Leader() key.Binding {
 // ShortHelp implements help.KeyMap for the status bar.
 func (r *CommandRegistry) ShortHelp() []key.Binding {
 	var bindings []key.Binding
-	for _, name := range []string{"doc-help", "clear", "quit"} {
+	for _, name := range []string{"doc-help", "command-palette", "quit", "history-back"} {
 		if cmd := r.byName[name]; cmd != nil && cmd.Binding.Enabled() {
 			bindings = append(bindings, cmd.Binding)
 		}
@@ -278,7 +296,7 @@ func buildCommands(cfg *Config) *CommandRegistry {
 		return *m, nil
 	})
 	reg.add("close-pane", "Close pane / exit mode", false, "", nil) // complex — handled inline
-	reg.add("history-back", "Previous command", false, "", func(m *Model) (tea.Model, tea.Cmd) {
+	reg.add("history-back", "History", false, "", func(m *Model) (tea.Model, tea.Cmd) {
 		m.historyBack()
 		return *m, nil
 	})
@@ -372,6 +390,9 @@ func buildCommands(cfg *Config) *CommandRegistry {
 	reg.add("edit-mode", "Tracer: enter edit mode", false, "tracer", nil) // handled in EditorPane
 
 	reg.applyBindings(cfg.Bindings)
-	reg.buildIndexes()
+	warnings := reg.buildIndexes()
+	for _, w := range warnings {
+		log.Printf("WARNING: %s", w)
+	}
 	return reg
 }

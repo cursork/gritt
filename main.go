@@ -78,6 +78,7 @@ func main() {
 	flag.BoolVar(launch, "l", false, "Launch Dyalog automatically")
 	version := flag.String("version", "", "Dyalog version (e.g. 20.0) or path to binary")
 	fmtMode := flag.Bool("fmt", false, "Format APL files in place")
+	historyMode := flag.Bool("history", false, "Print command history to stdout")
 	var cfgFlag string
 	var cfgSet bool
 	flag.Func("cfg", "Config file path ('' = no config, use defaults)", func(s string) error {
@@ -86,6 +87,12 @@ func main() {
 		return nil
 	})
 	flag.Parse()
+
+	// Print history and exit — no Dyalog needed
+	if *historyMode {
+		printHistory()
+		return
+	}
 
 	// Launch Dyalog if requested
 	var dyalogCmd *exec.Cmd
@@ -151,14 +158,19 @@ func main() {
 		}
 		defer client.Close()
 		runLinks(client, links)
+		var executed []string
 		for _, expr := range exprs {
 			// Split multiline expressions and execute each line
 			for _, line := range strings.Split(expr, "\n") {
 				line = strings.TrimSpace(line)
 				if line != "" {
 					runExpr(client, line)
+					executed = append(executed, line)
 				}
 			}
+		}
+		if err := appendHistory(executed); err != nil {
+			log.Fatal(err)
 		}
 		return
 	}
@@ -169,11 +181,17 @@ func main() {
 		}
 		defer client.Close()
 		runLinks(client, links)
+		var executed []string
 		scanner := bufio.NewScanner(os.Stdin)
 		for scanner.Scan() {
-			runExpr(client, scanner.Text())
+			line := scanner.Text()
+			runExpr(client, line)
+			executed = append(executed, line)
 		}
 		if err := scanner.Err(); err != nil {
+			log.Fatal(err)
+		}
+		if err := appendHistory(executed); err != nil {
 			log.Fatal(err)
 		}
 		return

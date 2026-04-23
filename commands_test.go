@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -227,14 +228,17 @@ func TestToNavKeys(t *testing.T) {
 func testRegistry() *CommandRegistry {
 	cfg := Config{
 		Bindings: map[string]BindingDef{
-			"leader":    {Keys: []string{"ctrl+]"}},
-			"debug":     {Keys: []string{"d"}, Leader: true},
-			"stack":     {Keys: []string{"s"}, Leader: true},
-			"clear":     {Keys: []string{"ctrl+l"}},
-			"doc-help":  {Keys: []string{"f1"}},
-			"step-into": {Keys: []string{"i"}, Context: "tracer"},
-			"step-over": {Keys: []string{"n"}, Context: "tracer"},
-			"symbols":   {}, // palette only
+			"leader":          {Keys: []string{"ctrl+]"}},
+			"debug":           {Keys: []string{"d"}, Leader: true},
+			"stack":           {Keys: []string{"s"}, Leader: true},
+			"clear":           {Keys: []string{"ctrl+l"}},
+			"doc-help":        {Keys: []string{"f1"}},
+			"command-palette": {Keys: []string{":"}, Leader: true},
+			"quit":            {Keys: []string{"q"}, Leader: true},
+			"history-back":    {Keys: []string{"ctrl+shift+up"}},
+			"step-into":      {Keys: []string{"i"}, Context: "tracer"},
+			"step-over":      {Keys: []string{"n"}, Context: "tracer"},
+			"symbols":        {}, // palette only
 		},
 	}
 	reg := newRegistry(cfg.LeaderBinding())
@@ -245,6 +249,9 @@ func testRegistry() *CommandRegistry {
 	reg.add("stack", "Toggle stack pane", true, "", noop)
 	reg.add("clear", "Clear session screen", false, "", noop)
 	reg.add("doc-help", "Documentation", false, "", noop)
+	reg.add("command-palette", "Open command palette", true, "", noop)
+	reg.add("quit", "Quit gritt", true, "", noop)
+	reg.add("history-back", "History", false, "", noop)
 	reg.add("step-into", "Step into", false, "tracer", noop)
 	reg.add("step-over", "Step over", false, "tracer", noop)
 	reg.add("symbols", "Search symbols", false, "", noop)
@@ -495,13 +502,43 @@ func TestBuildCommandsFromDefaults(t *testing.T) {
 	}
 }
 
+func TestSingleLetterDirectBindingWarning(t *testing.T) {
+	// Bind "x" as a direct (non-leader) command — should trigger a warning
+	cfg := Config{
+		Bindings: map[string]BindingDef{
+			"leader":   {Keys: []string{"ctrl+]"}},
+			"debug":    {Keys: []string{"x"}}, // bare letter, no leader
+			"doc-help": {Keys: []string{"f1"}},
+		},
+	}
+	reg := newRegistry(cfg.LeaderBinding())
+	noop := func(m *Model) (tea.Model, tea.Cmd) { return *m, nil }
+	reg.add("debug", "Toggle debug pane", false, "", noop)
+	reg.add("doc-help", "Documentation", false, "", noop)
+	reg.applyBindings(cfg.Bindings)
+
+	warnings := reg.buildIndexes()
+
+	if len(warnings) == 0 {
+		t.Fatal("expected warning about single-letter direct binding 'x'")
+	}
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, `"debug"`) && strings.Contains(w, `"x"`) {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("warning should mention command name and key, got: %v", warnings)
+	}
+}
+
 // --- ShortHelp / FullHelp ---
 
 func TestShortHelp(t *testing.T) {
 	reg := testRegistry()
 
 	bindings := reg.ShortHelp()
-	// Should contain at least doc-help and clear from our test config
 	names := map[string]bool{}
 	for _, b := range bindings {
 		h := b.Help()
@@ -510,8 +547,14 @@ func TestShortHelp(t *testing.T) {
 	if !names["Documentation"] {
 		t.Error("ShortHelp should include doc-help")
 	}
-	if !names["Clear session screen"] {
-		t.Error("ShortHelp should include clear")
+	if !names["Open command palette"] {
+		t.Error("ShortHelp should include command-palette")
+	}
+	if !names["Quit gritt"] {
+		t.Error("ShortHelp should include quit")
+	}
+	if !names["History"] {
+		t.Error("ShortHelp should include history-back")
 	}
 }
 
@@ -523,8 +566,8 @@ func TestFullHelp(t *testing.T) {
 		t.Fatalf("FullHelp returned %d groups, want 3", len(groups))
 	}
 	// group[0] = leader, group[1] = direct, group[2] = tracer
-	if len(groups[0]) != 2 { // debug, stack
-		t.Errorf("leader group has %d bindings, want 2", len(groups[0]))
+	if len(groups[0]) != 4 { // debug, stack, command-palette, quit
+		t.Errorf("leader group has %d bindings, want 4", len(groups[0]))
 	}
 	if len(groups[2]) != 2 { // step-into, step-over
 		t.Errorf("tracer group has %d bindings, want 2", len(groups[2]))

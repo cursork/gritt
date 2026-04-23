@@ -170,6 +170,12 @@ printf "x←5\nx×2\n" | ./gritt -l -stdin   # With auto-launch
 # Format APL files in place (functions and namespaces)
 ./gritt -l -fmt file1.aplf file2.aplf src/utils.apln
 
+# Command history (~/Library/Caches/gritt/history on macOS)
+./gritt -history                    # Dump history to stdout
+./gritt -history | tail -5          # Last 5 commands
+./gritt -history | grep foo         # Search history
+# -e expressions are also recorded in history
+
 # Protocol logging (for debugging)
 ./gritt -log debug.log
 ```

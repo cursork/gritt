@@ -70,7 +70,7 @@ func (s *Session) SendText(text string) error {
 	return exec.Command("tmux", "send-keys", "-t", s.Name, "-l", text).Run()
 }
 
-// Capture returns the current pane content (with ANSI escape codes)
+// Capture returns the current pane content (with ANSI escape codes for reports)
 func (s *Session) Capture() (string, error) {
 	out, err := exec.Command("tmux", "capture-pane", "-t", s.Name, "-p", "-e").Output()
 	if err != nil {
@@ -79,7 +79,8 @@ func (s *Session) Capture() (string, error) {
 	return string(out), nil
 }
 
-// WaitFor waits until the output contains the pattern or timeout
+// WaitFor waits until the output contains the pattern or timeout.
+// Matches against plain text (ANSI codes stripped).
 func (s *Session) WaitFor(pattern string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
@@ -87,13 +88,13 @@ func (s *Session) WaitFor(pattern string, timeout time.Duration) error {
 		if err != nil {
 			return err
 		}
-		if strings.Contains(content, pattern) {
+		if strings.Contains(stripANSI(content), pattern) {
 			return nil
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
 	content, _ := s.Capture()
-	return fmt.Errorf("timeout waiting for %q\nCurrent content:\n%s", pattern, content)
+	return fmt.Errorf("timeout waiting for %q\nCurrent content:\n%s", pattern, stripANSI(content))
 }
 
 // WaitForRegex waits until the output matches the regex or timeout
@@ -119,13 +120,69 @@ func regexpMatch(pattern, content string) (bool, error) {
 	return strings.Contains(content, pattern), nil
 }
 
-// Contains checks if the current output contains the pattern
+// Contains checks if the current output contains the pattern.
+// Matches against plain text (ANSI codes stripped).
 func (s *Session) Contains(pattern string) (bool, error) {
 	content, err := s.Capture()
 	if err != nil {
 		return false, err
 	}
-	return strings.Contains(content, pattern), nil
+	return strings.Contains(stripANSI(content), pattern), nil
+}
+
+// lines returns the non-empty, trimmed, ANSI-stripped lines on screen.
+func (s *Session) lines() ([]string, error) {
+	content, err := s.Capture()
+	if err != nil {
+		return nil, err
+	}
+	raw := strings.Split(stripANSI(content), "\n")
+	var out []string
+	for _, l := range raw {
+		l = strings.TrimRight(l, " \t")
+		if l != "" {
+			out = append(out, l)
+		}
+	}
+	return out, nil
+}
+
+// WaitForLine snapshots the current screen, then waits for a NEW line
+// (one not present in the snapshot) that contains pattern. This avoids
+// false matches from input echo or stale output already on screen.
+func (s *Session) WaitForLine(pattern string, timeout time.Duration) error {
+	// Snapshot current lines as a set
+	before, err := s.lines()
+	if err != nil {
+		return err
+	}
+	seen := make(map[string]int, len(before))
+	for _, l := range before {
+		seen[l]++
+	}
+
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		time.Sleep(200 * time.Millisecond)
+		now, err := s.lines()
+		if err != nil {
+			return err
+		}
+		// Build counts for current screen
+		cur := make(map[string]int, len(now))
+		for _, l := range now {
+			cur[l]++
+		}
+		// Check for new lines (or additional occurrences) containing pattern
+		for l, count := range cur {
+			if count > seen[l] && strings.Contains(l, pattern) {
+				return nil
+			}
+		}
+	}
+	now, _ := s.lines()
+	return fmt.Errorf("timeout waiting for new line containing %q\nBefore (%d lines): %v\nNow (%d lines): %v",
+		pattern, len(before), before, len(now), now)
 }
 
 // ContainsRegex checks if the current output matches the regex

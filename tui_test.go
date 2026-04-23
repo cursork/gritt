@@ -2006,6 +2006,38 @@ func TestTUI(t *testing.T) {
 		return runner.Contains("rebind keys") && !runner.Contains("L+v")
 	})
 
+	// Toggling leader off for a single-letter key opens a messages pane
+	runner.Test("Messages pane appears for bare letter binding", func() bool {
+		return runner.Contains("⚠ messages")
+	})
+
+	// Focus the messages pane via cycle-pane, then dismiss
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys("n") // cycle-pane
+	runner.Sleep(200 * time.Millisecond)
+
+	runner.Test("Messages pane is focused", func() bool {
+		return runner.Contains("╔ ⚠ messages") && runner.Contains("without leader")
+	})
+
+	runner.SendKeys("Escape")
+	runner.Sleep(200 * time.Millisecond)
+
+	runner.Test("Messages pane dismissed with Escape", func() bool {
+		return !runner.Contains("⚠ messages")
+	})
+
+	// Rebind pane is still there but unfocused — cycle to refocus it
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys("n")
+	runner.Sleep(200 * time.Millisecond)
+
+	runner.Test("Rebind pane refocused after messages dismissed", func() bool {
+		return runner.Contains("╔ rebind keys")
+	})
+
 	// Enter capture mode
 	runner.SendKeys("Enter")
 	runner.Sleep(200 * time.Millisecond)
@@ -2190,10 +2222,77 @@ func TestTUI(t *testing.T) {
 		return !runner.Contains("Lookup") || !runner.Contains("I-Beam")
 	})
 
-	// Final snapshot
-	runner.Snapshot("Final state")
+	// ===== Help bar shows essential bindings =====
+	runner.Snapshot("Help bar check")
 
-	// Generate report
+	runner.Test("Help bar shows command palette binding", func() bool {
+		return runner.Contains("ctrl+] :") && runner.Contains("Open command palette")
+	})
+
+	runner.Test("Help bar shows quit binding", func() bool {
+		return runner.Contains("ctrl+] q") && runner.Contains("Quit")
+	})
+
+	runner.Test("Help bar shows history binding", func() bool {
+		return runner.Contains("History")
+	})
+
+	// ===== History round-trip: TUI → file → -history =====
+	// Execute a unique expression so we can find it in history
+	historyMarker := "history_test_marker_42"
+	runner.SendLine(historyMarker + "←1")
+	runner.WaitForIdle(3 * time.Second)
+
+	// Quit gritt (saves history on exit)
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys("q")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("y")
+	runner.Sleep(1 * time.Second)
+
+	// Gritt exited — the original tmux session is gone.
+	// Create a new tmux session with a shell for CLI history tests.
+	cwd, _ := os.Getwd()
+	cliSession, err := uitest.NewSession("gritt-cli-test", screenW, screenH, "/bin/zsh")
+	if err != nil {
+		t.Fatalf("Failed to create CLI test session: %v", err)
+	}
+	cliRunner := &uitest.Runner{T: t, Session: cliSession, Report: runner.Report}
+	defer cliRunner.Close()
+
+	// Wait for shell prompt then cd to the project dir (HOME=/tmp)
+	cliRunner.Sleep(500 * time.Millisecond)
+	cliRunner.SendLine("cd " + cwd)
+	cliRunner.Sleep(300 * time.Millisecond)
+
+	// Check -history shows the TUI expression (last line = most recent)
+	cliRunner.SendLine("./gritt -history | tail -1")
+	cliRunner.WaitForLine(historyMarker, 3*time.Second)
+	cliRunner.Snapshot("gritt -history after TUI quit")
+
+	cliRunner.Test("gritt -history shows last TUI command", func() bool {
+		return cliRunner.Contains(historyMarker)
+	})
+
+	// Test -e appends to history
+	cliRunner.SendLine("./gritt -l -e '⍳3'")
+	// Wait for it to finish (prints output and exits)
+	cliRunner.WaitFor("1 2 3", 10*time.Second)
+	cliRunner.Sleep(500 * time.Millisecond)
+
+	cliRunner.SendLine("./gritt -history | tail -1")
+	cliRunner.WaitForLine("⍳3", 3*time.Second)
+	cliRunner.Snapshot("gritt -history after -e")
+
+	cliRunner.Test("gritt -e expression appears in history", func() bool {
+		return cliRunner.Contains("⍳3")
+	})
+
+	// Final snapshot (from CLI session — original gritt session is gone)
+	cliRunner.Snapshot("Final state")
+
+	// Generate report (report is shared between runners)
 	reportFile := runner.GenerateReport()
 	if reportFile != "" {
 		t.Logf("Report: %s", reportFile)

@@ -100,7 +100,7 @@ type Model struct {
 	pendingQuit  bool   // True if last command was )off
 
 	// Command history (ctrl+shift+up/down to cycle)
-	history      []string // Previously executed commands (newest at index 0)
+	history      []string // Previously executed commands (newest first in memory)
 	historyIdx   int      // 0 = live input, 1+ = history position
 	historySaved string   // Saved live input when navigating
 
@@ -323,6 +323,70 @@ func (m *Model) log(format string, args ...any) {
 	}
 }
 
+// showMessages opens (or appends to) the warnings pane and logs to debug.
+func (m *Model) showMessages(msgs []paneMessage) {
+	if len(msgs) == 0 {
+		return
+	}
+	for _, msg := range msgs {
+		switch msg.level {
+		case levelError:
+			m.log("ERROR: %s", msg.text)
+		default:
+			m.log("WARNING: %s", msg.text)
+		}
+	}
+	// Append to existing pane and resize, or create new
+	existing := m.panes.Get("warnings")
+	if existing != nil {
+		if wp, ok := existing.Content.(*WarningsPane); ok {
+			wp.messages = append(wp.messages, msgs...)
+			m.resizeWarningsPane(existing, len(wp.messages))
+			return
+		}
+	}
+	wp := &WarningsPane{messages: msgs}
+	paneW := m.width / 2
+	paneH := m.warningsPaneHeight(len(msgs))
+	paneX := m.width - paneW
+	paneY := m.height - paneH - 1 // -1 for help bar
+	pane := NewPane("warnings", wp, paneX, paneY, paneW, paneH)
+	m.panes.Add(pane)
+}
+
+// showWarnings opens a warnings pane (or appends to it) and logs to debug.
+func (m *Model) showWarnings(warnings []string) {
+	msgs := make([]paneMessage, len(warnings))
+	for i, w := range warnings {
+		msgs[i] = paneMessage{level: levelWarning, text: w}
+	}
+	m.showMessages(msgs)
+}
+
+// showError adds an error to the warnings pane (or creates it).
+func (m *Model) showError(err error) {
+	m.showMessages([]paneMessage{{level: levelError, text: err.Error()}})
+}
+
+func (m *Model) warningsPaneHeight(count int) int {
+	h := count + 4 // +2 header lines, +2 border
+	if h < 5 {
+		h = 5
+	}
+	if h > m.height/2 {
+		h = m.height / 2
+	}
+	return h
+}
+
+func (m *Model) resizeWarningsPane(pane *Pane, count int) {
+	newH := m.warningsPaneHeight(count)
+	if newH > pane.Height {
+		pane.Height = newH
+		pane.Y = m.height - newH - 1
+	}
+}
+
 // waitForRide waits for the next RIDE message.
 func waitForRide(ch <-chan rideEvent) tea.Cmd {
 	return func() tea.Msg {
@@ -461,7 +525,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.confirmQuit {
 		m.confirmQuit = false
 		if msg.String() == "y" || msg.String() == "Y" {
-			m.saveHistory()
 			return m, tea.Quit
 		}
 		return m, nil
@@ -1155,31 +1218,62 @@ func (m *Model) loadHistory() {
 		return // No history file yet
 	}
 	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
-	// Filter empty lines
-	for _, line := range lines {
-		if line != "" {
-			m.history = append(m.history, line)
+	// File is oldest-first (append-friendly, raw log with possible dupes).
+	// Reverse to get newest-first in memory, dedup consecutive entries.
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := lines[i]
+		if line == "" {
+			continue
 		}
+		if len(m.history) > 0 && m.history[len(m.history)-1] == line {
+			continue // skip consecutive duplicate
+		}
+		m.history = append(m.history, line)
 	}
 	if len(m.history) > maxHistory {
 		m.history = m.history[:maxHistory]
 	}
 }
 
-func (m *Model) saveHistory() {
+// appendHistory adds entries to the persistent history file without needing
+// a TUI Model. Used by -e and -stdin to record non-interactive commands.
+// File is oldest-first, so we just append. Each entry is written as a single
+// write(2) syscall with O_APPEND, which is atomic under PIPE_BUF (4096).
+func appendHistory(entries []string) error {
+	path := cachePath(historyFile)
+	if path == "" {
+		return fmt.Errorf("cache directory unavailable")
+	}
+	if len(entries) == 0 {
+		return nil
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("open history file: %w", err)
+	}
+	defer f.Close()
+	for _, e := range entries {
+		if e != "" {
+			line := []byte(e + "\n")
+			if _, err := f.Write(line); err != nil {
+				return fmt.Errorf("write history: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
+// printHistory dumps the history file to stdout (one entry per line).
+func printHistory() {
 	path := cachePath(historyFile)
 	if path == "" {
 		return
 	}
-	if len(m.history) == 0 {
+	data, err := os.ReadFile(path)
+	if err != nil {
 		return
 	}
-	var sb strings.Builder
-	for _, h := range m.history {
-		sb.WriteString(h)
-		sb.WriteString("\n")
-	}
-	os.WriteFile(path, []byte(sb.String()), 0644)
+	os.Stdout.Write(data)
 }
 
 func (m Model) toggleMultiline() (tea.Model, tea.Cmd) {
@@ -1323,12 +1417,16 @@ func (m Model) execute() (tea.Model, tea.Cmd) {
 	m.lastExecute = editedText + "\n" // Track what we sent to skip our own echo
 	m.pendingQuit = strings.TrimSpace(editedText) == ")off"
 
-	// Push to command history (skip duplicates, cap at 500)
+	// Push to in-memory history (skip consecutive duplicates, cap at 500)
 	if len(m.history) == 0 || m.history[0] != editedText {
 		m.history = append([]string{editedText}, m.history...)
 		if len(m.history) > 500 {
 			m.history = m.history[:500]
 		}
+	}
+	// Persist immediately — append-only, no rewrite on quit
+	if err := appendHistory([]string{editedText}); err != nil {
+		m.showError(fmt.Errorf("history: %w", err))
 	}
 	m.historyIdx = 0
 	m.historySaved = ""
@@ -2732,8 +2830,9 @@ func (m *Model) openRebindPane() {
 func (m *Model) applyRebind(name string, bd BindingDef) {
 	m.config.Bindings[name] = bd
 	m.commands.applyBindings(m.config.Bindings)
-	m.commands.buildIndexes()
+	warnings := m.commands.buildIndexes()
 	m.log("Rebound %s → %v (leader=%v)", name, bd.Keys, bd.Leader)
+	m.showWarnings(warnings)
 }
 
 func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
@@ -2744,7 +2843,6 @@ func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
 		// If last command was )off, this is intentional shutdown - exit cleanly
 		if m.pendingQuit {
 			m.log("Session ended with )off")
-			m.saveHistory()
 			return m, tea.Quit
 		}
 

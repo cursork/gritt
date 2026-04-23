@@ -239,5 +239,9 @@ I-beam (⌶) lookup library at `ibeam/` with TUI pane integration. Two-tier sear
 - **Busy spinner**: Animated braille spinner in title bar (`gritt ⠋`) when interpreter is executing. Driven by `m.ready` / SetPromptType. Spinner tick via `tea.Tick` at 80ms. Also fixed Unicode width bug in `renderBox()` (`len(title)` → `len([]rune(title))`).
 - **WaitForIdle**: New test helper in `uitest/runner.go` — checks for absence of all spinner braille frames. Replaced all `Sleep` calls after `SendLine` in `tui_test.go` with `WaitForIdle` (deterministic, ~3s faster).
 - **Code review fixes**: Rune-safe truncation in `locals_pane.go`, HTTP status check in `aplcart.go`, mutex scope fix in `main.go`, tighter test assertions with negative checks.
+- **History overhaul**: History file (`~/.cache/gritt/history`) is now append-only, oldest-first. Every TUI execute and every `-e`/`-stdin` expression appends immediately (single `write(2)` per entry, atomic under PIPE_BUF for concurrent processes). No rewrite on quit — crash-safe. Dedup and cap at 500 happen on load. New `-history` flag dumps history to stdout (`gritt -history | tail -5`).
+- **Binding guard + warnings pane**: `buildIndexes()` detects single ASCII alphanumeric keys bound as direct (non-leader) commands. Warnings show in a new `WarningsPane` (bottom-right, red, unfocused, Escape to dismiss) and in the debug log. Outside TUI, warnings go to stderr at startup.
+- **Help bar**: Now shows F1 docs, C-] : commands, C-] q quit, C-S-↑ history (was: F1, ctrl+l, C-] q).
+- **uitest improvements**: `Contains`/`WaitFor` now strip ANSI codes before matching (reports keep colours). New `WaitForLine` for CLI tests — snapshots the screen, then waits for a new line containing the pattern (ignores input echo and stale output).
 
 See FACIENDA.md for what's next.

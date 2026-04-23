@@ -102,6 +102,16 @@ echo "1+1" | ./gritt -l -stdin
 
 Works on function files (`.aplf`) and namespace/class files (`.apln`). Uses Dyalog's `FormatCode` to normalize whitespace and indentation. Also available in the TUI via the command palette (`Ctrl+]` `:` → `format`).
 
+### Command history
+
+```bash
+./gritt -history              # Dump full history
+./gritt -history | tail -5    # Last 5 commands
+./gritt -history | grep foo   # Search
+```
+
+History is an append-only log at `~/.cache/gritt/history` (`~/Library/Caches/gritt/history` on macOS). Both TUI sessions and `-e` expressions are recorded. Multiple concurrent gritt processes append safely.
+
 ## Caching
 
 gritt caches APLcart idioms and Dyalog documentation locally for fast offline access. Caches live in your OS cache directory (`~/Library/Caches/gritt/` on macOS, `~/.cache/gritt/` on Linux, `%LocalAppData%\gritt\` on Windows).

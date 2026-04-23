@@ -87,6 +87,17 @@ func (r *Runner) WaitFor(pattern string, timeout time.Duration) bool {
 	return true
 }
 
+// WaitForLine snapshots the screen, then waits for a new line containing
+// pattern to appear (ignoring lines already on screen, like input echo).
+func (r *Runner) WaitForLine(pattern string, timeout time.Duration) bool {
+	err := r.Session.WaitForLine(pattern, timeout)
+	if err != nil {
+		r.T.Logf("WaitForLine failed: %v", err)
+		return false
+	}
+	return true
+}
+
 // WaitForNot waits for a pattern to disappear
 func (r *Runner) WaitForNot(pattern string, timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
