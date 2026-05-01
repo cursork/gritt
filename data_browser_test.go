@@ -4,9 +4,28 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/cursork/gritt/codec"
 )
+
+// withAppendRowBinding configures a pane to treat Down as the append-row key,
+// matching the default `gritt.default.json` binding.
+func withAppendRowBinding(d *DataBrowserPane) *DataBrowserPane {
+	d.SetAppendRowBinding(key.NewBinding(key.WithKeys("down")))
+	return d
+}
+
+// withMutationBindings configures all five data-browser commands to their
+// shipped defaults so tests exercise the same wiring real users get.
+func withMutationBindings(d *DataBrowserPane) *DataBrowserPane {
+	d.SetAppendRowBinding(key.NewBinding(key.WithKeys("down")))
+	d.SetAppendColumnBinding(key.NewBinding(key.WithKeys("right")))
+	d.SetDeleteRowBinding(key.NewBinding(key.WithKeys("ctrl+d")))
+	d.SetDeleteColumnBinding(key.NewBinding(key.WithKeys("alt+d")))
+	d.SetCloseDiscardBinding(key.NewBinding(key.WithKeys("ctrl+w")))
+	return d
+}
 
 // --- Test data ---
 
@@ -356,14 +375,21 @@ func TestDataBrowserStartEditString(t *testing.T) {
 	}
 }
 
-func TestDataBrowserStartEditCompoundFails(t *testing.T) {
+func TestDataBrowserStartEditCompound(t *testing.T) {
+	// startEdit now works on compound cells too — buffer is the APLAN
+	// serialization, ready for editing as APLAN. Drill-in is preserved by
+	// the Enter handler in HandleKey, which routes compounds to drillIn.
 	db := NewDataBrowserPane("data", testNamespace(), nil)
 
-	// "scores" is index 2, a vector — can't edit inline
-	db.selected = 2
-	ok := db.startEdit()
-	if ok {
-		t.Error("startEdit on vector should return false")
+	db.selected = 2 // "scores" is a vector
+	if ok := db.startEdit(); !ok {
+		t.Fatal("startEdit on compound should succeed (APLAN buffer)")
+	}
+	if !db.editing {
+		t.Error("expected editing=true")
+	}
+	if len(db.editBuf) == 0 {
+		t.Error("editBuf should be prefilled with APLAN serialization")
 	}
 }
 
@@ -525,8 +551,10 @@ func TestConvertToTypeInt(t *testing.T) {
 		{"42", 42, false},
 		{"¯5", -5, false},
 		{"0", 0, false},
-		{"abc", 0, true},
-		{"3.14", 0, true},
+		{"abc", 0, true}, // not parseable as anything
+		// Note: "3.14" no longer fails — APLAN fallback parses it as float64
+		// (see TestConvertToTypeAPLANFallback). Type-promotion is intentional
+		// so users can widen scalars without leaving edit mode.
 	}
 	for _, tt := range tests {
 		got, err := convertToType(tt.text, int(0))
@@ -791,6 +819,482 @@ func TestSelectedValueNamespace(t *testing.T) {
 	db.selected = 1
 	if got := db.selectedValue(); got != 42 {
 		t.Errorf("selected[1] = %v, want 42", got)
+	}
+}
+
+func TestDataBrowserDownAppendsRow2D(t *testing.T) {
+	m := testMatrix() // 2×3 of ints
+	db := withAppendRowBinding(NewDataBrowserPane("m", m, nil))
+
+	// Move to last row
+	db.HandleKey(tea.KeyMsg{Type: tea.KeyDown})
+	if db.selected != 1 {
+		t.Fatalf("setup: selected = %d, want 1", db.selected)
+	}
+
+	// Down on last row should append a new row
+	db.HandleKey(tea.KeyMsg{Type: tea.KeyDown})
+
+	if m.Shape[0] != 3 {
+		t.Errorf("after append: rows = %d, want 3", m.Shape[0])
+	}
+	if db.selected != 2 {
+		t.Errorf("after append: selected = %d, want 2", db.selected)
+	}
+	if !db.modified {
+		t.Error("after append: modified should be true")
+	}
+
+	// New row should have 3 zero-valued int cells
+	row, ok := m.Data[2].([]any)
+	if !ok {
+		t.Fatalf("new row is not []any: %T", m.Data[2])
+	}
+	if len(row) != 3 {
+		t.Fatalf("new row len = %d, want 3", len(row))
+	}
+	for i, v := range row {
+		if v != 0 {
+			t.Errorf("new row[%d] = %v (%T), want 0 (int)", i, v, v)
+		}
+	}
+}
+
+func TestDataBrowserDownAppendsRow1D(t *testing.T) {
+	m := &codec.Array{Data: []any{10, 20}, Shape: []int{2}}
+	db := withAppendRowBinding(NewDataBrowserPane("v", m, nil))
+
+	db.HandleKey(tea.KeyMsg{Type: tea.KeyDown})
+	if db.selected != 1 {
+		t.Fatalf("setup: selected = %d, want 1", db.selected)
+	}
+
+	db.HandleKey(tea.KeyMsg{Type: tea.KeyDown})
+
+	if m.Shape[0] != 3 {
+		t.Errorf("after append: rows = %d, want 3", m.Shape[0])
+	}
+	if db.selected != 2 {
+		t.Errorf("after append: selected = %d, want 2", db.selected)
+	}
+	if m.Data[2] != 0 {
+		t.Errorf("new row[0] = %v (%T), want 0 (int)", m.Data[2], m.Data[2])
+	}
+}
+
+func TestDataBrowserDownAppendsRowVectorAny(t *testing.T) {
+	// Plain []any vector — what `)ed x` produces for `x←1 2 3 4`.
+	v := []any{1, 2, 3, 4}
+	db := withAppendRowBinding(NewDataBrowserPane("x", v, nil))
+	db.selected = 3 // last element
+
+	db.HandleKey(tea.KeyMsg{Type: tea.KeyDown})
+
+	// The pane stores the (possibly reallocated) slice on stack[0].value.
+	got, ok := db.currentValue().([]any)
+	if !ok {
+		t.Fatalf("currentValue is not []any: %T", db.currentValue())
+	}
+	if len(got) != 5 {
+		t.Errorf("len = %d, want 5", len(got))
+	}
+	if db.selected != 4 {
+		t.Errorf("selected = %d, want 4", db.selected)
+	}
+	if got[4] != 0 {
+		t.Errorf("got[4] = %v (%T), want 0 (int)", got[4], got[4])
+	}
+	if !db.modified {
+		t.Error("modified should be true")
+	}
+
+	// CRITICAL: the save path serializes db.root, so the appended row
+	// MUST be visible there too — not just in the stack.
+	rootSlice, ok := db.root.([]any)
+	if !ok {
+		t.Fatalf("db.root is not []any: %T", db.root)
+	}
+	if len(rootSlice) != 5 {
+		t.Errorf("db.root len = %d, want 5 (otherwise the new row is lost on save)", len(rootSlice))
+	}
+}
+
+func TestDataBrowserVectorAnyMultipleAppends(t *testing.T) {
+	// Two appends with an edit in between — db.root must reflect both
+	// appends and the edited value (the bug: db.root could go stale because
+	// []any append may reallocate).
+	v := []any{1, 2}
+	db := withAppendRowBinding(NewDataBrowserPane("x", v, nil))
+	db.selected = 1
+
+	db.HandleKey(tea.KeyMsg{Type: tea.KeyDown})
+	if got := db.currentValue().([]any); len(got) != 3 {
+		t.Fatalf("after first append: len = %d, want 3", len(got))
+	}
+
+	if !db.startEdit() {
+		t.Fatal("startEdit failed on appended cell")
+	}
+	db.editBuf = []rune("9")
+	db.editCursor = 1
+	db.confirmEdit()
+
+	db.HandleKey(tea.KeyMsg{Type: tea.KeyDown})
+	got, ok := db.currentValue().([]any)
+	if !ok {
+		t.Fatalf("currentValue is not []any: %T", db.currentValue())
+	}
+	if len(got) != 4 {
+		t.Errorf("after second append: len = %d, want 4", len(got))
+	}
+	rootSlice, _ := db.root.([]any)
+	if len(rootSlice) != 4 {
+		t.Errorf("db.root len = %d, want 4", len(rootSlice))
+	}
+	if rootSlice[2] != 9 {
+		t.Errorf("db.root[2] = %v, want 9 (the edited value)", rootSlice[2])
+	}
+}
+
+func TestDataBrowserDownPreservesColumnTypes(t *testing.T) {
+	// Mixed-type columns: int, float64, string
+	m := &codec.Array{
+		Data:  []any{[]any{1, 1.5, "a"}},
+		Shape: []int{1, 3},
+	}
+	db := withAppendRowBinding(NewDataBrowserPane("m", m, nil))
+
+	db.HandleKey(tea.KeyMsg{Type: tea.KeyDown})
+
+	row := m.Data[1].([]any)
+	if _, ok := row[0].(int); !ok {
+		t.Errorf("col 0 type = %T, want int", row[0])
+	}
+	if f, ok := row[1].(float64); !ok || f != 0.0 {
+		t.Errorf("col 1 = %v (%T), want 0.0 (float64)", row[1], row[1])
+	}
+	if s, ok := row[2].(string); !ok || s != "" {
+		t.Errorf("col 2 = %v (%T), want \"\" (string)", row[2], row[2])
+	}
+}
+
+func TestDataBrowserDownNoAppendOnNamespace(t *testing.T) {
+	db := NewDataBrowserPane("ns", testNamespace(), nil)
+
+	// Move to last item
+	for i := 0; i < 10; i++ {
+		db.HandleKey(tea.KeyMsg{Type: tea.KeyDown})
+	}
+
+	if db.selected != 3 {
+		t.Errorf("namespace selected = %d, want 3 (no append)", db.selected)
+	}
+	if db.modified {
+		t.Error("namespace modified should remain false")
+	}
+}
+
+func TestDataBrowserDownAppendsRepeatedly(t *testing.T) {
+	// User explicitly wanted unconstrained append: 3 Downs → 3 new rows.
+	m := testMatrix() // 2×3
+	db := withAppendRowBinding(NewDataBrowserPane("m", m, nil))
+	db.selected = 1
+
+	for i := 0; i < 3; i++ {
+		db.HandleKey(tea.KeyMsg{Type: tea.KeyDown})
+	}
+	if m.Shape[0] != 5 {
+		t.Errorf("after 3 downs: rows = %d, want 5", m.Shape[0])
+	}
+}
+
+func TestDataBrowserDownNoAppendMidMatrix(t *testing.T) {
+	// 3-row matrix, cursor on row 0
+	m := &codec.Array{
+		Data:  []any{[]any{1, 2}, []any{3, 4}, []any{5, 6}},
+		Shape: []int{3, 2},
+	}
+	db := NewDataBrowserPane("m", m, nil)
+
+	db.HandleKey(tea.KeyMsg{Type: tea.KeyDown}) // → row 1
+	if m.Shape[0] != 3 {
+		t.Errorf("mid-matrix down extended unexpectedly: rows = %d", m.Shape[0])
+	}
+	if db.modified {
+		t.Error("mid-matrix down should not set modified")
+	}
+}
+
+// --- Append column ---
+
+func TestDataBrowserAppendColumn2D(t *testing.T) {
+	m := testMatrix() // 2×3
+	db := withMutationBindings(NewDataBrowserPane("m", m, nil))
+	db.colSel = 2 // last column
+
+	// Right when at last column → append a new column.
+	db.HandleKey(tea.KeyMsg{Type: tea.KeyRight})
+
+	if m.Shape[1] != 4 {
+		t.Errorf("cols = %d, want 4", m.Shape[1])
+	}
+	if db.colSel != 3 {
+		t.Errorf("colSel = %d, want 3", db.colSel)
+	}
+	if !db.modified {
+		t.Error("modified should be true")
+	}
+	for r := 0; r < m.Shape[0]; r++ {
+		row := m.Data[r].([]any)
+		if len(row) != 4 {
+			t.Errorf("row %d len = %d, want 4", r, len(row))
+		}
+		if row[3] != 0 {
+			t.Errorf("row[%d][3] = %v, want 0", r, row[3])
+		}
+	}
+}
+
+func TestDataBrowserAppendColumnRepeats(t *testing.T) {
+	// Unconstrained: Right three times grows from 3 cols to 6.
+	m := &codec.Array{Data: []any{[]any{1, 2, 3}}, Shape: []int{1, 3}}
+	db := withMutationBindings(NewDataBrowserPane("m", m, nil))
+	db.colSel = 2
+
+	for i := 0; i < 3; i++ {
+		db.HandleKey(tea.KeyMsg{Type: tea.KeyRight})
+	}
+	if m.Shape[1] != 6 {
+		t.Errorf("cols = %d, want 6", m.Shape[1])
+	}
+}
+
+func TestDataBrowserAppendColumnNoOpVector(t *testing.T) {
+	v := []any{1, 2, 3}
+	db := withMutationBindings(NewDataBrowserPane("v", v, nil))
+	db.selected = 0
+
+	db.HandleKey(tea.KeyMsg{Type: tea.KeyRight})
+
+	got := db.currentValue().([]any)
+	if len(got) != 3 {
+		t.Errorf("vector should be untouched: len = %d, want 3", len(got))
+	}
+	if db.modified {
+		t.Error("modified should remain false on vector")
+	}
+}
+
+// --- Delete row ---
+
+func TestDataBrowserDeleteRow2D(t *testing.T) {
+	m := &codec.Array{
+		Data:  []any{[]any{1, 2}, []any{3, 4}, []any{5, 6}},
+		Shape: []int{3, 2},
+	}
+	db := withMutationBindings(NewDataBrowserPane("m", m, nil))
+	db.selected = 1 // delete middle row
+
+	db.HandleKey(tea.KeyMsg{Type: tea.KeyCtrlD})
+
+	if m.Shape[0] != 2 {
+		t.Errorf("rows = %d, want 2", m.Shape[0])
+	}
+	// Row 0 = [1,2], row 1 was [3,4] (deleted), row 2 = [5,6] becomes new row 1.
+	row1 := m.Data[1].([]any)
+	if row1[0] != 5 || row1[1] != 6 {
+		t.Errorf("after delete: data[1] = %v, want [5 6]", row1)
+	}
+	if !db.modified {
+		t.Error("modified should be true")
+	}
+}
+
+func TestDataBrowserDeleteRowAdjustsCursor(t *testing.T) {
+	// Deleting the last row must move selected back so it's in range.
+	m := &codec.Array{
+		Data:  []any{[]any{1}, []any{2}, []any{3}},
+		Shape: []int{3, 1},
+	}
+	db := withMutationBindings(NewDataBrowserPane("m", m, nil))
+	db.selected = 2
+
+	db.HandleKey(tea.KeyMsg{Type: tea.KeyCtrlD})
+	if m.Shape[0] != 2 {
+		t.Fatalf("rows = %d, want 2", m.Shape[0])
+	}
+	if db.selected != 1 {
+		t.Errorf("selected = %d, want 1 (was at last, must back off)", db.selected)
+	}
+}
+
+func TestDataBrowserDeleteRowVector(t *testing.T) {
+	v := []any{10, 20, 30, 40}
+	db := withMutationBindings(NewDataBrowserPane("v", v, nil))
+	db.selected = 1
+
+	db.HandleKey(tea.KeyMsg{Type: tea.KeyCtrlD})
+
+	got := db.currentValue().([]any)
+	if len(got) != 3 {
+		t.Errorf("len = %d, want 3", len(got))
+	}
+	if got[0] != 10 || got[1] != 30 || got[2] != 40 {
+		t.Errorf("got = %v, want [10 30 40]", got)
+	}
+	rootSlice := db.root.([]any)
+	if len(rootSlice) != 3 {
+		t.Errorf("db.root len = %d, want 3 (otherwise delete is lost on save)", len(rootSlice))
+	}
+}
+
+// --- Delete column ---
+
+func TestDataBrowserDeleteColumn(t *testing.T) {
+	m := &codec.Array{
+		Data:  []any{[]any{1, 2, 3}, []any{4, 5, 6}},
+		Shape: []int{2, 3},
+	}
+	db := withMutationBindings(NewDataBrowserPane("m", m, nil))
+	db.colSel = 1 // delete middle column
+
+	db.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}, Alt: true})
+
+	if m.Shape[1] != 2 {
+		t.Errorf("cols = %d, want 2", m.Shape[1])
+	}
+	row0 := m.Data[0].([]any)
+	if row0[0] != 1 || row0[1] != 3 {
+		t.Errorf("row 0 = %v, want [1 3]", row0)
+	}
+	row1 := m.Data[1].([]any)
+	if row1[0] != 4 || row1[1] != 6 {
+		t.Errorf("row 1 = %v, want [4 6]", row1)
+	}
+}
+
+func TestDataBrowserDeleteColumnNoOpVector(t *testing.T) {
+	v := []any{1, 2, 3}
+	db := withMutationBindings(NewDataBrowserPane("v", v, nil))
+
+	// Vector — try delete-column. Must not mutate.
+	db.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}, Alt: true})
+
+	got := db.currentValue().([]any)
+	if len(got) != 3 {
+		t.Errorf("vector mutated: len = %d, want 3", len(got))
+	}
+	if db.modified {
+		t.Error("modified should be false on vector")
+	}
+}
+
+// --- Close discard ---
+
+func TestDataBrowserCloseDiscardSetsFlag(t *testing.T) {
+	closed := false
+	db := withMutationBindings(NewDataBrowserPane("v", []any{1, 2}, func() { closed = true }))
+	db.modified = true // simulate prior edit
+
+	db.HandleKey(tea.KeyMsg{Type: tea.KeyCtrlW})
+
+	if !db.Discard {
+		t.Error("Discard should be true after close-discard")
+	}
+	if !closed {
+		t.Error("onClose should have fired")
+	}
+}
+
+// --- APLAN edit-mode parsing ---
+
+func TestConvertToTypeAPLANFallback(t *testing.T) {
+	// Scalar int 0 + APLAN vector input → []any{7,8,9}.
+	got, err := convertToType("7 8 9", 0)
+	if err != nil {
+		t.Fatalf("APLAN fallback failed: %v", err)
+	}
+	v, ok := got.([]any)
+	if !ok {
+		t.Fatalf("got %T, want []any", got)
+	}
+	if len(v) != 3 || v[0] != 7 || v[1] != 8 || v[2] != 9 {
+		t.Errorf("got %v, want [7 8 9]", v)
+	}
+}
+
+func TestConvertToTypeLiteralWinsForSimpleNumbers(t *testing.T) {
+	// "5" should parse as int 5, not as APLAN scalar.
+	got, err := convertToType("5", 0)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if n, ok := got.(int); !ok || n != 5 {
+		t.Errorf("got %v (%T), want int 5", got, got)
+	}
+}
+
+func TestConvertToTypeCompoundUsesAPLAN(t *testing.T) {
+	// Original is a vector; user typed `(1 2)` → parsed as APLAN.
+	original := []any{0, 0}
+	got, err := convertToType("1 2", original)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	v, ok := got.([]any)
+	if !ok {
+		t.Fatalf("got %T, want []any", got)
+	}
+	if len(v) != 2 || v[0] != 1 || v[1] != 2 {
+		t.Errorf("got %v, want [1 2]", v)
+	}
+}
+
+// --- Recursive zeroValueFor ---
+
+func TestZeroValueForVectorPreservesShape(t *testing.T) {
+	got := zeroValueFor([]any{1, 2.5, "x"})
+	v, ok := got.([]any)
+	if !ok {
+		t.Fatalf("got %T, want []any", got)
+	}
+	if len(v) != 3 {
+		t.Fatalf("len = %d, want 3", len(v))
+	}
+	if v[0] != 0 {
+		t.Errorf("v[0] = %v, want 0 (int)", v[0])
+	}
+	if v[1] != 0.0 {
+		t.Errorf("v[1] = %v, want 0.0", v[1])
+	}
+	if v[2] != "" {
+		t.Errorf("v[2] = %v, want \"\"", v[2])
+	}
+}
+
+func TestAppendRowAfterCompoundUsesRecursiveZero(t *testing.T) {
+	// `(1 2 3) (4 5 6)` → append → new row should be `(0 0 0)`, not `0`.
+	v := []any{[]any{1, 2, 3}, []any{4, 5, 6}}
+	db := withMutationBindings(NewDataBrowserPane("x", v, nil))
+	db.selected = 1
+
+	db.HandleKey(tea.KeyMsg{Type: tea.KeyDown})
+
+	got := db.currentValue().([]any)
+	if len(got) != 3 {
+		t.Fatalf("len = %d, want 3", len(got))
+	}
+	newRow, ok := got[2].([]any)
+	if !ok {
+		t.Fatalf("appended row is %T, want []any (recursive zero)", got[2])
+	}
+	if len(newRow) != 3 {
+		t.Errorf("new row len = %d, want 3", len(newRow))
+	}
+	for i, x := range newRow {
+		if x != 0 {
+			t.Errorf("newRow[%d] = %v, want 0", i, x)
+		}
 	}
 }
 

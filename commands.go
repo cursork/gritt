@@ -21,12 +21,13 @@ type CommandDef struct {
 
 // CommandRegistry holds all commands and provides matching.
 type CommandRegistry struct {
-	leader     key.Binding
-	commands   []CommandDef
-	byName     map[string]*CommandDef
-	leaderCmds []*CommandDef // Leader=true
-	directCmds []*CommandDef // Leader=false, Context=""
-	tracerCmds []*CommandDef // Context="tracer"
+	leader          key.Binding
+	commands        []CommandDef
+	byName          map[string]*CommandDef
+	leaderCmds      []*CommandDef // Leader=true
+	directCmds      []*CommandDef // Leader=false, Context=""
+	tracerCmds      []*CommandDef // Context="tracer"
+	dataBrowserCmds []*CommandDef // Context="data-browser"
 }
 
 func newRegistry(leader key.Binding) *CommandRegistry {
@@ -86,6 +87,7 @@ func (r *CommandRegistry) buildIndexes() []string {
 	r.leaderCmds = nil
 	r.directCmds = nil
 	r.tracerCmds = nil
+	r.dataBrowserCmds = nil
 	for i := range r.commands {
 		cmd := &r.commands[i]
 		r.byName[cmd.Name] = cmd
@@ -93,6 +95,8 @@ func (r *CommandRegistry) buildIndexes() []string {
 			switch {
 			case cmd.Context == "tracer":
 				r.tracerCmds = append(r.tracerCmds, cmd)
+			case cmd.Context == "data-browser":
+				r.dataBrowserCmds = append(r.dataBrowserCmds, cmd)
 			case cmd.Leader:
 				r.leaderCmds = append(r.leaderCmds, cmd)
 			default:
@@ -145,6 +149,16 @@ func (r *CommandRegistry) MatchTracer(msg tea.KeyMsg) *CommandDef {
 	return nil
 }
 
+// MatchDataBrowser returns the command matching a key press in data-browser context, or nil.
+func (r *CommandRegistry) MatchDataBrowser(msg tea.KeyMsg) *CommandDef {
+	for _, cmd := range r.dataBrowserCmds {
+		if key.Matches(msg, cmd.Binding) {
+			return cmd
+		}
+	}
+	return nil
+}
+
 // ByName returns a command by name, or nil.
 func (r *CommandRegistry) ByName(name string) *CommandDef {
 	return r.byName[name]
@@ -168,7 +182,7 @@ func (r *CommandRegistry) ShortHelp() []key.Binding {
 
 // FullHelp implements help.KeyMap for the full help view.
 func (r *CommandRegistry) FullHelp() [][]key.Binding {
-	var leader, direct, tracer []key.Binding
+	var leader, direct, tracer, dataBrowser []key.Binding
 	for _, cmd := range r.leaderCmds {
 		leader = append(leader, cmd.Binding)
 	}
@@ -178,7 +192,10 @@ func (r *CommandRegistry) FullHelp() [][]key.Binding {
 	for _, cmd := range r.tracerCmds {
 		tracer = append(tracer, cmd.Binding)
 	}
-	return [][]key.Binding{leader, direct, tracer}
+	for _, cmd := range r.dataBrowserCmds {
+		dataBrowser = append(dataBrowser, cmd.Binding)
+	}
+	return [][]key.Binding{leader, direct, tracer, dataBrowser}
 }
 
 // PaletteCommands returns Command entries for the command palette.
@@ -388,6 +405,13 @@ func buildCommands(cfg *Config) *CommandRegistry {
 		return *m, nil
 	})
 	reg.add("edit-mode", "Tracer: enter edit mode", false, "tracer", nil) // handled in EditorPane
+
+	// --- Data browser commands --- (all handled in DataBrowserPane)
+	reg.add("append-row", "Data browser: append a row", false, "data-browser", nil)
+	reg.add("append-column", "Data browser: append a column", false, "data-browser", nil)
+	reg.add("delete-row", "Data browser: delete the selected row", false, "data-browser", nil)
+	reg.add("delete-column", "Data browser: delete the selected column", false, "data-browser", nil)
+	reg.add("close-discard", "Data browser: close without saving changes", false, "data-browser", nil)
 
 	reg.applyBindings(cfg.Bindings)
 	warnings := reg.buildIndexes()

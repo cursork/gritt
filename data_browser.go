@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/cursork/gritt/codec"
@@ -36,6 +37,19 @@ type DataBrowserPane struct {
 	editErr    string // validation error message
 	modified   bool   // any values changed since open
 
+	// Set by close-discard: tells the pane's owner (tui.go ESC handler) to
+	// skip the SaveChanges path and just send CloseWindow.
+	Discard bool
+
+	// Bindings for context-scoped data-browser commands. Each is disabled
+	// (zero value) unless explicitly set from the registry — a missing
+	// binding simply means that command isn't available.
+	appendRowBinding    key.Binding
+	appendColumnBinding key.Binding
+	deleteRowBinding    key.Binding
+	deleteColumnBinding key.Binding
+	closeDiscardBinding key.Binding
+
 	// Callbacks
 	onClose func()
 
@@ -53,6 +67,32 @@ type browseEntry struct {
 	selected int
 	scroll   int
 	colSel   int
+}
+
+// SetAppendRowBinding configures the key binding for appending a row.
+func (d *DataBrowserPane) SetAppendRowBinding(b key.Binding) {
+	d.appendRowBinding = b
+}
+
+// SetAppendColumnBinding configures the key binding for appending a column.
+func (d *DataBrowserPane) SetAppendColumnBinding(b key.Binding) {
+	d.appendColumnBinding = b
+}
+
+// SetDeleteRowBinding configures the key binding for deleting the selected row.
+func (d *DataBrowserPane) SetDeleteRowBinding(b key.Binding) {
+	d.deleteRowBinding = b
+}
+
+// SetDeleteColumnBinding configures the key binding for deleting the selected column.
+func (d *DataBrowserPane) SetDeleteColumnBinding(b key.Binding) {
+	d.deleteColumnBinding = b
+}
+
+// SetCloseDiscardBinding configures the key binding for close-without-save.
+// When pressed, the pane sets DiscardOnClose=true and triggers onClose.
+func (d *DataBrowserPane) SetCloseDiscardBinding(b key.Binding) {
+	d.closeDiscardBinding = b
 }
 
 // NewDataBrowserPane creates a data browser for the given parsed APLAN value.
@@ -466,6 +506,40 @@ func (d *DataBrowserPane) HandleKey(msg tea.KeyMsg) bool {
 		return d.handleEditKey(msg)
 	}
 
+	// Data-browser context bindings — checked before the navigation switch
+	// so a binding like "down" → append-row can still win on the last row.
+	// If the action's precondition fails (wrong cursor position, wrong
+	// type), we fall through and the same key gets its normal handler.
+	if d.appendRowBinding.Enabled() && key.Matches(msg, d.appendRowBinding) {
+		if d.tryAppendRow() {
+			d.selected++
+			return true
+		}
+	}
+	if d.appendColumnBinding.Enabled() && key.Matches(msg, d.appendColumnBinding) {
+		if d.tryAppendColumn() {
+			d.colSel++
+			return true
+		}
+	}
+	if d.deleteRowBinding.Enabled() && key.Matches(msg, d.deleteRowBinding) {
+		if d.tryDeleteRow() {
+			return true
+		}
+	}
+	if d.deleteColumnBinding.Enabled() && key.Matches(msg, d.deleteColumnBinding) {
+		if d.tryDeleteColumn() {
+			return true
+		}
+	}
+	if d.closeDiscardBinding.Enabled() && key.Matches(msg, d.closeDiscardBinding) {
+		d.Discard = true
+		if d.onClose != nil {
+			d.onClose()
+		}
+		return true
+	}
+
 	count := d.itemCount()
 
 	switch msg.Type {
@@ -505,11 +579,13 @@ func (d *DataBrowserPane) HandleKey(msg tea.KeyMsg) bool {
 		return true
 
 	case tea.KeyEnter:
-		// Try editing scalar first, fall back to drill-in
-		if d.startEdit() {
-			return true
+		// Compound cells drill in (existing behavior); scalars edit.
+		// To force-edit a compound cell as APLAN, use the edit-cell binding.
+		switch d.selectedValue().(type) {
+		case *codec.Namespace, *codec.Array, []any:
+			return d.drillIn()
 		}
-		return d.drillIn()
+		return d.startEdit()
 
 	case tea.KeyEscape, tea.KeyBackspace:
 		return d.drillOut()
@@ -566,19 +642,15 @@ func (d *DataBrowserPane) handleEditKey(msg tea.KeyMsg) bool {
 	return true // consume all keys while editing
 }
 
-// startEdit begins editing the currently selected scalar value.
+// startEdit begins editing the currently selected value. Scalars edit raw;
+// compound cells (sub-vectors, sub-arrays, sub-namespaces) edit as their
+// APLAN serialization, parsed back via codec.APLAN on confirm.
 func (d *DataBrowserPane) startEdit() bool {
 	val := d.selectedValue()
 	if val == nil {
 		return false
 	}
-	// Only scalars are editable
-	switch val.(type) {
-	case *codec.Namespace, *codec.Array, []any:
-		return false
-	}
 
-	// Show raw value for editing (no quotes for strings, ¯ for APL negatives)
 	var text string
 	switch v := val.(type) {
 	case string:
@@ -652,6 +724,222 @@ func (d *DataBrowserPane) setSelectedValue(newVal any) {
 	}
 }
 
+// tryAppendRow appends a new row to the current value when the cursor is on
+// the last row. Supports *codec.Array (1D and 2D) and []any (plain vectors at
+// the top level — drill-in vectors aren't supported because the parent's
+// reference to the slice would need updating). New cells are zero-valued,
+// matching column types from the previous row. Returns true if a row was
+// appended.
+func (d *DataBrowserPane) tryAppendRow() bool {
+	switch v := d.currentValue().(type) {
+	case []any:
+		// Only the root-level vector can be safely extended in place: a
+		// drilled-in []any is held by reference in a parent (namespace map
+		// value, array cell, or another slice), and append may reallocate.
+		if len(d.stack) != 1 || len(v) == 0 || d.selected != len(v)-1 {
+			return false
+		}
+		def := zeroValueFor(v[len(v)-1])
+		newSlice := append(v, def)
+		d.stack[0].value = newSlice
+		d.root = newSlice // keep root in sync — saved on close via codec.Serialize(d.root)
+		d.modified = true
+		return true
+	}
+
+	m, ok := d.currentValue().(*codec.Array)
+	if !ok || len(m.Shape) == 0 || m.Shape[0] == 0 {
+		return false
+	}
+	if d.selected != m.Shape[0]-1 {
+		return false
+	}
+
+	if len(m.Shape) == 1 {
+		var def any = 0
+		if len(m.Data) > 0 {
+			def = zeroValueFor(m.Data[len(m.Data)-1])
+		}
+		m.Data = append(m.Data, def)
+	} else {
+		cols := m.Shape[1]
+		newRow := make([]any, cols)
+		var prev []any
+		if last, ok := m.Data[len(m.Data)-1].([]any); ok {
+			prev = last
+		}
+		for c := 0; c < cols; c++ {
+			if c < len(prev) {
+				newRow[c] = zeroValueFor(prev[c])
+			} else {
+				newRow[c] = 0
+			}
+		}
+		m.Data = append(m.Data, newRow)
+	}
+
+	m.Shape[0]++
+	d.modified = true
+	return true
+}
+
+// zeroValueFor returns a zero value of the same Go shape as v. Compound types
+// recurse so e.g. a row of vectors stays as a row of vectors of zeros.
+func zeroValueFor(v any) any {
+	switch x := v.(type) {
+	case int:
+		return 0
+	case float64:
+		return 0.0
+	case complex128:
+		return complex(0, 0)
+	case string:
+		return ""
+	case []any:
+		out := make([]any, len(x))
+		for i, item := range x {
+			out[i] = zeroValueFor(item)
+		}
+		return out
+	case *codec.Array:
+		// Replicate shape; data length = product of shape
+		n := 1
+		for _, dim := range x.Shape {
+			n *= dim
+		}
+		shape := make([]int, len(x.Shape))
+		copy(shape, x.Shape)
+		// Walk first cell to pick the elemental zero type
+		var elemZero any = 0
+		if len(x.Data) > 0 {
+			// For 2D, Data[0] is []any of cols; pick its first element
+			if row, ok := x.Data[0].([]any); ok && len(row) > 0 {
+				elemZero = zeroValueFor(row[0])
+			} else {
+				elemZero = zeroValueFor(x.Data[0])
+			}
+		}
+		if len(shape) >= 2 {
+			data := make([]any, shape[0])
+			for r := 0; r < shape[0]; r++ {
+				row := make([]any, shape[1])
+				for c := 0; c < shape[1]; c++ {
+					row[c] = elemZero
+				}
+				data[r] = row
+			}
+			return &codec.Array{Shape: shape, Data: data}
+		}
+		data := make([]any, n)
+		for i := range data {
+			data[i] = elemZero
+		}
+		return &codec.Array{Shape: shape, Data: data}
+	case *codec.Namespace:
+		// Replicate keys with their values' zero shapes
+		out := &codec.Namespace{Keys: make([]string, len(x.Keys)), Values: map[string]any{}}
+		copy(out.Keys, x.Keys)
+		for _, k := range x.Keys {
+			out.Values[k] = zeroValueFor(x.Values[k])
+		}
+		return out
+	default:
+		return 0
+	}
+}
+
+// tryAppendColumn appends a new column to a 2D *codec.Array when the cursor
+// is on the last column. Each row receives a zero value matching the existing
+// column's element type. No-op for vectors and 1D arrays. Returns true if the
+// matrix was extended.
+func (d *DataBrowserPane) tryAppendColumn() bool {
+	m, ok := d.currentValue().(*codec.Array)
+	if !ok || len(m.Shape) < 2 {
+		return false
+	}
+	cols := m.Shape[1]
+	if d.colSel != cols-1 {
+		return false
+	}
+
+	for r := 0; r < m.Shape[0]; r++ {
+		row, ok := m.Data[r].([]any)
+		if !ok {
+			row = []any{}
+		}
+		var def any = 0
+		if len(row) > 0 {
+			def = zeroValueFor(row[len(row)-1])
+		}
+		m.Data[r] = append(row, def)
+	}
+	m.Shape[1]++
+	d.modified = true
+	return true
+}
+
+// tryDeleteRow removes the currently-selected row from the array. Works on
+// *codec.Array (1D and 2D) and on root-level []any. Adjusts selected so it
+// doesn't index past the new end. Returns true if the array shrank.
+func (d *DataBrowserPane) tryDeleteRow() bool {
+	switch v := d.currentValue().(type) {
+	case []any:
+		if len(d.stack) != 1 || len(v) == 0 || d.selected < 0 || d.selected >= len(v) {
+			return false
+		}
+		newSlice := append(v[:d.selected:d.selected], v[d.selected+1:]...)
+		d.stack[0].value = newSlice
+		d.root = newSlice
+		if d.selected >= len(newSlice) && d.selected > 0 {
+			d.selected--
+		}
+		d.modified = true
+		return true
+	}
+
+	m, ok := d.currentValue().(*codec.Array)
+	if !ok || len(m.Shape) == 0 || m.Shape[0] == 0 {
+		return false
+	}
+	if d.selected < 0 || d.selected >= m.Shape[0] {
+		return false
+	}
+
+	m.Data = append(m.Data[:d.selected:d.selected], m.Data[d.selected+1:]...)
+	m.Shape[0]--
+	if d.selected >= m.Shape[0] && d.selected > 0 {
+		d.selected--
+	}
+	d.modified = true
+	return true
+}
+
+// tryDeleteColumn removes the currently-selected column from a 2D *codec.Array.
+// No-op for vectors or 1D arrays. Returns true if the matrix shrank.
+func (d *DataBrowserPane) tryDeleteColumn() bool {
+	m, ok := d.currentValue().(*codec.Array)
+	if !ok || len(m.Shape) < 2 || m.Shape[1] == 0 {
+		return false
+	}
+	if d.colSel < 0 || d.colSel >= m.Shape[1] {
+		return false
+	}
+
+	for r := 0; r < m.Shape[0]; r++ {
+		row, ok := m.Data[r].([]any)
+		if !ok {
+			continue
+		}
+		m.Data[r] = append(row[:d.colSel:d.colSel], row[d.colSel+1:]...)
+	}
+	m.Shape[1]--
+	if d.colSel >= m.Shape[1] && d.colSel > 0 {
+		d.colSel--
+	}
+	d.modified = true
+	return true
+}
+
 func (d *DataBrowserPane) setMatrixCell(m *codec.Array, row, col int, val any) {
 	if len(m.Shape) == 1 {
 		if row < len(m.Data) {
@@ -666,44 +954,54 @@ func (d *DataBrowserPane) setMatrixCell(m *codec.Array, row, col int, val any) {
 	}
 }
 
-// convertToType parses text into the same Go type as original.
+// convertToType parses text into a value. For numeric originals, the literal
+// parsers (Atoi/ParseFloat/J-notation) try first; if they fail, the input is
+// reparsed as APLAN so users can type things like `7 8 9` to promote a
+// scalar cell into a vector. For string originals the text is taken verbatim.
+// For compound originals the input is always parsed as APLAN.
 func convertToType(text string, original any) (any, error) {
 	switch original.(type) {
+	case *codec.Namespace, *codec.Array, []any:
+		v, err := codec.APLAN(text)
+		if err != nil {
+			return nil, fmt.Errorf("not valid APLAN: %v", err)
+		}
+		return v, nil
+	case string:
+		return text, nil
+	}
+
+	s := strings.ReplaceAll(text, "¯", "-")
+	switch original.(type) {
 	case int:
-		s := strings.ReplaceAll(text, "¯", "-")
-		n, err := strconv.Atoi(s)
-		if err != nil {
-			return nil, fmt.Errorf("not a valid integer")
+		if n, err := strconv.Atoi(s); err == nil {
+			return n, nil
 		}
-		return n, nil
 	case float64:
-		s := strings.ReplaceAll(text, "¯", "-")
-		f, err := strconv.ParseFloat(s, 64)
-		if err != nil {
-			return nil, fmt.Errorf("not a valid number")
+		if f, err := strconv.ParseFloat(s, 64); err == nil {
+			return f, nil
 		}
-		return f, nil
 	case complex128:
-		s := strings.ReplaceAll(text, "¯", "-")
-		// Parse J notation: realJimag
 		if idx := strings.IndexAny(s, "Jj"); idx >= 0 {
 			re, err1 := strconv.ParseFloat(s[:idx], 64)
 			im, err2 := strconv.ParseFloat(s[idx+1:], 64)
-			if err1 != nil || err2 != nil {
-				return nil, fmt.Errorf("not a valid complex number (use NJN)")
+			if err1 == nil && err2 == nil {
+				return complex(re, im), nil
 			}
-			return complex(re, im), nil
+		} else if f, err := strconv.ParseFloat(s, 64); err == nil {
+			return complex(f, 0), nil
 		}
-		f, err := strconv.ParseFloat(s, 64)
-		if err != nil {
-			return nil, fmt.Errorf("not a valid complex number")
-		}
-		return complex(f, 0), nil
-	case string:
-		return text, nil
 	default:
 		return nil, fmt.Errorf("cannot edit this type")
 	}
+
+	// Literal parse failed — fall back to APLAN (user may have typed
+	// something like `(7 8 9)` to replace a scalar with a sub-vector).
+	v, err := codec.APLAN(text)
+	if err != nil {
+		return nil, fmt.Errorf("not a valid value")
+	}
+	return v, nil
 }
 
 // drillIn pushes the selected value onto the stack.

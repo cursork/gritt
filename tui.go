@@ -714,7 +714,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					// At root — close the data browser
 					var token int
 					fmt.Sscanf(fp.ID, "editor:%d", &token)
-					if db.modified {
+					if db.modified && !db.Discard {
 						w, exists := m.editors[token]
 						if exists && w.PendingClose {
 							return m, nil // already saving
@@ -726,7 +726,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 						}
 						m.closeEditor(token) // save then close
 					} else {
-						// Unmodified: remove pane locally and send close
+						// Unmodified, or close-discard requested: remove pane
+						// locally and send CloseWindow without saving.
 						m.panes.Remove(fp.ID)
 						delete(m.editors, token)
 						m.sendCloseWindow(token)
@@ -1777,9 +1778,20 @@ func (m *Model) tryDataBrowser(w *EditorWindow) *DataBrowserPane {
 	switch parsed.(type) {
 	case *codec.Namespace, *codec.Array, []any:
 		token := w.Token
-		return NewDataBrowserPane(w.Name, parsed, func() {
+		pane := NewDataBrowserPane(w.Name, parsed, func() {
 			m.sendCloseWindow(token)
 		})
+		bind := func(name string, set func(key.Binding)) {
+			if cmd := m.commands.ByName(name); cmd != nil && cmd.Binding.Enabled() {
+				set(cmd.Binding)
+			}
+		}
+		bind("append-row", pane.SetAppendRowBinding)
+		bind("append-column", pane.SetAppendColumnBinding)
+		bind("delete-row", pane.SetDeleteRowBinding)
+		bind("delete-column", pane.SetDeleteColumnBinding)
+		bind("close-discard", pane.SetCloseDiscardBinding)
+		return pane
 	}
 	return nil
 }

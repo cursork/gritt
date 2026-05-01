@@ -1959,6 +1959,90 @@ func TestTUI(t *testing.T) {
 	runner.SendLine(")erase dbTest")
 	runner.WaitForIdle(3 * time.Second)
 
+	// === DATA BROWSER: APPEND ROW (Down on last row) ===
+	// `)ed x` for x←1 2 3 4 → read-only editor → Enter → APLAN data browser
+	// (parsed as []any). Down on last item extends; edit-then-Down extends
+	// again. After saving, the variable's shape must reflect the new rows.
+	runner.SendLine("vecApp←1 2 3 4")
+	runner.WaitForIdle(3 * time.Second)
+
+	runner.SendLine(")ed vecApp")
+	runner.WaitFor("[read-only]", 3*time.Second)
+	runner.SendKeys("Enter") // ShowAsArrayNotation
+	runner.Sleep(1500 * time.Millisecond)
+	runner.Snapshot("vecApp data browser open")
+
+	runner.Test("vecApp data browser shows index [4]", func() bool {
+		return runner.Contains("[4]")
+	})
+
+	// Navigate to last row [4] then Down to extend → [5] appears.
+	runner.SendKeys("End")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Down")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("vecApp after first Down (extends to [5])")
+
+	runner.Test("Down on last item extends vector to [5]", func() bool {
+		return runner.Contains("[5]")
+	})
+
+	// Second Down without editing must NOT extend (pending guard).
+	runner.SendKeys("Down")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("vecApp after second Down (pending guard blocks)")
+
+	runner.Test("Pending guard blocks repeat Down without edit", func() bool {
+		return !runner.Contains("[6]")
+	})
+
+	// Edit the new cell [5] to "55" so the row is committed.
+	runner.SendKeys("Enter") // start edit
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendText("55")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Enter") // confirm
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("vecApp after editing [5] to 55")
+
+	// Now another Down should extend to [6] (pending was cleared by the edit).
+	runner.SendKeys("Down")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("vecApp after Down post-edit (should reach [6])")
+
+	runner.Test("Edit clears pending, second append reaches [6]", func() bool {
+		return runner.Contains("[6]")
+	})
+
+	// Edit [6] to 66 to commit.
+	runner.SendKeys("Enter")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendText("66")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Enter")
+	runner.Sleep(300 * time.Millisecond)
+
+	// Esc → save changes → CloseWindow.
+	runner.SendKeys("Escape")
+	runner.Sleep(2000 * time.Millisecond)
+	runner.WaitForIdle(8 * time.Second)
+	runner.Snapshot("vecApp after save+close")
+
+	// CRITICAL: query the variable to confirm the appends actually persisted.
+	// Expected: the original 4 values plus two appended (55 and 66 entered by
+	// the user). Matching the full sequence proves both shape (≥6) and the
+	// committed values made it back to the interpreter.
+	runner.SendLine("vecApp")
+	runner.WaitForIdle(3 * time.Second)
+	runner.Snapshot("vecApp value")
+
+	runner.Test("vecApp persists as 1 2 3 4 55 66 after save", func() bool {
+		return runner.Contains("1 2 3 4 55 66")
+	})
+
+	runner.SendLine(")erase vecApp")
+	runner.WaitForIdle(3 * time.Second)
+
 	// =========================================================================
 	// Rebind pane tests
 	// =========================================================================

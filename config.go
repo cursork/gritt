@@ -17,7 +17,7 @@ var defaultConfigJSON []byte
 type BindingDef struct {
 	Keys    []string `json:"keys,omitempty"`
 	Leader  bool     `json:"leader,omitempty"`
-	Context string   `json:"context,omitempty"` // "", "tracer"
+	Context string   `json:"context,omitempty"` // "", "tracer", "data-browser"
 }
 
 // NavConfig defines navigation key bindings.

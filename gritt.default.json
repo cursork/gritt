@@ -40,7 +40,12 @@
     "resume-all":      { "keys": ["r"], "context": "tracer" },
     "trace-back":      { "keys": ["p"], "context": "tracer" },
     "trace-forward":   { "keys": ["f"], "context": "tracer" },
-    "edit-mode":       { "keys": ["e"], "context": "tracer" }
+    "edit-mode":       { "keys": ["e"], "context": "tracer" },
+    "append-row":      { "keys": ["down"],     "context": "data-browser" },
+    "append-column":   { "keys": ["right"],    "context": "data-browser" },
+    "delete-row":      { "keys": ["ctrl+d"],   "context": "data-browser" },
+    "delete-column":   { "keys": ["alt+d"],    "context": "data-browser" },
+    "close-discard":   { "keys": ["ctrl+w"],   "context": "data-browser" }
   },
   "navigation": {
     "up": ["up"],
