@@ -293,8 +293,9 @@ func decodeTradfnLine(tokens []byte, ctx *tokenContext) string {
 // --- Namespace decompiler ---
 
 type nsMember struct {
-	name  string
-	class int // 2=variable, 3=function, 9=namespace name
+	name      string
+	class     int  // 2=variable, 3=function, 9=namespace-family (own name or sub-ns)
+	classByte byte // raw class byte; 0x08 = the namespace's own name, 0x98 = sub-namespace member
 }
 
 func (r Raw) decompileNamespace() (string, error) {
@@ -303,7 +304,7 @@ func (r Raw) decompileNamespace() (string, error) {
 	nsName := ""
 	var memberList []nsMember
 	for _, m := range members {
-		if m.class == 9 {
+		if m.classByte == 0x08 {
 			nsName = m.name
 		} else {
 			memberList = append(memberList, m)
@@ -486,7 +487,7 @@ func (r Raw) extractNsMembers() []nsMember {
 			}
 
 			if len(runes) > 0 {
-				members = append(members, nsMember{name: string(runes), class: actualClass})
+				members = append(members, nsMember{name: string(runes), class: actualClass, classByte: classByte})
 			}
 			j = lastEnd - 1
 		}

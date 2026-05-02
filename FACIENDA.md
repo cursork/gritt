@@ -12,6 +12,9 @@
 ## amicable
 - [ ] **decompiler: extend** — multi-line dfns, more system variables, tradfn string literals/locals, embedded function decompilation (different encoding from standalone ⎕OR — see §5.7), nested namespaces
 - [ ] **bytecode synthesis** — generate/modify ⎕OR bytecode in Go, send to Dyalog via `0(220⌶)`
+- [ ] **nested-namespace unmarshal: end-of-sub-blob detection** — current fix handles class-9 members at end of extraction order (i.e. earliest in name-table order). When a sub-namespace appears later in name-table order than another member, `pos` is left at the sub-blob start and subsequent variable extraction re-finds content from inside the nested ns. Need a way to determine sub-blob byte length (likely by recursively walking and counting trailing settings/translation/workspace `07 D5 50` blocks).
+- [ ] **other 9.x classes** — instances (9.2), classes (9.4), interfaces (9.5), external classes (9.6) all hit the same code path as 9.1 namespaces but have different blob shapes. Currently the recursive `unmarshalNamespace` may misparse them.
+- [ ] **generative round-trip tests** — randomly construct namespace/array structures in APL via gritt, capture the 220⌶ blob, unmarshal, re-marshal, and compare. Would surface boundary cases (deep nesting, large fan-out, mixed types per member) without hand-writing every shape. Drives both the bug fix above and confidence in marshal symmetry.
 
 ## GitHub Issues
 - **#3 Multithreaded tracing** — switch between suspended functions in different threads

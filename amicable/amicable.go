@@ -106,12 +106,16 @@ func (r Raw) unmarshalNamespace() (any, error) {
 	members := r.extractNsMembers()
 	nameTableEnd := r.findNameTableEnd()
 
-	// Separate namespace name from value members.
+	// Class-9 entries are sub-namespaces (9.1) or instances/classes/etc.
+	// (9.2/9.4/9.5/9.6). The one exception is the namespace's own name,
+	// which is also reported with class 9 but encoded with classByte 0x08;
+	// drop it so it isn't surfaced as a "member".
 	var memberList []nsMember
 	for _, m := range members {
-		if m.class != 9 {
-			memberList = append(memberList, m)
+		if m.classByte == 0x08 {
+			continue
 		}
+		memberList = append(memberList, m)
 	}
 
 	// Values are stored in reverse name-table order.
@@ -136,6 +140,27 @@ func (r Raw) unmarshalNamespace() (any, error) {
 			copy(blob, data[fnStart:newPos])
 			values = append(values, blob)
 			pos = newPos
+		case 9: // sub-namespace (or instance/class) — recursively parse
+			nsStart, ok := findNextNsSubBlob(data, pos)
+			if !ok {
+				goto done
+			}
+			sub := Raw(data[nsStart:])
+			val, err := sub.unmarshalNamespace()
+			if err != nil {
+				goto done
+			}
+			values = append(values, val)
+			// Advancing pos past the nested namespace requires knowing its
+			// byte length within the parent. We don't yet have a robust way
+			// to determine that, so leave pos at nsStart — findNextSubArray /
+			// findNextNsSubBlob for any later members will scan forward and
+			// likely re-find content from inside this nested namespace,
+			// which is wrong for namespaces that are followed by other
+			// members in extraction order. The bug-repro case (class-9 last
+			// in extraction order) works because no further values follow.
+			// TODO: detect end of nested ns sub-blob.
+			pos = nsStart
 		default: // variable — standard sub-array
 			val, newPos, ok := findNextSubArray(data, pos)
 			if !ok {
@@ -163,6 +188,46 @@ done:
 		}
 	}
 	return ns, nil
+}
+
+// findNextNsSubBlob scans forward from 'from' for the next nested namespace
+// sub-blob marker. Embedded namespaces start with the eight-byte word
+// 0x07 then the eight-byte 'D5 50 ...' marker — the same internal preamble
+// that the parent namespace itself uses (after the DF A4 magic header).
+// Returns the sub-blob start offset and true on success.
+func findNextNsSubBlob(data []byte, from int) (int, bool) {
+	for j := from; j+16 <= len(data); j++ {
+		// First qword: 07 00 00 00 00 00 00 00
+		if data[j] != 0x07 {
+			continue
+		}
+		allZero := true
+		for k := j + 1; k < j+8; k++ {
+			if data[k] != 0 {
+				allZero = false
+				break
+			}
+		}
+		if !allZero {
+			continue
+		}
+		// Second qword: D5 50 00 00 00 00 00 00
+		if data[j+8] != 0xD5 || data[j+9] != 0x50 {
+			continue
+		}
+		allZero = true
+		for k := j + 10; k < j+16; k++ {
+			if data[k] != 0 {
+				allZero = false
+				break
+			}
+		}
+		if !allZero {
+			continue
+		}
+		return j, true
+	}
+	return from, false
 }
 
 // findNextSubArray scans forward from 'from' for the next standard sub-array
