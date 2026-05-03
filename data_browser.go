@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -954,52 +953,19 @@ func (d *DataBrowserPane) setMatrixCell(m *codec.Array, row, col int, val any) {
 	}
 }
 
-// convertToType parses text into a value. For numeric originals, the literal
-// parsers (Atoi/ParseFloat/J-notation) try first; if they fail, the input is
-// reparsed as APLAN so users can type things like `7 8 9` to promote a
-// scalar cell into a vector. For string originals the text is taken verbatim.
-// For compound originals the input is always parsed as APLAN.
+// convertToType parses the edit-buffer text. Strings are taken raw — APLAN
+// requires quotes for strings, but our edit UI shows them unquoted, so
+// round-tripping via APLAN would force the user to retype quotes. Everything
+// else is parsed as APLAN, which already handles ints, floats, complex (J),
+// negatives (¯), vectors, namespaces, and arrays — and matches APL's own
+// value semantics (e.g. 5J0 collapses to int 5, just like in APL itself).
 func convertToType(text string, original any) (any, error) {
-	switch original.(type) {
-	case *codec.Namespace, *codec.Array, []any:
-		v, err := codec.APLAN(text)
-		if err != nil {
-			return nil, fmt.Errorf("not valid APLAN: %v", err)
-		}
-		return v, nil
-	case string:
+	if _, ok := original.(string); ok {
 		return text, nil
 	}
-
-	s := strings.ReplaceAll(text, "¯", "-")
-	switch original.(type) {
-	case int:
-		if n, err := strconv.Atoi(s); err == nil {
-			return n, nil
-		}
-	case float64:
-		if f, err := strconv.ParseFloat(s, 64); err == nil {
-			return f, nil
-		}
-	case complex128:
-		if idx := strings.IndexAny(s, "Jj"); idx >= 0 {
-			re, err1 := strconv.ParseFloat(s[:idx], 64)
-			im, err2 := strconv.ParseFloat(s[idx+1:], 64)
-			if err1 == nil && err2 == nil {
-				return complex(re, im), nil
-			}
-		} else if f, err := strconv.ParseFloat(s, 64); err == nil {
-			return complex(f, 0), nil
-		}
-	default:
-		return nil, fmt.Errorf("cannot edit this type")
-	}
-
-	// Literal parse failed — fall back to APLAN (user may have typed
-	// something like `(7 8 9)` to replace a scalar with a sub-vector).
 	v, err := codec.APLAN(text)
 	if err != nil {
-		return nil, fmt.Errorf("not a valid value")
+		return nil, fmt.Errorf("not valid APLAN: %v", err)
 	}
 	return v, nil
 }

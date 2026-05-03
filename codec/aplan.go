@@ -27,6 +27,12 @@ type Namespace struct {
 // (APLAN has no native function representation — this is a grittles-ism).
 type FnSource string
 
+// Raw is the catch-all container for APL text that should round-trip verbatim
+// — anything we can't or don't bother to classify more specifically (e.g. a
+// 220⌶-decoded class, script, operator, or namespace-with-refs whose canonical
+// text form we want to preserve). Serialize emits Raw values unchanged.
+type Raw string
+
 // Zilde is the sentinel for APL's empty numeric vector (⍬).
 var Zilde = &zilde{}
 

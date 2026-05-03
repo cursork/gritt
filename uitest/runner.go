@@ -2,6 +2,7 @@ package uitest
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -11,6 +12,12 @@ type Runner struct {
 	T       *testing.T
 	Session *Session
 	Report  *Report
+
+	// SkipAliveCheck disables the IsAlive gate inside Test(). Set to true
+	// for runners driving non-TUI interactions (e.g. a CLI-only session
+	// running `./gritt -history`), where the gritt TUI's top border won't
+	// be rendered.
+	SkipAliveCheck bool
 }
 
 // NewRunner creates a new test runner
@@ -42,8 +49,61 @@ func (r *Runner) Snapshot(label string) {
 	r.Report.AddSnapshot(label, content)
 }
 
-// Test runs a test with automatic result recording
+// IsAlive returns true if the gritt TUI appears to be rendering normally.
+// A dead/broken state (Dyalog disconnected, gritt error screen) shows up as
+// the absence of gritt's top border ("╭─ gritt") and presence of fatal
+// error markers like "connection refused" or "Press any key to exit".
+//
+// Many test predicates use `!runner.Contains("X")` and trivially evaluate
+// true when nothing is rendering. Gating Test() on IsAlive() turns those
+// silent false-positives into honest failures.
+//
+// Recognized "alive" UI states:
+//   - normal pane mode: top border "╭─ gritt" is visible
+//   - focus mode: border is hidden by design; "focus mode" hint shows
+//     in the status line instead
+func (r *Runner) IsAlive() bool {
+	content, err := r.Session.Capture()
+	if err != nil {
+		return false
+	}
+	plain := stripANSI(content)
+	// Fatal markers — gritt's stderr/exit screen
+	deadMarkers := []string{
+		"connection refused",
+		"Press any key to exit",
+		"Error: dial",
+	}
+	for _, m := range deadMarkers {
+		if strings.Contains(plain, m) {
+			return false
+		}
+	}
+	// Positive markers — at least one must be visible for us to treat
+	// gritt as rendering normally. ╭─ gritt is the standard top border;
+	// "focus mode" is shown as a hint when the border is intentionally
+	// hidden.
+	if strings.Contains(plain, "╭─ gritt") {
+		return true
+	}
+	if strings.Contains(plain, "focus mode") {
+		return true
+	}
+	return false
+}
+
+// Test runs a test with automatic result recording. Before running the
+// predicate it asserts the gritt UI is alive (unless SkipAliveCheck is
+// set) — without this check, tests whose predicates merely assert
+// ABSENCE of state silently pass on a broken UI (e.g. `!Contains("X")`
+// is true when nothing is rendering).
 func (r *Runner) Test(name string, fn func() bool) bool {
+	if !r.SkipAliveCheck && !r.IsAlive() {
+		r.Report.AddResult(name, false)
+		r.T.Errorf("FAIL: %s (system not alive — gritt not rendering)", name)
+		r.Snapshot(fmt.Sprintf("Failed (system dead): %s", name))
+		return false
+	}
 	passed := fn()
 	r.Report.AddResult(name, passed)
 	if passed {

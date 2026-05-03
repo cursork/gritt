@@ -551,10 +551,7 @@ func TestConvertToTypeInt(t *testing.T) {
 		{"42", 42, false},
 		{"¯5", -5, false},
 		{"0", 0, false},
-		{"abc", 0, true}, // not parseable as anything
-		// Note: "3.14" no longer fails — APLAN fallback parses it as float64
-		// (see TestConvertToTypeAPLANFallback). Type-promotion is intentional
-		// so users can widen scalars without leaving edit mode.
+		{"abc", 0, true}, // not parseable as int or APLAN
 	}
 	for _, tt := range tests {
 		got, err := convertToType(tt.text, int(0))
@@ -610,13 +607,15 @@ func TestConvertToTypeComplex(t *testing.T) {
 		t.Errorf("got %v, want -1+2i", got)
 	}
 
-	// Real only → complex with zero imaginary
+	// Real-only typed into a complex cell collapses to int — matches APL's
+	// own semantics: (5J0)≡5 returns 1, ⎕DR 5J0 is INT (83). The "complex
+	// slot" is a Go-side fiction APL doesn't honor.
 	got, err = convertToType("5", complex128(0))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != complex(5, 0) {
-		t.Errorf("got %v, want 5+0i", got)
+	if got != 5 {
+		t.Errorf("got %v (%T), want int 5 (matches APL's (5J0)≡5)", got, got)
 	}
 }
 
@@ -1207,6 +1206,23 @@ func TestDataBrowserCloseDiscardSetsFlag(t *testing.T) {
 }
 
 // --- APLAN edit-mode parsing ---
+
+func TestConvertToTypeIntPromotesToFloat(t *testing.T) {
+	// `3.14` typed over an int 0 used to fail. With APLAN fallback the
+	// scalar widens to float64 — same spirit as `(7 8 9)` promoting to a
+	// sub-vector. Asserting the new contract.
+	got, err := convertToType("3.14", 0)
+	if err != nil {
+		t.Fatalf("convertToType(\"3.14\", int) should succeed via APLAN fallback: %v", err)
+	}
+	f, ok := got.(float64)
+	if !ok {
+		t.Fatalf("got %T, want float64", got)
+	}
+	if f != 3.14 {
+		t.Errorf("got %v, want 3.14", f)
+	}
+}
 
 func TestConvertToTypeAPLANFallback(t *testing.T) {
 	// Scalar int 0 + APLAN vector input → []any{7,8,9}.

@@ -99,8 +99,16 @@ func Unmarshal(data []byte) (any, error) {
 // unmarshalNamespace parses a Raw namespace blob into *codec.Namespace.
 // Extracts member values directly from the blob as typed Go values.
 //
-// Blob layout after the name table: member values in reverse name-table order,
-// then metadata tail (settings, translation table, workspace info).
+// Two layout cases:
+//
+//   - All-class-2/3 members (no sub-namespaces): values are packed
+//     sequentially right after the name table in reverse name-table order,
+//     then metadata tail (settings, translation table, workspace info).
+//
+//   - With class-9 members: class-9 sub-blobs sit immediately after the
+//     name table. Class-2/3 values are relocated to a "tail region" right
+//     before a final terminator D5_50 block, also in reverse name-table
+//     order.
 func (r Raw) unmarshalNamespace() (any, error) {
 	data := []byte(r)
 	members := r.extractNsMembers()
@@ -124,50 +132,119 @@ func (r Raw) unmarshalNamespace() (any, error) {
 		reversed[len(memberList)-1-i] = m
 	}
 
-	// Walk sequentially from nameTableEnd, collecting one value per member.
+	// Detect mixed layout: when extraction order's first member is class-9,
+	// Dyalog relocates class-2/3 values to a "tail region" near the end of
+	// the blob. Otherwise (no class-9, or class-2/3 first), values are
+	// packed sequentially right after the name table.
+	relocated := len(reversed) > 0 && reversed[0].class == 9
+
 	values := make([]any, 0, len(memberList))
-	pos := nameTableEnd
-	for _, m := range reversed {
-		switch m.class {
-		case 3: // function — embedded sub-blob, different format from standalone ⎕OR
-			fnStart := pos
-			newPos, ok := skipFnBlob(data, pos)
-			if !ok {
-				goto done
+
+	if !relocated {
+		// Simple layout: walk sequentially from nameTableEnd.
+		pos := nameTableEnd
+		for _, m := range reversed {
+			switch m.class {
+			case 3:
+				fnStart := pos
+				newPos, ok := skipFnBlob(data, pos)
+				if !ok {
+					goto done
+				}
+				blob := make(Raw, newPos-fnStart)
+				copy(blob, data[fnStart:newPos])
+				values = append(values, blob)
+				pos = newPos
+			case 9:
+				// Sub-namespace appearing later in extraction order — its
+				// sub-blob is right after the previous member's value.
+				// We can't easily determine its byte length, so leave pos
+				// unchanged; this is fine when class-9 is the last member
+				// extracted (no further values to find).
+				nsStart, ok := findNextNsSubBlob(data, pos)
+				if !ok {
+					goto done
+				}
+				sub := Raw(data[nsStart:])
+				val, err := sub.unmarshalNamespace()
+				if err != nil {
+					goto done
+				}
+				values = append(values, val)
+			default:
+				val, newPos, ok := findNextSubArray(data, pos)
+				if !ok {
+					goto done
+				}
+				values = append(values, val)
+				pos = newPos
 			}
-			// Store the raw embedded bytes for future use.
-			blob := make(Raw, newPos-fnStart)
-			copy(blob, data[fnStart:newPos])
-			values = append(values, blob)
-			pos = newPos
-		case 9: // sub-namespace (or instance/class) — recursively parse
-			nsStart, ok := findNextNsSubBlob(data, pos)
+		}
+	} else {
+		// Mixed layout: class-9 first, class-2/3 in tail region.
+		//
+		// 1. Class-9 sub-blobs: scan forward from nameTableEnd via
+		//    findNextNsSubBlob, in extraction order. Each returns the
+		//    sub-blob start; we recurse to parse the namespace.
+		//
+		// 2. Class-2/3 values: find the terminator "other" D5_50 block,
+		//    then collect class-2/3 sub-arrays appearing in the file
+		//    before that terminator. The last N (= count of class-2/3
+		//    members) are the values, in extraction order. We tolerate
+		//    bad sub-array parses (workspace metadata uses type codes
+		//    we don't decode) by scanning byte-by-byte.
+
+		nsValues := make([]any, 0)
+		nsPos := nameTableEnd
+		for _, m := range reversed {
+			if m.class != 9 {
+				continue
+			}
+			nsStart, ok := findNextNsSubBlob(data, nsPos)
 			if !ok {
-				goto done
+				break
 			}
 			sub := Raw(data[nsStart:])
 			val, err := sub.unmarshalNamespace()
 			if err != nil {
-				goto done
+				break
 			}
-			values = append(values, val)
-			// Advancing pos past the nested namespace requires knowing its
-			// byte length within the parent. We don't yet have a robust way
-			// to determine that, so leave pos at nsStart — findNextSubArray /
-			// findNextNsSubBlob for any later members will scan forward and
-			// likely re-find content from inside this nested namespace,
-			// which is wrong for namespaces that are followed by other
-			// members in extraction order. The bug-repro case (class-9 last
-			// in extraction order) works because no further values follow.
-			// TODO: detect end of nested ns sub-blob.
-			pos = nsStart
-		default: // variable — standard sub-array
-			val, newPos, ok := findNextSubArray(data, pos)
-			if !ok {
-				goto done
+			nsValues = append(nsValues, val)
+			// Advance past this sub-blob's marker so the next
+			// findNextNsSubBlob doesn't re-find the same one. The
+			// nested ns extends well past +16, but the next class-9
+			// sub-blob would be after this one's content; we use the
+			// settings markers to know when to stop, but since
+			// findNextNsSubBlob looks for `07 D5 50` and that pattern
+			// also appears inside the parent's settings/translation
+			// blocks, we defensively stop scanning at the first
+			// "settings" D5_50 block (sub-array starts with `17 06`).
+			nsPos = nsStart + 16
+		}
+
+		// Collect class-2/3 values from tail region. Walk forward from
+		// `nameTableEnd` to `tailEnd`, collecting every top-level
+		// sub-array (class-2 values) AND every function blob (class-3
+		// values). Function blobs are recognized by their `45 51` (EQ
+		// version) marker — `findNextSubArray` skips them, so we need a
+		// dedicated scan that handles both formats.
+		tailEnd := findNsTerminator(data, nameTableEnd)
+		varValues := collectTailValues(data, nameTableEnd, tailEnd, countNonClass9(memberList), reversed)
+
+		// Stitch class-9 and class-2/3 values together in extraction order.
+		nsIdx, varIdx := 0, 0
+		for _, m := range reversed {
+			if m.class == 9 {
+				if nsIdx < len(nsValues) {
+					values = append(values, nsValues[nsIdx])
+					nsIdx++
+				}
+			} else {
+				if varIdx < len(varValues) {
+					values = append(values, varValues[varIdx])
+					varIdx++
+				}
 			}
-			values = append(values, val)
-			pos = newPos
 		}
 	}
 done:
@@ -188,6 +265,180 @@ done:
 		}
 	}
 	return ns, nil
+}
+
+// findNsTerminator scans forward from `from` for the terminator D5_50 block
+// that marks the end of class-2/3 values in mixed layouts. Returns the
+// position of the `07 D5 50` preamble (or len(data) if not found).
+//
+// The terminator's sub-array has typeRank bytes `00 00` (no valid type).
+// Other D5_50 blocks have distinguishing markers in the typeRank position:
+//
+//	`05 55` — namespace header
+//	`17 06` — settings/translation/workspace (nested array)
+//	`45 51` — embedded function blob preamble ("EQ" marker, version-tagged)
+//
+// We require both bytes to be zero rather than just "not one of the known
+// markers" so future Dyalog versions adding new internal markers don't get
+// misidentified as terminators.
+func findNsTerminator(data []byte, from int) int {
+	for j := from; j+34 <= len(data); j++ {
+		if data[j] != 0x07 {
+			continue
+		}
+		ok := true
+		for k := j + 1; k < j+8; k++ {
+			if data[k] != 0 {
+				ok = false
+				break
+			}
+		}
+		if !ok || data[j+8] != 0xD5 || data[j+9] != 0x50 {
+			continue
+		}
+		for k := j + 10; k < j+16; k++ {
+			if data[k] != 0 {
+				ok = false
+				break
+			}
+		}
+		if !ok {
+			continue
+		}
+		// Sub-array's typeRank (at sub+8..sub+9) must be 00 00.
+		sub := j + 24
+		if data[sub+8] != 0 || data[sub+9] != 0 {
+			continue
+		}
+		return j
+	}
+	return len(data)
+}
+
+// collectTailValues walks `data[from:to]` collecting both standard sub-
+// arrays (class-2) and embedded function blobs (class-3, identified by the
+// `45 51` "EQ" marker). Returns the last `count` of them, which are the
+// class-2/3 values in extraction order. The class sequence in `reversed`
+// is consulted to verify the layout matches expectations.
+//
+// At each step we look for the next sub-array start AND the next function
+// blob start, take whichever comes earlier in the file, and repeat.
+func collectTailValues(data []byte, from, to, count int, reversed []nsMember) []any {
+	if count <= 0 || from >= to {
+		return nil
+	}
+
+	wantClasses := make([]int, 0, count)
+	for _, m := range reversed {
+		if m.class == 9 {
+			continue
+		}
+		wantClasses = append(wantClasses, m.class)
+	}
+	if len(wantClasses) != count {
+		return nil
+	}
+
+	type hit struct {
+		val  any
+		isFn bool
+	}
+	var hits []hit
+
+	pos := from
+	for pos < to {
+		fnStart := findNextFnBlobStart(data, pos, to)
+		subVal, subStart, subEnd, subOK := findNextSubArrayAt(data, pos)
+		if !subOK || subEnd > to {
+			subOK = false
+		}
+
+		switch {
+		case !subOK && fnStart < 0:
+			pos = to // nothing more to find
+		case fnStart < 0 || (subOK && subStart < fnStart):
+			hits = append(hits, hit{val: subVal, isFn: false})
+			pos = subEnd
+		default:
+			fnEnd, ok := skipFnBlob(data, fnStart)
+			if !ok || fnEnd > to {
+				pos = to
+				break
+			}
+			blob := make(Raw, fnEnd-fnStart)
+			copy(blob, data[fnStart:fnEnd])
+			hits = append(hits, hit{val: blob, isFn: true})
+			pos = fnEnd
+		}
+	}
+
+	if len(hits) < count {
+		return nil
+	}
+	last := hits[len(hits)-count:]
+	out := make([]any, count)
+	for i, h := range last {
+		// If the layout matches what extraction order tells us to expect
+		// (class-3 → function blob, class-2 → sub-array), assign. If not,
+		// bail out so we don't mis-assign across types.
+		if wantClasses[i] == 3 && !h.isFn {
+			return nil
+		}
+		if wantClasses[i] != 3 && h.isFn {
+			return nil
+		}
+		out[i] = h.val
+	}
+	return out
+}
+
+// findNextFnBlobStart scans forward from `from` (up to `to`) for the start
+// of an embedded function blob: an `07 D5 50 ...` preamble whose sub-array
+// at +24 has the `45 51` ("EQ") version marker. Returns the preamble start
+// offset, or -1 if not found.
+func findNextFnBlobStart(data []byte, from, to int) int {
+	limit := to
+	if limit > len(data)-34 {
+		limit = len(data) - 34
+	}
+	for j := from; j+34 <= len(data) && j < limit; j++ {
+		if data[j] != 0x07 {
+			continue
+		}
+		ok := true
+		for k := j + 1; k < j+8; k++ {
+			if data[k] != 0 {
+				ok = false
+				break
+			}
+		}
+		if !ok || data[j+8] != 0xD5 || data[j+9] != 0x50 {
+			continue
+		}
+		for k := j + 10; k < j+16; k++ {
+			if data[k] != 0 {
+				ok = false
+				break
+			}
+		}
+		if !ok {
+			continue
+		}
+		if data[j+24+8] == 0x45 && data[j+24+9] == 0x51 {
+			return j
+		}
+	}
+	return -1
+}
+
+func countNonClass9(members []nsMember) int {
+	n := 0
+	for _, m := range members {
+		if m.class != 9 {
+			n++
+		}
+	}
+	return n
 }
 
 // findNextNsSubBlob scans forward from 'from' for the next nested namespace
@@ -233,6 +484,14 @@ func findNextNsSubBlob(data []byte, from int) (int, bool) {
 // findNextSubArray scans forward from 'from' for the next standard sub-array
 // (simple or nested) and parses it. Returns (value, posAfter, true) on success.
 func findNextSubArray(data []byte, from int) (any, int, bool) {
+	val, _, end, ok := findNextSubArrayAt(data, from)
+	return val, end, ok
+}
+
+// findNextSubArrayAt is like findNextSubArray but also returns the sub-array's
+// start offset. Useful when callers need to compare against other candidate
+// markers (e.g. function blob preambles) to determine which comes first.
+func findNextSubArrayAt(data []byte, from int) (any, int, int, bool) {
 	for j := from; j < len(data)-17; j++ {
 		rf := data[j+8]
 		tc := data[j+9]
@@ -279,9 +538,9 @@ func findNextSubArray(data []byte, from int) (any, int, bool) {
 			}
 		}
 
-		return val, subR.pos, true
+		return val, j, subR.pos, true
 	}
-	return nil, from, false
+	return nil, from, from, false
 }
 
 // skipFnBlob scans forward from 'from' past an embedded function sub-blob.
@@ -320,14 +579,34 @@ func skipFnBlob(data []byte, from int) (int, bool) {
 
 	// Parse the bytecode vector to find its end.
 	subR := &reader{data: data, pos: vecStart, ptrSize: 8}
-	_, err := subR.readArray()
+	bcVal, err := subR.readArray()
 	if err != nil {
 		return bcStart + 2, false
 	}
 	end := subR.pos
 
-	// Skip past trailing sub-arrays (literal pool + footer values).
-	for {
+	// Count distinct literal-pool references (tok 0x57) inside the
+	// bytecode's expression token stream. Each reference targets one
+	// entry of the literal pool; the literal pool follows the bytecode
+	// vector as that many sub-arrays. Counting references lets us
+	// consume EXACTLY the literal pool, with no over-reach into the
+	// next class-2 member's value (which is structurally identical to
+	// a literal pool entry — same `04 00..0F 22..val` shape — and
+	// would otherwise be swallowed by a gap-based heuristic).
+	litCount := 0
+	if bc, ok := bcVal.(string); ok && len(bc) > 20 {
+		refs := make(map[byte]bool)
+		exprs := extractExpressions([]byte(bc)[20:])
+		for _, e := range exprs {
+			collectExprLiteralRefs(e.tokens, refs)
+		}
+		litCount = len(refs)
+	}
+
+	// Consume exactly `litCount` trailing sub-arrays. Bound the gap to
+	// guard against parser drift after one of them — a runaway parse
+	// could march arbitrarily far into the rest of the blob.
+	for i := 0; i < litCount; i++ {
 		_, newPos, ok := findNextSubArray(data, end)
 		if !ok || newPos-end > 64 {
 			break

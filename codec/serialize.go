@@ -51,6 +51,9 @@ func serializeValue(value any, depth int, opt *SerializeOptions) string {
 	case FnSource:
 		// Raw APL source — pass through unquoted.
 		return string(v)
+	case Raw:
+		// Verbatim text (e.g. 220⌶-decoded non-data) — pass through.
+		return string(v)
 	case *Array:
 		return serializeMatrix(v, depth, opt)
 	case *Namespace:

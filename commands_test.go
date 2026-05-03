@@ -562,10 +562,10 @@ func TestFullHelp(t *testing.T) {
 	reg := testRegistry()
 
 	groups := reg.FullHelp()
-	if len(groups) != 3 {
-		t.Fatalf("FullHelp returned %d groups, want 3", len(groups))
+	// group[0] = leader, group[1] = direct, group[2] = tracer, group[3] = data-browser
+	if len(groups) != 4 {
+		t.Fatalf("FullHelp returned %d groups, want 4", len(groups))
 	}
-	// group[0] = leader, group[1] = direct, group[2] = tracer
 	if len(groups[0]) != 4 { // debug, stack, command-palette, quit
 		t.Errorf("leader group has %d bindings, want 4", len(groups[0]))
 	}

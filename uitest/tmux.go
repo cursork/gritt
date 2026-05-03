@@ -4,6 +4,7 @@ package uitest
 import (
 	"bytes"
 	"fmt"
+	"net"
 	"os/exec"
 	"strings"
 	"time"
@@ -200,25 +201,56 @@ func (s *Session) Sleep(d time.Duration) {
 }
 
 // RequireDyalog checks if Dyalog is running on the given port
+// RequireDyalog verifies a working RIDE server is listening on `port`.
+// A bare `nc -z` (port-LISTEN check) is insufficient — a half-dead Dyalog
+// or a stale TIME_WAIT/orphan process can hold the port without speaking
+// the protocol, leaving us connecting to a corpse. We instead open a TCP
+// connection and read the RIDE handshake greeting (`SupportedProtocols=`)
+// that a live Dyalog sends within ~1s of accepting a connection.
 func RequireDyalog(port int) error {
 	addr := fmt.Sprintf("localhost:%d", port)
-	cmd := exec.Command("nc", "-z", addr[:strings.Index(addr, ":")], fmt.Sprintf("%d", port))
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("Dyalog not running on port %d. Start with: RIDE_INIT=SERVE:*:%d dyalog +s -q", port, port)
+	conn, err := net.DialTimeout("tcp", addr, 1*time.Second)
+	if err != nil {
+		return fmt.Errorf("Dyalog not running on port %d (dial: %v). Start with: RIDE_INIT=SERVE:*:%d dyalog +s -q", port, err, port)
+	}
+	defer conn.Close()
+	// RIDE protocol: server sends a frame within ~1s. The first frame is
+	// `<4-byte length> "RIDE" <payload>` where payload starts with the
+	// ASCII string "SupportedProtocols=".
+	conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+	buf := make([]byte, 64)
+	n, err := conn.Read(buf)
+	if err != nil {
+		return fmt.Errorf("port %d is open but no RIDE greeting received (read: %v) — likely a dead/orphan process holding the port", port, err)
+	}
+	if !bytes.Contains(buf[:n], []byte("SupportedProtocols=")) {
+		return fmt.Errorf("port %d responded but greeting doesn't look like RIDE (got %q)", port, buf[:n])
 	}
 	return nil
 }
 
-// StartDyalog starts Dyalog in the background
+// StartDyalog starts Dyalog in the background and waits until the RIDE
+// port is actually accepting connections. A blind sleep races with slow
+// startup (cold-start, locked workspace files, etc.) and silently leaves
+// the test connecting to a port nothing's listening on yet, which
+// presents to the runner as a fatal "connection refused" screen.
 func StartDyalog(port int) (*exec.Cmd, error) {
 	cmd := exec.Command("dyalog", "+s", "-q")
 	cmd.Env = append(cmd.Environ(), fmt.Sprintf("RIDE_INIT=SERVE:*:%d", port))
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start Dyalog: %w", err)
 	}
-	// Wait for it to be ready
-	time.Sleep(3 * time.Second)
-	return cmd, nil
+	// Poll until the port accepts a connection (or give up after 30s).
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		if RequireDyalog(port) == nil {
+			return cmd, nil
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	// Port never came up — kill the orphan and fail.
+	if cmd.Process != nil {
+		cmd.Process.Kill()
+	}
+	return nil, fmt.Errorf("Dyalog started but port %d never accepted connections within 30s", port)
 }

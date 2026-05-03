@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,7 +12,9 @@ import (
 )
 
 const (
-	dyalogPort  = 4502
+	// 4502 is the default Dyalog/RIDE port — leaving it for the user's own
+	// dev sessions. Tests use 14502 to stay out of their way.
+	dyalogPort  = 14502
 	sessionName = "gritt-test"
 	screenW     = 120
 	screenH     = 40
@@ -74,7 +77,7 @@ func TestTUI(t *testing.T) {
 	}
 
 	// Create test runner with protocol logging
-	runner, err := uitest.NewRunner(t, sessionName, screenW, screenH, "./gritt -log test-reports/protocol.log", "test-reports")
+	runner, err := uitest.NewRunner(t, sessionName, screenW, screenH, fmt.Sprintf("./gritt -addr localhost:%d -log test-reports/protocol.log", dyalogPort), "test-reports")
 	if err != nil {
 		t.Fatalf("Failed to create runner: %v", err)
 	}
@@ -2342,7 +2345,10 @@ func TestTUI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create CLI test session: %v", err)
 	}
-	cliRunner := &uitest.Runner{T: t, Session: cliSession, Report: runner.Report}
+	// CLI runner drives a plain shell (no gritt TUI), so the gritt-border
+	// alive check would always fail. Tests against gritt CLI subcommands
+	// (-history, -e) check shell output directly.
+	cliRunner := &uitest.Runner{T: t, Session: cliSession, Report: runner.Report, SkipAliveCheck: true}
 	defer cliRunner.Close()
 
 	// Wait for shell prompt then cd to the project dir (HOME=/tmp)
