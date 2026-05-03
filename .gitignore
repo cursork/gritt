@@ -6,3 +6,11 @@ test-reports
 /cmd/explore*
 *.swp
 .earwig
+# Compiled grittle binaries (each shares its directory name)
+/grittles/aplanconv/aplanconv
+/grittles/aplcart/aplcart
+/grittles/apldocs/apldocs
+/grittles/aplfmt/aplfmt
+/grittles/aplmcp/aplmcp
+/grittles/aplor/aplor
+/grittles/aplsock/aplsock

@@ -16,28 +16,40 @@ See FACIENDA "codec package" section for planned uses (structured variable viewe
 
 ## Structured Data Browser
 
-New `DataBrowserPane` in `data_browser.go` implements `PaneContent` for structured viewing and editing of APLAN data. When an editor window has entityType 262144, the APLAN text is parsed via `codec.APLAN()` and shown in a type-specific view instead of raw text:
+`DataBrowserPane` (`data_browser.go`) implements `PaneContent` for structured viewing and editing of APLAN data. When an editor window has entityType 262144, the APLAN text is parsed via `codec.APLAN()` and shown in a type-specific view:
 
-- **Namespace**: key-value list with type-glyph-prefixed previews
-- **Matrix**: grid with row/column headers, 2D cell navigation, selected column header highlighted
-- **Vector**: indexed list with 1-based APL indices
-- **Scalars**: simple display (leaf nodes, no drill-down)
+- **Namespace** — key-value list with type-glyph-prefixed previews (`#` namespace, `⊞` matrix, `≡` vector).
+- **Matrix** — grid with row/column headers, 2D cell navigation.
+- **Vector** — indexed list with 1-based APL indices.
+- **Scalars** — leaf display.
 
-View stack with breadcrumb title bar for drill-down navigation. Enter drills in, Esc/Backspace pops out. Type glyphs: `#` namespace, `⊞` matrix, `≡` vector.
+View stack with breadcrumb title bar; Enter drills into compound cells, Esc/Backspace pops out.
 
-**v1 editing** (implemented, not yet tested): Enter on scalar starts inline edit with cursor. Type validation maintains original type (int→int, string→string, etc.). Red error on invalid input. Save serializes modified root back to APLAN via SaveChanges on close.
+### Editing
 
-Integration in `tui.go`: OpenWindow and UpdateWindow both check for entityType 262144 and swap to DataBrowserPane. ClosePane (Esc) handler has special data browser path: cancel edit → pop stack → save-if-modified → close. Design doc in `deliberanda/structured-editing.md`.
+Enter on a scalar starts inline edit. The buffer is parsed with `codec.APLAN` on confirm — strings are taken raw, everything else goes through APLAN (which already handles ints, floats, complex, negatives, vectors, namespaces). Editing a cell with a vector literal like `7 8 9` promotes the cell to a sub-vector — APL's own value semantics. `widenToOriginalType` was tried and removed: APL itself collapses `5J0`→`5` even from APLAN literals (verified with `(x:5J0)` → `⎕DR` 83), so widening was theatre. See FACIENDA "Cell type collapse on edit" for the deferred design.
 
-### KNOWN BUG: Interpreter stuck after ShowAsArrayNotation
+### Mutations (configurable bindings, `data-browser` context)
 
-**Symptoms**: Spinner in title bar after opening data browser via `)ed data` + Enter (ShowAsArrayNotation). Interpreter becomes unresponsive — session commands show spinner too. Esc at data browser root calls `sendCloseWindow(token)` but pane stays because it waits for Dyalog's CloseWindow response which never comes (interpreter stuck).
+| Command | Default | Behaviour |
+|---|---|---|
+| `append-row` | `down` | Down on last row appends a new row; `zeroValueFor` recurses so a row of vectors stays a row of vectors of zeros. Repeated presses keep stacking — no pending guard (user explicitly wanted unconstrained append). |
+| `append-column` | `right` | Right on last column extends a 2D matrix. No-op for vectors. |
+| `delete-row` | `ctrl+d` | Removes selected row (vector or matrix), adjusts cursor when at end. |
+| `delete-column` | `alt+d` | Removes selected column (matrix only). |
+| `close-discard` | `ctrl+w` | Sets `Discard` flag; tui.go's Esc handler skips `SaveChanges` and just sends `CloseWindow`. |
 
-**Suspicion**: ShowAsArrayNotation (or the UpdateWindow response changing entityType to 262144) may leave the interpreter in a busy state — SetPromptType type=1 may not be sent after the conversion. Need to check protocol logs (`-log debug.log`) to see what messages flow during ShowAsArrayNotation and whether we get a SetPromptType back.
+For `[]any` root vectors the append/delete code mutates `db.stack[0].value` AND `db.root` — the save path serializes `db.root`, and a slice append may reallocate, so both must be kept in sync.
 
-**Possible fix**: For unmodified data browser close, remove the pane locally immediately instead of waiting for Dyalog's CloseWindow response. For the stuck interpreter, may need to investigate the ShowAsArrayNotation protocol flow — check if RIDE does anything extra after receiving the UpdateWindow.
+### Save / discard
 
-**Not yet done**: testing editing, adding/removing elements, pagination.
+`tui.go` Esc handler: if `db.modified && !db.Discard` → serialize `db.root` via `codec.Serialize`, set `w.Modified = true`, call `closeEditor` (sends `SaveChanges` then `CloseWindow`). Otherwise (unmodified or close-discard) → remove pane locally, send `CloseWindow`. The "remove pane locally for unmodified" path resolves the earlier interpreter-stuck-after-ShowAsArrayNotation symptom.
+
+### Pending
+
+- Integration tests that re-query the variable after save: `3 3⍴9` (column add, row delete), `(1 2 3)(4 5 6)` (append + drill-edit), close-discard verifying x is unchanged. Required for confidence — earlier UI-only assertions missed real bugs.
+- Personal config `~/.config/gritt/gritt.json` doesn't yet have the four new binding entries (only `append-row` is there).
+- `amicable.Unmarshal` could start producing `codec.Raw` (newly added next to `FnSource`, both serialize verbatim) for non-data 220⌶ values that APLAN can't represent. Container is in place; wiring is not.
 
 ## Grittles (new)
 
