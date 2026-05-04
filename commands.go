@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
+	"sort"
+	"strings"
 	"unicode"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -199,6 +201,8 @@ func (r *CommandRegistry) FullHelp() [][]key.Binding {
 }
 
 // PaletteCommands returns Command entries for the command palette.
+// Commands prefixed with `@` are introspection / "peek into the guts" tools
+// — pushed to the end of the list so they don't crowd everyday commands.
 func (r *CommandRegistry) PaletteCommands(m *Model) []Command {
 	var cmds []Command
 	for i := range r.commands {
@@ -225,6 +229,12 @@ func (r *CommandRegistry) PaletteCommands(m *Model) []Command {
 			Help: help + hint,
 		})
 	}
+	sort.SliceStable(cmds, func(i, j int) bool {
+		iAt := strings.HasPrefix(cmds[i].Name, "@")
+		jAt := strings.HasPrefix(cmds[j].Name, "@")
+		// Non-@ first, @ commands at the bottom; preserve order within each group.
+		return !iAt && jAt
+	})
 	return cmds
 }
 
@@ -372,6 +382,21 @@ func buildCommands(cfg *Config) *CommandRegistry {
 	})
 	reg.add("rebind", "Change key bindings", false, "", func(m *Model) (tea.Model, tea.Cmd) {
 		m.openRebindPane()
+		return *m, nil
+	})
+
+	// --- Introspection commands (@-prefixed: sorted to end of palette) ---
+	reg.add("@pid", "Show launched Dyalog PID", false, "", func(m *Model) (tea.Model, tea.Cmd) {
+		var msg string
+		if m.dyalogCmd != nil && m.dyalogCmd.Process != nil {
+			msg = fmt.Sprintf("⍝ Dyalog PID: %d", m.dyalogCmd.Process.Pid)
+		} else {
+			msg = "⍝ No launched Dyalog (gritt is in connect mode)"
+		}
+		m.lines = append(m.lines, Line{Text: msg})
+		m.lines = append(m.lines, Line{Text: aplIndent})
+		m.cursorRow = len(m.lines) - 1
+		m.cursorCol = len(aplIndent)
 		return *m, nil
 	})
 

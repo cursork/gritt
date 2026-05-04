@@ -197,8 +197,16 @@ type killTickMsg struct{}
 // the Dyalog process exit, so we don't have to wait for the next tick.
 type dyalogExitedMsg struct{}
 
+// gracePeriodElapsedMsg fires after `)off` has had quitGracePeriod to take
+// effect; if Dyalog hasn't exited by then we escalate to SIGTERM + modal.
+type gracePeriodElapsedMsg struct{}
+
 func killTickCmd() tea.Cmd {
 	return tea.Tick(time.Second, func(time.Time) tea.Msg { return killTickMsg{} })
+}
+
+func gracePeriodCmd() tea.Cmd {
+	return tea.Tick(quitGracePeriod, func(time.Time) tea.Msg { return gracePeriodElapsedMsg{} })
 }
 
 func waitForDyalogExitCmd(exited <-chan struct{}) tea.Cmd {
@@ -288,13 +296,35 @@ func (m *Model) dyalogStillRunning() bool {
 	}
 }
 
-// quit shuts gritt down. If gritt owns a still-running Dyalog, it sends
-// SIGTERM and shows the kill-wait modal so the process is given a chance
-// to exit cleanly before SIGKILL escalation.
+// quitGracePeriod is how long quit() waits for `)off` to take effect before
+// falling back to SIGTERM and opening the kill-wait modal. Idle Dyalog
+// exits on `)off` well within this; stuck Dyalog won't, and we escalate.
+const quitGracePeriod = 5 * time.Second
+
+// quit shuts gritt down. If we have a live, idle RIDE connection we first
+// try `)off` (the APL graceful exit) — for idle Dyalog this completes well
+// inside `quitGracePeriod`, so the user never sees the kill-wait modal.
+// Otherwise (busy/stuck/disconnected) we go straight to SIGTERM.
 func (m Model) quit() (tea.Model, tea.Cmd) {
 	if !m.dyalogStillRunning() {
 		return m, tea.Quit
 	}
+	m.killWaitActive = true
+
+	if m.connected && m.ready && m.client != nil && m.internalQuery == "" {
+		m.log("Sending )off and waiting %s for graceful exit", quitGracePeriod)
+		// Best-effort — send error is irrelevant, escalation handles it.
+		_ = m.client.Send("Execute", map[string]any{"text": ")off\n", "trace": 0})
+		return m, tea.Batch(gracePeriodCmd(), waitForDyalogExitCmd(m.dyalogExited))
+	}
+
+	return m.startKillModal()
+}
+
+// startKillModal sends SIGTERM, opens the countdown modal, and schedules the
+// tick + exit-watcher commands. Used after `)off` failed to take effect or
+// when we couldn't try `)off` (busy/disconnected).
+func (m Model) startKillModal() (tea.Model, tea.Cmd) {
 	terminateProcessGroup(m.dyalogCmd)
 	m.log("Sent SIGTERM to Dyalog (pid=%d), waiting %ds before SIGKILL", m.dyalogCmd.Process.Pid, m.killTimeout)
 
@@ -573,6 +603,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.log("Dyalog exited within timeout")
 		return m.reapAndQuit()
+
+	case gracePeriodElapsedMsg:
+		if !m.killWaitActive {
+			return m, nil
+		}
+		if !m.dyalogStillRunning() {
+			return m.reapAndQuit()
+		}
+		m.log(")off didn't take effect in %s, escalating to SIGTERM", quitGracePeriod)
+		return m.startKillModal()
 
 	case killTickMsg:
 		if !m.killWaitActive {

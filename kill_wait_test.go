@@ -302,3 +302,75 @@ func mustModel(m tea.Model, c tea.Cmd) (Model, tea.Cmd) {
 	}
 	return mm, c
 }
+
+func TestGracefulKillNilCmd(t *testing.T) {
+	closed := make(chan struct{})
+	close(closed)
+	// Should not panic with nil cmd.
+	gracefulKillDyalog(nil, closed, time.Second)
+}
+
+func TestGracefulKillShortCircuitsWhenAlreadyExited(t *testing.T) {
+	cmd := exec.Command("sleep", "0.1")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start sleep: %v", err)
+	}
+	exited := make(chan struct{})
+	go func() {
+		cmd.Wait()
+		close(exited)
+	}()
+	<-exited // process already gone before we call
+
+	start := time.Now()
+	gracefulKillDyalog(cmd, exited, 5*time.Second)
+	if elapsed := time.Since(start); elapsed > 100*time.Millisecond {
+		t.Errorf("should return instantly, took %v", elapsed)
+	}
+}
+
+func TestGracefulKillReturnsWhenSIGTERMHonored(t *testing.T) {
+	// `sleep 60` exits on SIGTERM — graceful path.
+	cmd := exec.Command("sleep", "60")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start sleep: %v", err)
+	}
+	exited := make(chan struct{})
+	go func() {
+		cmd.Wait()
+		close(exited)
+	}()
+
+	start := time.Now()
+	gracefulKillDyalog(cmd, exited, 5*time.Second)
+	elapsed := time.Since(start)
+	if elapsed > 2*time.Second {
+		t.Errorf("SIGTERM-honoring process took %v, expected near-instant", elapsed)
+	}
+	select {
+	case <-exited:
+	default:
+		t.Error("exited channel not closed after gracefulKillDyalog returned")
+	}
+}
+
+func TestGracefulKillEscalatesOnTimeout(t *testing.T) {
+	cmd, exited := startTermIgnoringProcess(t)
+
+	start := time.Now()
+	gracefulKillDyalog(cmd, exited, 500*time.Millisecond)
+	elapsed := time.Since(start)
+	if elapsed < 400*time.Millisecond {
+		t.Errorf("escalation returned too fast (%v); SIGKILL path skipped?", elapsed)
+	}
+	if elapsed > 2*time.Second {
+		t.Errorf("escalation took too long (%v)", elapsed)
+	}
+	select {
+	case <-exited:
+	default:
+		t.Error("process not reaped after escalation")
+	}
+}

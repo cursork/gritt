@@ -21,6 +21,7 @@ type CommandPalette struct {
 	query          string
 	selected       int
 	scrollOffset   int    // First visible item index
+	lastListH      int    // visible list height from most recent Render — used by PgUp/PgDn
 	SelectedAction string // Set when Enter pressed
 }
 
@@ -89,6 +90,7 @@ func (c *CommandPalette) Render(w, h int) string {
 	if listH < 1 {
 		listH = 1
 	}
+	c.lastListH = listH
 
 	// Adjust scroll to keep selection visible
 	c.AdjustScroll(listH)
@@ -172,6 +174,44 @@ func (c *CommandPalette) HandleKey(msg tea.KeyMsg) bool {
 		if c.selected < len(c.filtered)-1 {
 			c.selected++
 			// Note: scrollOffset adjustment happens in Render based on visible height
+		}
+		return true
+
+	case tea.KeyPgUp:
+		page := c.lastListH
+		if page < 1 {
+			page = 10
+		}
+		c.selected -= page
+		if c.selected < 0 {
+			c.selected = 0
+		}
+		c.scrollOffset = c.selected
+		return true
+
+	case tea.KeyPgDown:
+		page := c.lastListH
+		if page < 1 {
+			page = 10
+		}
+		c.selected += page
+		if c.selected > len(c.filtered)-1 {
+			c.selected = len(c.filtered) - 1
+		}
+		if c.selected < 0 {
+			c.selected = 0
+		}
+		return true
+
+	case tea.KeyHome:
+		c.selected = 0
+		c.scrollOffset = 0
+		return true
+
+	case tea.KeyEnd:
+		c.selected = len(c.filtered) - 1
+		if c.selected < 0 {
+			c.selected = 0
 		}
 		return true
 

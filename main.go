@@ -22,12 +22,20 @@ import (
 
 // launchDyalog starts Dyalog APL with RIDE on a random port.
 // version constrains which installed version to use (empty = highest available).
+//
+// We deliberately bypass any wrapper script (e.g. macOS mapl) — see
+// session.FindDyalogBinary. With a wrapper, gritt's cmd.Process is the
+// shell wrapper; signals targeted at it kill the wrapper while the real
+// interpreter gets orphaned to init, and cmd.Wait() reports "exited" while
+// the interpreter keeps serving RIDE.
 func launchDyalog(version string) (*exec.Cmd, int) {
 	exe := resolveDyalog(version)
 
 	port := 10000 + rand.Intn(50000)
 	cmd := exec.Command(exe, "+s", "-q")
 	cmd.Env = append(os.Environ(), fmt.Sprintf("RIDE_INIT=SERVE:*:%d", port))
+	cmd.Env = append(cmd.Env, "RIDE_SPAWNED=1")
+	cmd.Env = append(cmd.Env, "DYALOG_LINEEDITOR_MODE=1")
 	cmd.Env = append(cmd.Env, session.DyalogEnv(exe)...)
 	setProcessGroup(cmd)
 	if err := cmd.Start(); err != nil {
@@ -47,13 +55,39 @@ func launchDyalog(version string) (*exec.Cmd, int) {
 	return nil, 0
 }
 
-// resolveDyalog finds the Dyalog binary to use.
+// resolveDyalog finds the Dyalog binary (skipping wrapper scripts) to use.
 func resolveDyalog(version string) string {
-	exe, err := session.FindDyalog(version)
+	exe, err := session.FindDyalogBinary(version)
 	if err != nil {
 		log.Fatal(err)
 	}
 	return exe
+}
+
+// gracefulKillDyalog sends SIGTERM, waits up to timeout for the launch-time
+// wait goroutine to observe the exit (via the closed `exited` channel), then
+// SIGKILLs and waits for the reap. Silent — used by non-TUI cleanup paths
+// (-e, -stdin, -sock, -fmt, signal handler, panic safety net) where the
+// caller-process exit code is the only feedback channel.
+//
+// Safe to call repeatedly: short-circuits if `exited` is already closed.
+func gracefulKillDyalog(cmd *exec.Cmd, exited <-chan struct{}, timeout time.Duration) {
+	if cmd == nil {
+		return
+	}
+	select {
+	case <-exited:
+		return
+	default:
+	}
+	terminateProcessGroup(cmd)
+	select {
+	case <-exited:
+		return
+	case <-time.After(timeout):
+	}
+	killProcessGroup(cmd)
+	<-exited
 }
 
 // multiFlag allows a flag to be specified multiple times, collecting all values
@@ -94,6 +128,11 @@ func main() {
 		return
 	}
 
+	var cfgArg *string
+	if cfgSet {
+		cfgArg = &cfgFlag
+	}
+
 	// Launch Dyalog if requested
 	var dyalogCmd *exec.Cmd
 	dyalogExited := make(chan struct{}) // pre-closed unless we launch
@@ -112,28 +151,27 @@ func main() {
 			close(dyalogExited)
 		}()
 
-		// Safety-net cleanup for crashes/panics: the TUI's normal quit
-		// flow does graceful SIGTERM→SIGKILL via the kill-wait modal.
-		defer func() {
-			select {
-			case <-dyalogExited:
-			default:
-				killProcessGroup(dyalogCmd)
-				<-dyalogExited
-			}
-		}()
+		// Resolve kill_timeout once for non-TUI cleanup paths. The TUI
+		// reloads config inside NewModel (cheap, JSON parse).
+		cfg := LoadConfig(cfgArg)
+		killTimeoutSec := cfg.KillTimeout
+		if killTimeoutSec <= 0 {
+			killTimeoutSec = DefaultKillTimeout
+		}
+		killTimeout := time.Duration(killTimeoutSec) * time.Second
+
+		// Safety-net cleanup for crashes/panics and non-TUI modes (-e, -stdin,
+		// -sock, -fmt). The TUI's normal quit flow handles graceful kill via
+		// the kill-wait modal. This helper is silent — exit code is the
+		// only signal scripted callers see.
+		defer gracefulKillDyalog(dyalogCmd, dyalogExited, killTimeout)
 
 		// Handle external signals (kill PID etc.) — no chance to show UI.
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, termSignals()...)
 		go func() {
 			<-sigCh
-			select {
-			case <-dyalogExited:
-			default:
-				killProcessGroup(dyalogCmd)
-				<-dyalogExited
-			}
+			gracefulKillDyalog(dyalogCmd, dyalogExited, killTimeout)
 			os.Exit(0)
 		}()
 	}
@@ -232,10 +270,6 @@ func main() {
 		colorProfile = colorprofile.TrueColor
 	}
 
-	var cfgArg *string
-	if cfgSet {
-		cfgArg = &cfgFlag
-	}
 	p := tea.NewProgram(NewModel(*addr, logWriter, colorProfile, cfgArg, dyalogCmd, dyalogExited), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)

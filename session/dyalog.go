@@ -26,6 +26,19 @@ type dyalogInstall struct {
 // the binary. If version is "X.Y", only that version is returned. If version
 // is empty, the highest installed version is returned (checking PATH first).
 func FindDyalog(version string) (string, error) {
+	return findDyalog(version, false)
+}
+
+// FindDyalogBinary returns the path to the actual Dyalog binary, never a
+// wrapper script (e.g. macOS `mapl` symlinked from /usr/local/bin/dyalog).
+// Use this when the caller needs direct process control over the interpreter
+// — without it, signals target the wrapper and `cmd.Wait()` reaps the wrong
+// process while the real interpreter is orphaned to init.
+func FindDyalogBinary(version string) (string, error) {
+	return findDyalog(version, true)
+}
+
+func findDyalog(version string, skipPath bool) (string, error) {
 	// Direct path (contains / or \)
 	if strings.ContainsAny(version, `/\`) {
 		if _, err := os.Stat(version); err != nil {
@@ -34,8 +47,8 @@ func FindDyalog(version string) (string, error) {
 		return version, nil
 	}
 
-	// If no version requested, try PATH first
-	if version == "" {
+	// If no version requested, try PATH first (unless explicitly skipped).
+	if version == "" && !skipPath {
 		if path, err := exec.LookPath("dyalog"); err == nil {
 			return path, nil
 		}
