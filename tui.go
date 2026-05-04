@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -133,6 +134,13 @@ type Model struct {
 	nav      NavKeys
 	config   Config
 
+	// Owned Dyalog process (only when launched with -l). Set to nil
+	// after the process has been reaped or when gritt is in connect mode.
+	dyalogCmd      *exec.Cmd
+	dyalogExited   <-chan struct{} // closed when dyalogCmd has been Wait()'d
+	killTimeout    int             // Seconds between SIGTERM and SIGKILL escalation.
+	killWaitActive bool            // True while the kill-wait pane is up.
+
 	// Leader key state
 	leaderActive bool
 	showQuitHint bool
@@ -182,6 +190,27 @@ type Model struct {
 // spinnerTickMsg advances the busy spinner animation.
 type spinnerTickMsg struct{}
 
+// killTickMsg fires every second while the kill-wait pane is up.
+type killTickMsg struct{}
+
+// dyalogExitedMsg fires as soon as the launch-time Wait() goroutine sees
+// the Dyalog process exit, so we don't have to wait for the next tick.
+type dyalogExitedMsg struct{}
+
+func killTickCmd() tea.Cmd {
+	return tea.Tick(time.Second, func(time.Time) tea.Msg { return killTickMsg{} })
+}
+
+func waitForDyalogExitCmd(exited <-chan struct{}) tea.Cmd {
+	if exited == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		<-exited
+		return dyalogExitedMsg{}
+	}
+}
+
 var spinnerFrames = []rune{'⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'}
 
 const spinnerInterval = 80 * time.Millisecond
@@ -207,9 +236,16 @@ func connectCmd(addr string) tea.Cmd {
 }
 
 // NewModel creates a Model that will connect to the given address.
-func NewModel(addr string, logFile io.Writer, profile colorprofile.Profile, cfgFile *string) Model {
+// dyalogCmd is the gritt-launched Dyalog process (nil in connect mode).
+// dyalogExited closes when the process has truly exited and been reaped;
+// pass an already-closed channel in connect mode.
+func NewModel(addr string, logFile io.Writer, profile colorprofile.Profile, cfgFile *string, dyalogCmd *exec.Cmd, dyalogExited <-chan struct{}) Model {
 	cfg := LoadConfig(cfgFile)
 	initColors(profile, cfg.Accent)
+	killTimeout := cfg.KillTimeout
+	if killTimeout <= 0 {
+		killTimeout = DefaultKillTimeout
+	}
 	m := Model{
 		addr:         addr,
 		connecting:   true,
@@ -223,6 +259,9 @@ func NewModel(addr string, logFile io.Writer, profile colorprofile.Profile, cfgF
 		commands:     buildCommands(&cfg),
 		nav:          cfg.ToNavKeys(),
 		autolocalise: cfg.Autolocalise,
+		dyalogCmd:    dyalogCmd,
+		dyalogExited: dyalogExited,
+		killTimeout:  killTimeout,
 	}
 
 	// Docs database opened lazily on first use from cache dir
@@ -232,6 +271,70 @@ func NewModel(addr string, logFile io.Writer, profile colorprofile.Profile, cfgF
 	m.loadHistory()
 
 	return m
+}
+
+// dyalogStillRunning is true iff gritt owns a Dyalog process whose Wait()
+// goroutine has not yet observed it exit. Distinguishes a live process from
+// an exited-but-unreaped zombie (which `kill(-pid, 0)` falsely reports alive).
+func (m *Model) dyalogStillRunning() bool {
+	if m.dyalogCmd == nil || m.dyalogExited == nil {
+		return false
+	}
+	select {
+	case <-m.dyalogExited:
+		return false
+	default:
+		return true
+	}
+}
+
+// quit shuts gritt down. If gritt owns a still-running Dyalog, it sends
+// SIGTERM and shows the kill-wait modal so the process is given a chance
+// to exit cleanly before SIGKILL escalation.
+func (m Model) quit() (tea.Model, tea.Cmd) {
+	if !m.dyalogStillRunning() {
+		return m, tea.Quit
+	}
+	terminateProcessGroup(m.dyalogCmd)
+	m.log("Sent SIGTERM to Dyalog (pid=%d), waiting %ds before SIGKILL", m.dyalogCmd.Process.Pid, m.killTimeout)
+
+	pane := &KillWaitPane{secondsLeft: m.killTimeout}
+	paneW := min(56, m.width-4)
+	if paneW < 30 {
+		paneW = 30
+	}
+	paneH := 7
+	paneX := (m.width - paneW) / 2
+	paneY := (m.height - paneH) / 2
+	if paneY < 1 {
+		paneY = 1
+	}
+	p := NewPane("kill-wait", pane, paneX, paneY, paneW, paneH)
+	m.panes.Add(p)
+	m.panes.Focus("kill-wait")
+	m.killWaitActive = true
+	return m, tea.Batch(killTickCmd(), waitForDyalogExitCmd(m.dyalogExited))
+}
+
+// reapAndQuit SIGKILLs the Dyalog process group (if still alive), waits for
+// the launch-time goroutine to observe its exit, and returns tea.Quit.
+func (m Model) reapAndQuit() (tea.Model, tea.Cmd) {
+	if m.dyalogStillRunning() {
+		killProcessGroup(m.dyalogCmd)
+		<-m.dyalogExited
+	}
+	m.killWaitActive = false
+	m.panes.Remove("kill-wait")
+	return m, tea.Quit
+}
+
+// cancelKillWait dismisses the modal without exiting gritt. Dyalog has
+// already been SIGTERM'd; if it eventually exits, the rideEvent err path
+// will surface the disconnect.
+func (m *Model) cancelKillWait() {
+	m.killWaitActive = false
+	m.panes.Remove("kill-wait")
+	m.log("Kill cancelled — gritt and Dyalog left running")
 }
 
 // startRecvLoop starts a goroutine to receive RIDE messages.
@@ -464,6 +567,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case dyalogExitedMsg:
+		if !m.killWaitActive {
+			return m, nil
+		}
+		m.log("Dyalog exited within timeout")
+		return m.reapAndQuit()
+
+	case killTickMsg:
+		if !m.killWaitActive {
+			return m, nil
+		}
+		if !m.dyalogStillRunning() {
+			m.log("Dyalog exited within timeout")
+			return m.reapAndQuit()
+		}
+		pane := m.panes.Get("kill-wait")
+		kp, _ := pane.Content.(*KillWaitPane)
+		if kp == nil {
+			m.killWaitActive = false
+			return m, nil
+		}
+		kp.secondsLeft--
+		if kp.secondsLeft <= 0 {
+			m.log("Timeout reached, sending SIGKILL")
+			return m.reapAndQuit()
+		}
+		return m, killTickCmd()
+
 	case rideEvent:
 		return m.handleRide(msg)
 	}
@@ -471,6 +602,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Fatal-error screen: any keypress exits, honouring the on-screen prompt.
+	if m.err != nil {
+		return m.quit()
+	}
+
+	// Kill-wait modal: only esc and 'k' are meaningful while it's up.
+	if m.killWaitActive {
+		switch {
+		case msg.Type == tea.KeyEscape:
+			m.cancelKillWait()
+			return m, nil
+		case msg.String() == "k" || msg.String() == "K":
+			m.log("User chose to kill Dyalog now")
+			return m.reapAndQuit()
+		}
+		return m, nil
+	}
+
 	// Handle autocomplete popup - must be first to intercept keys
 	if m.acPopup != nil {
 		switch msg.Type {
@@ -525,7 +674,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.confirmQuit {
 		m.confirmQuit = false
 		if msg.String() == "y" || msg.String() == "Y" {
-			return m, tea.Quit
+			return m.quit()
 		}
 		return m, nil
 	}
@@ -2855,7 +3004,7 @@ func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
 		// If last command was )off, this is intentional shutdown - exit cleanly
 		if m.pendingQuit {
 			m.log("Session ended with )off")
-			return m, tea.Quit
+			return m.quit()
 		}
 
 		m.log("Disconnected: %v", ev.err)

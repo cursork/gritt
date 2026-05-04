@@ -47,6 +47,7 @@
     "delete-column":   { "keys": ["alt+d"],    "context": "data-browser" },
     "close-discard":   { "keys": ["ctrl+w"],   "context": "data-browser" }
   },
+  "kill_timeout": 10,
   "navigation": {
     "up": ["up"],
     "down": ["down"],

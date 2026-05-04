@@ -49,11 +49,16 @@ type Config struct {
 	Bindings     map[string]BindingDef  `json:"bindings"`
 	Navigation   NavConfig              `json:"navigation"`
 	Autolocalise bool                   `json:"autolocalise"`
+	KillTimeout  int                    `json:"kill_timeout"`
 
 	// Legacy fields for migration
 	Keys       *legacyKeyMapConfig     `json:"keys,omitempty"`
 	TracerKeys *legacyTracerKeysConfig `json:"tracer_keys,omitempty"`
 }
+
+// DefaultKillTimeout is the SIGTERM→SIGKILL escalation window for a
+// gritt-launched Dyalog when kill_timeout is unset.
+const DefaultKillTimeout = 10
 
 // legacyKeyMapConfig is the old config format
 type legacyKeyMapConfig struct {

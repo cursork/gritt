@@ -96,26 +96,44 @@ func main() {
 
 	// Launch Dyalog if requested
 	var dyalogCmd *exec.Cmd
+	dyalogExited := make(chan struct{}) // pre-closed unless we launch
+	close(dyalogExited)
 	if *launch {
 		var port int
 		dyalogCmd, port = launchDyalog(*version)
 		*addr = fmt.Sprintf("localhost:%d", port)
 
-		// Cleanup function to kill Dyalog process group
-		killDyalog := func() {
-			if dyalogCmd.Process != nil {
-				killProcessGroup(dyalogCmd)
-				dyalogCmd.Wait() // Reap zombie
-			}
-		}
-		defer killDyalog()
+		// One owner of cmd.Wait() — closes the channel when the process
+		// truly exits (and reaps it), so the TUI can distinguish "still
+		// running" from "exited but not yet reaped (zombie)".
+		dyalogExited = make(chan struct{})
+		go func() {
+			dyalogCmd.Wait()
+			close(dyalogExited)
+		}()
 
-		// Handle signals to ensure cleanup on Ctrl+C, etc.
+		// Safety-net cleanup for crashes/panics: the TUI's normal quit
+		// flow does graceful SIGTERM→SIGKILL via the kill-wait modal.
+		defer func() {
+			select {
+			case <-dyalogExited:
+			default:
+				killProcessGroup(dyalogCmd)
+				<-dyalogExited
+			}
+		}()
+
+		// Handle external signals (kill PID etc.) — no chance to show UI.
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, termSignals()...)
 		go func() {
 			<-sigCh
-			killDyalog()
+			select {
+			case <-dyalogExited:
+			default:
+				killProcessGroup(dyalogCmd)
+				<-dyalogExited
+			}
 			os.Exit(0)
 		}()
 	}
@@ -218,7 +236,7 @@ func main() {
 	if cfgSet {
 		cfgArg = &cfgFlag
 	}
-	p := tea.NewProgram(NewModel(*addr, logWriter, colorProfile, cfgArg), tea.WithAltScreen(), tea.WithMouseCellMotion())
+	p := tea.NewProgram(NewModel(*addr, logWriter, colorProfile, cfgArg, dyalogCmd, dyalogExited), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
 	}

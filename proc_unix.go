@@ -20,6 +20,22 @@ func killProcessGroup(cmd *exec.Cmd) {
 	}
 }
 
+// terminateProcessGroup sends SIGTERM to the process group, asking it to exit
+// gracefully. Returns to be escalated via killProcessGroup if it doesn't.
+func terminateProcessGroup(cmd *exec.Cmd) {
+	if cmd.Process != nil {
+		syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
+	}
+}
+
+// processAlive reports whether any process in the group is still running.
+func processAlive(cmd *exec.Cmd) bool {
+	if cmd == nil || cmd.Process == nil {
+		return false
+	}
+	return syscall.Kill(-cmd.Process.Pid, 0) == nil
+}
+
 // termSignals returns the signals to watch for graceful shutdown.
 func termSignals() []os.Signal {
 	return []os.Signal{syscall.SIGINT, syscall.SIGTERM}

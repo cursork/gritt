@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,13 +13,25 @@ import (
 )
 
 const (
-	// 4502 is the default Dyalog/RIDE port — leaving it for the user's own
-	// dev sessions. Tests use 14502 to stay out of their way.
-	dyalogPort  = 14502
 	sessionName = "gritt-test"
 	screenW     = 120
 	screenH     = 40
 )
+
+// pickPort asks the OS for a free TCP port. Tiny race window between
+// closing the listener and Dyalog binding, but the alternative — reusing
+// a fixed port across runs — invites stale-Dyalog contamination (the
+// framework happily reuses anything answering RIDE on that port,
+// inheriting workspace state from prior aborted runs).
+func pickPort(t *testing.T) int {
+	l, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("pickPort: %v", err)
+	}
+	port := l.Addr().(*net.TCPAddr).Port
+	l.Close()
+	return port
+}
 
 // TestTUI runs the full TUI test suite
 func TestTUI(t *testing.T) {
@@ -60,21 +73,20 @@ func TestTUI(t *testing.T) {
 		t.Logf("Warning: could not write test ibeams CSV: %v", err)
 	}
 
-	// Check if Dyalog is running, if not try to start it
-	var dyalogCmd *exec.Cmd
-	if err := uitest.RequireDyalog(dyalogPort); err != nil {
-		t.Log("Starting Dyalog...")
-		var startErr error
-		dyalogCmd, startErr = uitest.StartDyalog(dyalogPort)
-		if startErr != nil {
-			t.Skipf("Dyalog not available: %v", startErr)
-		}
-		defer func() {
-			if dyalogCmd != nil && dyalogCmd.Process != nil {
-				dyalogCmd.Process.Kill()
-			}
-		}()
+	// Always spawn a fresh Dyalog on a freshly-picked random port. Each
+	// test run gets its own pristine workspace; defer ensures the PID
+	// we started gets cleaned up even on test failure.
+	dyalogPort := pickPort(t)
+	t.Logf("Starting Dyalog on port %d...", dyalogPort)
+	dyalogCmd, startErr := uitest.StartDyalog(dyalogPort)
+	if startErr != nil {
+		t.Skipf("Dyalog not available: %v", startErr)
 	}
+	defer func() {
+		if dyalogCmd != nil && dyalogCmd.Process != nil {
+			dyalogCmd.Process.Kill()
+		}
+	}()
 
 	// Create test runner with protocol logging
 	runner, err := uitest.NewRunner(t, sessionName, screenW, screenH, fmt.Sprintf("./gritt -addr localhost:%d -log test-reports/protocol.log", dyalogPort), "test-reports")
@@ -724,6 +736,15 @@ func TestTUI(t *testing.T) {
 	runner.SendKeys("Escape")
 	runner.Sleep(200 * time.Millisecond)
 
+	// Pre-populate the workspace with 15 globals named pad1..pad15. They
+	// sort alphabetically between 'b' (the last local) and 'yvar', so in
+	// the [all]-mode variables pane yvar gets pushed off the viewport.
+	// The scroll-down loop in the yvar assertion then has to actually
+	// scroll to find it — exercising the navigation mechanism for real,
+	// not just as defensive code that never runs.
+	runner.SendLine("{⍎'pad',(⍕⍵),'←',⍕⍵}¨⍳15")
+	runner.WaitForIdle(5 * time.Second)
+
 	// === VARIABLES PANE TEST ===
 	// Open variables pane (C-] v) - should show Z's local variables
 	runner.SendKeys("C-]")
@@ -768,6 +789,12 @@ func TestTUI(t *testing.T) {
 	// Test: ~ toggles to "all" mode (shows globals too)
 	runner.SendText("~")
 	runner.WaitFor("[all]", 3*time.Second)
+	// `[all]` shows up the instant the title flips, but the variables
+	// data is fetched asynchronously via an Internal query (⎕NL 2). The
+	// pane shows "Loading..." until the query response arrives. Wait for
+	// `yvar` (a variable from Y's outer scope, only visible in [all] mode)
+	// so the snapshot/assertions see real data, not "Loading...".
+	runner.WaitFor("yvar", 3*time.Second)
 	runner.Snapshot("Variables pane - all mode")
 
 	runner.Test("Variables pane shows [all] in title", func() bool {
@@ -778,8 +805,20 @@ func TestTUI(t *testing.T) {
 		return runner.Contains("• a") && runner.Contains("• b")
 	})
 
+	// Asserts the user can navigate to yvar — scrolling down through the
+	// list until it appears. With an end-to-end suite run, prior tests
+	// leak ~58 globals (cleartest, hist*, loadmarker, scr1..scr50) into
+	// the workspace and yvar (alphabetically last) is well below the
+	// initial viewport. Cap is generous — variables pane Down past the
+	// last entry is a no-op so over-scroll is harmless.
+	for i := 0; i < 200 && !runner.Contains("yvar"); i++ {
+		runner.SendKeys("Down")
+		runner.Sleep(40 * time.Millisecond)
+	}
+	runner.Snapshot("Variables pane - all mode (yvar in view)")
+
 	runner.Test("All mode shows yvar without bullet", func() bool {
-		// yvar is from Y's scope, not local to Z
+		// yvar is from Y's scope, not local to Z.
 		return runner.Contains("yvar") && !runner.Contains("• yvar")
 	})
 
@@ -1990,16 +2029,7 @@ func TestTUI(t *testing.T) {
 		return runner.Contains("[5]")
 	})
 
-	// Second Down without editing must NOT extend (pending guard).
-	runner.SendKeys("Down")
-	runner.Sleep(300 * time.Millisecond)
-	runner.Snapshot("vecApp after second Down (pending guard blocks)")
-
-	runner.Test("Pending guard blocks repeat Down without edit", func() bool {
-		return !runner.Contains("[6]")
-	})
-
-	// Edit the new cell [5] to "55" so the row is committed.
+	// Edit the new cell [5] to "55".
 	runner.SendKeys("Enter") // start edit
 	runner.Sleep(200 * time.Millisecond)
 	runner.SendText("55")
@@ -2008,12 +2038,13 @@ func TestTUI(t *testing.T) {
 	runner.Sleep(300 * time.Millisecond)
 	runner.Snapshot("vecApp after editing [5] to 55")
 
-	// Now another Down should extend to [6] (pending was cleared by the edit).
+	// Down again extends to [6] — pending guard was removed; user wanted
+	// unconstrained append.
 	runner.SendKeys("Down")
 	runner.Sleep(300 * time.Millisecond)
-	runner.Snapshot("vecApp after Down post-edit (should reach [6])")
+	runner.Snapshot("vecApp after second append (reaches [6])")
 
-	runner.Test("Edit clears pending, second append reaches [6]", func() bool {
+	runner.Test("Second Down extends vector to [6]", func() bool {
 		return runner.Contains("[6]")
 	})
 
@@ -2044,6 +2075,210 @@ func TestTUI(t *testing.T) {
 	})
 
 	runner.SendLine(")erase vecApp")
+	runner.WaitForIdle(3 * time.Second)
+
+	// === DATA BROWSER: APPEND COLUMN on a 3×3 matrix ===
+	// `x←3 3⍴9` — open as APLAN data browser, navigate to last column,
+	// press Right to extend to 3×4, save, re-query and assert ⍴x is 3 4.
+	runner.SendLine("matApp←3 3⍴9")
+	runner.WaitForIdle(3 * time.Second)
+
+	runner.SendLine(")ed matApp")
+	runner.WaitFor("[read-only]", 3*time.Second)
+	runner.SendKeys("Enter") // ShowAsArrayNotation
+	runner.Sleep(1500 * time.Millisecond)
+	runner.Snapshot("matApp data browser open")
+
+	// Move to last column ([3]) then Right to append a 4th column.
+	runner.SendKeys("Right")
+	runner.Sleep(150 * time.Millisecond)
+	runner.SendKeys("Right")
+	runner.Sleep(150 * time.Millisecond)
+	runner.SendKeys("Right") // append-column trigger
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("matApp after appending column")
+
+	runner.Test("matApp shows column header [4] after append", func() bool {
+		return runner.Contains("[4]")
+	})
+
+	runner.SendKeys("Escape")
+	runner.Sleep(2000 * time.Millisecond)
+	runner.WaitForIdle(8 * time.Second)
+
+	runner.SendLine("⍴matApp")
+	runner.WaitForIdle(3 * time.Second)
+	runner.Snapshot("⍴matApp after column append")
+
+	runner.Test("⍴matApp is 3 4 after column append (re-queried)", func() bool {
+		return runner.Contains("3 4")
+	})
+
+	runner.SendLine(")erase matApp")
+	runner.WaitForIdle(3 * time.Second)
+
+	// === DATA BROWSER: DELETE ROW on a 3×3 matrix ===
+	// `x←3 3⍴⍳9` — open, ctrl+d to delete the first row, save, ⍴x is 2 3.
+	runner.SendLine("matDel←3 3⍴⍳9")
+	runner.WaitForIdle(3 * time.Second)
+
+	runner.SendLine(")ed matDel")
+	runner.WaitFor("[read-only]", 3*time.Second)
+	runner.SendKeys("Enter")
+	runner.Sleep(1500 * time.Millisecond)
+
+	// Cursor starts at row 0; ctrl+d deletes it. After delete, what was
+	// row 1 is now row 0 (values 4 5 6).
+	runner.SendKeys("C-d")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("matDel after ctrl+d (row deleted)")
+
+	runner.SendKeys("Escape")
+	runner.Sleep(2000 * time.Millisecond)
+	runner.WaitForIdle(8 * time.Second)
+
+	runner.SendLine("⍴matDel")
+	runner.WaitForIdle(3 * time.Second)
+	runner.Snapshot("⍴matDel after row delete")
+
+	runner.Test("⍴matDel is 2 3 after row delete (re-queried)", func() bool {
+		return runner.Contains("2 3")
+	})
+
+	// First row of original was 1 2 3; it should be gone. Remaining rows
+	// are 4 5 6 / 7 8 9.
+	runner.SendLine("matDel")
+	runner.WaitForIdle(3 * time.Second)
+	runner.Snapshot("matDel value after row delete")
+
+	runner.Test("matDel value contains row 4 5 6", func() bool {
+		return runner.Contains("4 5 6")
+	})
+	runner.Test("matDel value contains row 7 8 9", func() bool {
+		return runner.Contains("7 8 9")
+	})
+
+	runner.SendLine(")erase matDel")
+	runner.WaitForIdle(3 * time.Second)
+
+	// === DATA BROWSER: APPEND ROW on a vector-of-vectors ===
+	// `x←(1 2 3)(4 5 6)` — open as APLAN data browser, Down on last row
+	// appends a sub-vector of zeros (recursive zeroValueFor). Drill in,
+	// edit each scalar to 7/8/9, drill out, save, re-query.
+	runner.SendLine("nestApp←(1 2 3)(4 5 6)")
+	runner.WaitForIdle(3 * time.Second)
+
+	runner.SendLine(")ed nestApp")
+	runner.WaitFor("[read-only]", 3*time.Second)
+	runner.SendKeys("Enter")
+	runner.Sleep(1500 * time.Millisecond)
+	runner.Snapshot("nestApp data browser open")
+
+	// Move to last row ([2]) then Down to append a third sub-vector.
+	runner.SendKeys("Down")
+	runner.Sleep(150 * time.Millisecond)
+	runner.SendKeys("Down")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("nestApp after appending sub-vector at [3]")
+
+	runner.Test("nestApp shows row [3] after append", func() bool {
+		return runner.Contains("[3]")
+	})
+
+	// Drill into [3] (the new (0 0 0) sub-vector), edit each scalar.
+	runner.SendKeys("Enter")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("nestApp drilled into new sub-vector")
+
+	// Edit cell [1] = 0 → 7
+	runner.SendKeys("Enter")
+	runner.Sleep(150 * time.Millisecond)
+	runner.SendText("7")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys("Enter")
+	runner.Sleep(150 * time.Millisecond)
+
+	// Move to [2], edit to 8
+	runner.SendKeys("Down")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys("Enter")
+	runner.Sleep(150 * time.Millisecond)
+	runner.SendText("8")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys("Enter")
+	runner.Sleep(150 * time.Millisecond)
+
+	// Move to [3], edit to 9
+	runner.SendKeys("Down")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys("Enter")
+	runner.Sleep(150 * time.Millisecond)
+	runner.SendText("9")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys("Enter")
+	runner.Sleep(150 * time.Millisecond)
+	runner.Snapshot("nestApp after editing sub-vector to 7 8 9")
+
+	// Drill out (Esc), then save+close (Esc again at root).
+	runner.SendKeys("Escape")
+	runner.Sleep(300 * time.Millisecond)
+	runner.SendKeys("Escape")
+	runner.Sleep(2000 * time.Millisecond)
+	runner.WaitForIdle(8 * time.Second)
+
+	runner.SendLine("≢nestApp")
+	runner.WaitForIdle(3 * time.Second)
+	runner.Snapshot("≢nestApp after append")
+
+	runner.Test("≢nestApp is 3 after append (re-queried)", func() bool {
+		return runner.Contains("3")
+	})
+
+	runner.SendLine("3⊃nestApp")
+	runner.WaitForIdle(3 * time.Second)
+	runner.Snapshot("3⊃nestApp value")
+
+	runner.Test("3⊃nestApp is 7 8 9 (the appended+edited sub-vector)", func() bool {
+		return runner.Contains("7 8 9")
+	})
+
+	runner.SendLine(")erase nestApp")
+	runner.WaitForIdle(3 * time.Second)
+
+	// === DATA BROWSER: CLOSE-DISCARD (ctrl+w) ===
+	// `x←1 2 3 4` — open, edit a cell, ctrl+w should close without
+	// saving so the variable stays unchanged.
+	runner.SendLine("vecDis←1 2 3 4")
+	runner.WaitForIdle(3 * time.Second)
+
+	runner.SendLine(")ed vecDis")
+	runner.WaitFor("[read-only]", 3*time.Second)
+	runner.SendKeys("Enter")
+	runner.Sleep(1500 * time.Millisecond)
+
+	// Edit cell [1] from 1 → 99
+	runner.SendKeys("Enter")
+	runner.Sleep(150 * time.Millisecond)
+	runner.SendText("99")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys("Enter")
+	runner.Sleep(200 * time.Millisecond)
+	runner.Snapshot("vecDis after editing [1] to 99 (modified)")
+
+	// Close-discard via ctrl+w: should NOT send SaveChanges.
+	runner.SendKeys("C-w")
+	runner.Sleep(2000 * time.Millisecond)
+	runner.WaitForIdle(8 * time.Second)
+
+	runner.SendLine("vecDis")
+	runner.WaitForIdle(3 * time.Second)
+	runner.Snapshot("vecDis after ctrl+w discard")
+
+	runner.Test("vecDis is unchanged 1 2 3 4 after ctrl+w (discard worked)", func() bool {
+		return runner.Contains("1 2 3 4") && !runner.Contains("99")
+	})
+
+	runner.SendLine(")erase vecDis")
 	runner.WaitForIdle(3 * time.Second)
 
 	// =========================================================================
