@@ -386,14 +386,25 @@ func buildCommands(cfg *Config) *CommandRegistry {
 	})
 
 	// --- Introspection commands (@-prefixed: sorted to end of palette) ---
-	reg.add("@pid", "Show launched Dyalog PID", false, "", func(m *Model) (tea.Model, tea.Cmd) {
-		var msg string
-		if m.dyalogCmd != nil && m.dyalogCmd.Process != nil {
-			msg = fmt.Sprintf("⍝ Dyalog PID: %d", m.dyalogCmd.Process.Pid)
+	reg.add("@pid", "Show Dyalog process tree", false, "", func(m *Model) (tea.Model, tea.Cmd) {
+		var lines []string
+		if m.dyalogCmd == nil || m.dyalogCmd.Process == nil {
+			lines = []string{"⍝ No launched Dyalog (gritt is in connect mode)"}
 		} else {
-			msg = "⍝ No launched Dyalog (gritt is in connect mode)"
+			root := m.dyalogCmd.Process.Pid
+			tree := processTree(root)
+			if len(tree) == 0 {
+				lines = []string{fmt.Sprintf("⍝ Dyalog PID %d (process tree unavailable)", root)}
+			} else {
+				lines = append(lines, "⍝ Dyalog process tree (kill the deepest 'dyalog' to take it down):")
+				for _, p := range tree {
+					lines = append(lines, fmt.Sprintf("⍝   %s%d  %s", strings.Repeat("  ", p.depth), p.pid, p.cmd))
+				}
+			}
 		}
-		m.lines = append(m.lines, Line{Text: msg})
+		for _, ln := range lines {
+			m.lines = append(m.lines, Line{Text: ln})
+		}
 		m.lines = append(m.lines, Line{Text: aplIndent})
 		m.cursorRow = len(m.lines) - 1
 		m.cursorCol = len(aplIndent)

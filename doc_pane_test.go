@@ -173,11 +173,11 @@ func TestSymbolAtCursor(t *testing.T) {
 		col  int
 		want string
 	}{
-		{0, ""},       // before content
-		{7, ""},       // on 'x' (ASCII letter)
-		{8, "←"},      // on ←
-		{9, "⍳"},      // on ⍳
-		{10, ""},      // on '1' (digit)
+		{0, ""},  // before content
+		{7, ""},  // on 'x' (ASCII letter, no ⎕ in front)
+		{8, "←"}, // on ←
+		{9, "⍳"}, // on ⍳
+		{10, ""}, // on '1' (digit, no ⎕ in front)
 	}
 
 	for _, tt := range tests {
@@ -185,6 +185,33 @@ func TestSymbolAtCursor(t *testing.T) {
 		got := m.symbolAtCursor()
 		if got != tt.want {
 			t.Errorf("col=%d: symbolAtCursor()=%q, want %q", tt.col, got, tt.want)
+		}
+	}
+}
+
+func TestSymbolAtCursorSystemFns(t *testing.T) {
+	// Each test runs a single line at every cursor position and asserts.
+	cases := []struct {
+		line string
+		col  int
+		want string
+	}{
+		// "      ⎕DL 1" — cols are 1-indexed in cursorCol semantics.
+		{"      ⎕DL 1", 7, "⎕DL"},  // on ⎕
+		{"      ⎕DL 1", 8, "⎕DL"},  // on D (mid-name)
+		{"      ⎕DL 1", 9, "⎕DL"},  // on L (end of name)
+		{"      ⎕DL 1", 10, ""},    // on space — no symbol
+		{"      ⎕IO", 7, "⎕IO"},    // ⎕IO at end of line
+		{"      ⎕IO", 9, "⎕IO"},    // cursor after the O
+		{"      ⎕", 7, "⎕"},        // bare ⎕ with nothing following
+		{"      ⎕FIX'x'", 7, "⎕FIX"},
+		{"      ⎕FIX'x'", 10, "⎕FIX"},
+	}
+	for _, c := range cases {
+		m := Model{lines: []Line{{Text: c.line}}, cursorCol: c.col}
+		got := m.symbolAtCursor()
+		if got != c.want {
+			t.Errorf("line=%q col=%d: got %q, want %q", c.line, c.col, got, c.want)
 		}
 	}
 }

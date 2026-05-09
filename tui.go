@@ -321,9 +321,14 @@ func (m Model) quit() (tea.Model, tea.Cmd) {
 	return m.startKillModal()
 }
 
-// startKillModal sends SIGTERM, opens the countdown modal, and schedules the
-// tick + exit-watcher commands. Used after `)off` failed to take effect or
-// when we couldn't try `)off` (busy/disconnected).
+// startKillModal sends SIGTERM, opens the countdown modal, and schedules
+// the tick + exit-watcher commands. Used after `)off` failed to take effect
+// or when we couldn't try `)off` (busy/disconnected). SIGTERM is mostly a
+// formality for gritt-launched Dyalog (no controlling tty, handler hangs)
+// but it's the right protocol-level "please exit" signal and may take
+// effect in future Dyalog versions or when a tty is somehow present. The
+// SIGKILL escalation on timeout is the actual safety net. See
+// adnotata/0011-graceful-kill-and-protocol.md.
 func (m Model) startKillModal() (tea.Model, tea.Cmd) {
 	terminateProcessGroup(m.dyalogCmd)
 	m.log("Sent SIGTERM to Dyalog (pid=%d), waiting %ds before SIGKILL", m.dyalogCmd.Process.Pid, m.killTimeout)
@@ -2730,16 +2735,52 @@ func (m *Model) openDocHelp() (tea.Model, tea.Cmd) {
 }
 
 // symbolAtCursor returns the APL symbol or keyword at/before the cursor.
+// For system functions/variables it returns the full ⎕name (e.g. ⎕DL),
+// which is what the docs DB indexes — a bare ⎕ rarely matches anything
+// useful.
 func (m *Model) symbolAtCursor() string {
 	runes := m.currentLineRunes()
 	col := m.cursorCol
 
-	// Look at the character to the left of the cursor
 	if col <= 0 || col > len(runes) {
 		return ""
 	}
 
+	isWordChar := func(r rune) bool {
+		return r == '_' || r == '∆' || r == '⍙' ||
+			(r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
+	}
+
 	r := runes[col-1]
+
+	// Cursor sitting in/after the name part of a ⎕name. Walk left through
+	// word characters; if a ⎕ precedes them, return the whole token.
+	if isWordChar(r) {
+		start := col - 1
+		for start > 0 && isWordChar(runes[start-1]) {
+			start--
+		}
+		if start > 0 && runes[start-1] == '⎕' {
+			end := col - 1
+			for end+1 < len(runes) && isWordChar(runes[end+1]) {
+				end++
+			}
+			return "⎕" + string(runes[start:end+1])
+		}
+		return ""
+	}
+
+	// Cursor sitting on/right-after the ⎕ itself — pick up the name to its right.
+	if r == '⎕' {
+		end := col - 1
+		for end+1 < len(runes) && isWordChar(runes[end+1]) {
+			end++
+		}
+		if end > col-1 {
+			return string(runes[col-1 : end+1])
+		}
+		return "⎕"
+	}
 
 	// Single-character APL symbol
 	if r > 127 || strings.ContainsRune("+-×÷*!?|<>=≠≤≥∨∧~,./\\@&#;:()[]{}", r) {

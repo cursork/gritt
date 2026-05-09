@@ -33,6 +33,30 @@
 - [ ] StringDialog (text input dialog)
 - [ ] HadError message handling (better error display)
 
+## Kill flow follow-ups
+See `adnotata/0011-graceful-kill-and-protocol.md` for context. Today's
+flow (`)off` → SIGTERM → SIGKILL) works correctly; these are smoothness
+improvements.
+- [ ] **Bypass mapl wrapper cleanly** — replicate the env mapl sets
+  (`USERCONFIGFILE`, `APL_LANGUAGE_BAR_FILE`, `AUTO_PW`, …) directly in
+  Go and launch the real binary. Earlier attempt broke the tracer pane;
+  bisect which env var matters. Would give clean PID/wait/signal
+  semantics (currently `cmd.Process.Pid` is the shell wrapper, not the
+  interpreter).
+- [ ] **Pre-emptive `CloseWindow`s on quit** — when gritt initiates
+  quit, close every editor/tracer it tracks before sending `)off`.
+  Dyalog tries to surface a debug during cleanup → we already told it
+  we're done.
+- [ ] **Reactive `CloseWindow` during shutdown** — while
+  `m.killWaitActive`, immediately reply `CloseWindow` to any
+  `OpenWindow {debugger:1}`. Lets Dyalog complete its
+  destructor-error path even when no tty is around (the root cause of
+  headless SIGTERM hanging).
+- [ ] **Optional pty for the spawned interpreter** — restore SIGTERM
+  responsiveness end-to-end. Adds significant launch complexity, but
+  makes gritt robust against future Dyalog versions that double down on
+  tty-gated handlers.
+
 ## Pane / UI
 - [ ] Mouse drag edges to resize — code exists but buggy in practice
 - [ ] Singleton panes should persist position/size after dismiss/recreate

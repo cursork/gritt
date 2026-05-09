@@ -238,6 +238,28 @@ I-beam (⌶) lookup library at `ibeam/` with TUI pane integration. Two-tier sear
 
 `gritt -cfg path` loads a specific config file. `gritt -cfg ''` uses embedded defaults only (no file). Without `-cfg`, the existing hierarchy applies: `./gritt.json` → `~/.config/gritt/gritt.json` → embedded defaults.
 
+## Graceful kill flow (new)
+
+Three-stage process — `)off` → SIGTERM → SIGKILL — applied identically in
+TUI and non-TUI (`-e`/`-stdin`/`-sock`/`-fmt`) modes when gritt owns the
+Dyalog process (`-l`). Stage 1→2 has a 5 s grace period; stage 2→3 uses
+`kill_timeout` from `gritt.json` (default 10 s).
+
+A single launch-time goroutine owns `cmd.Wait()` and closes a
+`dyalogExited` channel — every stage races its deadline against this so
+a Dyalog that exits during any tier short-circuits the rest. TUI shows a
+modal during the SIGTERM countdown with `[esc]` (cancel — gritt and
+Dyalog stay alive) and `[k]` (force SIGKILL now). Connect mode
+(no `-l`) bypasses everything; gritt just disconnects.
+
+`@pid` introspection command in the palette walks the process tree —
+useful because gritt typically launches via `/usr/local/bin/dyalog` →
+`mapl` wrapper, so `cmd.Process.Pid` is the wrapper, not the real
+interpreter. Full write-up: `adnotata/0011-graceful-kill-and-protocol.md`.
+
+`@`-prefixed introspection commands sort to the bottom of the command
+palette via stable sort in `PaletteCommands`.
+
 ## Recent
 
 - **Multiline input mode**: C-] l toggles multiline mode. When on, Enter adds a new line instead of executing. Title bar shows `[ML]`. Toggling off queues all accumulated lines and sends them one per SetPromptType (same drain pattern as RIDE). Auto-detects nabla vs namespace: nabla body lines get `[n]  ` prefixes, namespace/plain lines keep 6-space indent. Client-side line accumulation, interpreter-compatible sending. Variables pane moved from C-] l to C-] v.

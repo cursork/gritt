@@ -22,20 +22,12 @@ import (
 
 // launchDyalog starts Dyalog APL with RIDE on a random port.
 // version constrains which installed version to use (empty = highest available).
-//
-// We deliberately bypass any wrapper script (e.g. macOS mapl) — see
-// session.FindDyalogBinary. With a wrapper, gritt's cmd.Process is the
-// shell wrapper; signals targeted at it kill the wrapper while the real
-// interpreter gets orphaned to init, and cmd.Wait() reports "exited" while
-// the interpreter keeps serving RIDE.
 func launchDyalog(version string) (*exec.Cmd, int) {
 	exe := resolveDyalog(version)
 
 	port := 10000 + rand.Intn(50000)
 	cmd := exec.Command(exe, "+s", "-q")
 	cmd.Env = append(os.Environ(), fmt.Sprintf("RIDE_INIT=SERVE:*:%d", port))
-	cmd.Env = append(cmd.Env, "RIDE_SPAWNED=1")
-	cmd.Env = append(cmd.Env, "DYALOG_LINEEDITOR_MODE=1")
 	cmd.Env = append(cmd.Env, session.DyalogEnv(exe)...)
 	setProcessGroup(cmd)
 	if err := cmd.Start(); err != nil {
@@ -55,20 +47,42 @@ func launchDyalog(version string) (*exec.Cmd, int) {
 	return nil, 0
 }
 
-// resolveDyalog finds the Dyalog binary (skipping wrapper scripts) to use.
+// resolveDyalog finds the Dyalog binary to use.
 func resolveDyalog(version string) string {
-	exe, err := session.FindDyalogBinary(version)
+	exe, err := session.FindDyalog(version)
 	if err != nil {
 		log.Fatal(err)
 	}
 	return exe
 }
 
+// closeClient is the standard cleanup for a non-TUI RIDE connection. When
+// gritt owns the Dyalog process (-l) we send `)off` first so the
+// interpreter exits cleanly; then we close our end of the socket.
+// Best-effort: errors are ignored — the deferred gracefulKillDyalog still
+// escalates if needed.
+func closeClient(c *ride.Client, ownsDyalog bool) {
+	if c == nil {
+		return
+	}
+	if ownsDyalog {
+		_ = c.Send("Execute", map[string]any{"text": ")off\n", "trace": 0})
+	}
+	c.Close()
+}
+
 // gracefulKillDyalog sends SIGTERM, waits up to timeout for the launch-time
-// wait goroutine to observe the exit (via the closed `exited` channel), then
-// SIGKILLs and waits for the reap. Silent — used by non-TUI cleanup paths
-// (-e, -stdin, -sock, -fmt, signal handler, panic safety net) where the
-// caller-process exit code is the only feedback channel.
+// wait goroutine to observe the exit (via the closed `exited` channel),
+// then SIGKILLs and waits for the reap. Silent — used by non-TUI cleanup
+// paths (-e, -stdin, -sock, -fmt, signal handler, panic safety net) where
+// the caller-process exit code is the only feedback channel.
+//
+// SIGTERM is mostly a formality for gritt-launched Dyalog (no controlling
+// tty, handler hangs trying to surface a destructor debug — see
+// adnotata/0011-graceful-kill-and-protocol.md), but it's the right
+// protocol-level "please exit" signal and may take effect in future
+// Dyalog versions. The SIGKILL escalation on timeout is the actual safety
+// net.
 //
 // Safe to call repeatedly: short-circuits if `exited` is already closed.
 func gracefulKillDyalog(cmd *exec.Cmd, exited <-chan struct{}, timeout time.Duration) {
@@ -198,7 +212,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		defer client.Close()
+		defer closeClient(client, *launch)
 		runFormat(client, files)
 		return
 	}
@@ -212,7 +226,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		defer client.Close()
+		defer closeClient(client, *launch)
 		runLinks(client, links)
 		var executed []string
 		for _, expr := range exprs {
@@ -235,7 +249,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		defer client.Close()
+		defer closeClient(client, *launch)
 		runLinks(client, links)
 		var executed []string
 		scanner := bufio.NewScanner(os.Stdin)
@@ -257,7 +271,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		defer client.Close()
+		defer closeClient(client, *launch)
 		runLinks(client, links)
 		runSocket(client, *sock)
 		return
