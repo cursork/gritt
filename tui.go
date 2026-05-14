@@ -175,9 +175,17 @@ type Model struct {
 	acPopup   *Autocomplete // Non-nil when popup is showing
 
 	// Internal queries (don't display in session)
-	internalQuery    string                   // Command text being executed internally
-	internalCallback func(outputs []string)   // Where to send results
-	internalOutputs  []string                 // Accumulated outputs for internal query
+	internalQuery    string                 // Command text being executed internally
+	internalCallback func(outputs []string) // Where to send results
+	internalOutputs  []string               // Accumulated outputs for internal query
+
+	// -sock injections. Interaction (user input + internal queries +
+	// multiline drain) always takes priority; socketQueue only drains
+	// when those are idle. The conn lives in its reader goroutine; the
+	// Model only sees the request + its done channel. activeSocket
+	// owns the in-flight request's output buffer (req.outputs).
+	socketQueue  []*socketRequest
+	activeSocket *socketRequest
 
 	// Terminal dimensions
 	width  int
@@ -642,8 +650,43 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case rideEvent:
 		return m.handleRide(msg)
+
+	case socketLineMsg:
+		m.socketQueue = append(m.socketQueue, msg.req)
+		m.drainSocketQueue()
+		return m, nil
 	}
 	return m, nil
+}
+
+// drainSocketQueue pops the next socket injection if the interpreter is idle
+// and no interaction-tier work is in flight. The active request's outputs
+// will accumulate in req.outputs while m.activeSocket == req.
+func (m *Model) drainSocketQueue() {
+	if m.activeSocket != nil {
+		return // request already in flight
+	}
+	if !m.connected || !m.ready {
+		return // interpreter busy
+	}
+	if m.internalQuery != "" || len(m.pendingLines) > 0 {
+		return // interaction tier still has work
+	}
+	if len(m.socketQueue) == 0 {
+		return
+	}
+	req := m.socketQueue[0]
+	m.socketQueue = m.socketQueue[1:]
+	m.activeSocket = req
+	m.lastExecute = req.code + "\n"
+	m.ready = false
+	m.log("→ Socket Execute %q", req.code)
+	if err := m.send("Execute", map[string]any{"text": req.code + "\n", "trace": 0}); err != nil {
+		// send() already logged and marked disconnected. Release the
+		// waiting goroutine with whatever error context we can give.
+		req.done <- fmt.Sprintf("send failed: %v\n", err)
+		m.activeSocket = nil
+	}
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -3154,6 +3197,13 @@ func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
 		}
 
 		if result, ok := msg.Args["result"].(string); ok {
+			// Mirror to the active socket request's buffer so the
+			// reader goroutine can return it to the client. The TUI
+			// session still receives the same chunk below — Dyalog
+			// only has one RIDE client, so output is shared.
+			if m.activeSocket != nil {
+				m.activeSocket.outputs = append(m.activeSocket.outputs, result)
+			}
 			result = strings.TrimSuffix(result, "\n")
 			for _, line := range strings.Split(result, "\n") {
 				m.lines = append(m.lines, Line{Text: line})
@@ -3194,6 +3244,25 @@ func (m Model) handleRide(ev rideEvent) (tea.Model, tea.Cmd) {
 					m.internalOutputs = nil
 				}
 				// Don't add new input line for internal queries
+				return m, waitForRide(m.msgs)
+			}
+
+			// Complete the in-flight socket injection: hand its
+			// captured output back to the reader goroutine, which
+			// writes it to the client and returns to its read loop.
+			if m.ready && !wasReady && m.activeSocket != nil {
+				req := m.activeSocket
+				m.activeSocket = nil
+				m.log("  socket Execute complete: %d outputs", len(req.outputs))
+				req.done <- strings.Join(req.outputs, "")
+				// Fall through to drain the next socket request or
+				// add a new input line if the queue is empty.
+			}
+
+			// Pop the next socket injection if the interaction tier
+			// is idle. Mirrors the multiline-drain pattern above.
+			if m.ready && !wasReady && len(m.socketQueue) > 0 && m.internalQuery == "" {
+				m.drainSocketQueue()
 				return m, waitForRide(m.msgs)
 			}
 

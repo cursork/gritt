@@ -24,6 +24,7 @@
 - **#4 Inline tracing** — `IT` command: left/right args, current fn, axis spec, previous result
 - **#5 Proper multiline mode** — basic client-side multiline done (C-] l toggle). Still needed: interpreter-level multiline (nabla/namespace protocol with SetPromptType type=3)
 - **#6 Syntax highlighting** — `)` commands, `]` commands, `⎕` fns, `:Keywords`, glyphs
+- **#22 EWC demos don't update UI** — `gritt -l`, link EWC, run a demo in browser mode: logging works, but the UI never changes.
 
 ## Data browser
 - [ ] **Cell type collapse on edit** — APL has no "complex slot": typing `5` into a cell that was `5J3` saves and reloads as int 5, because the interpreter collapses `5J0`→`5` even when written as an APLAN literal (verified with `foo←(x:5J0)` → `⎕DR foo.x` is 83/INT). Same situation for float→int when the value is whole. The data browser presents typed cells but the wire format doesn't honor that. Possible directions (none designed yet): show cell type as a glyph or colour so the disappearance is visible feedback; warn in the status bar when an edit will narrow on save; let users explicitly "lock" a cell as complex/float (would require a Go-side wrapper that doesn't round-trip through the interpreter). Deferred — no design capacity right now.

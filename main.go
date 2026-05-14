@@ -11,7 +11,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"strings"
-	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -119,7 +118,7 @@ func main() {
 	var exprs multiFlag
 	flag.Var(&exprs, "e", "Execute expression and exit (can be repeated)")
 	stdin := flag.Bool("stdin", false, "Read expressions from stdin")
-	sock := flag.String("sock", "", "Unix socket path for APL server")
+	sock := flag.String("sock", "", "Listen for injection on Unix path (contains '/') or TCP port (e.g. 9876, :9876, host:port)")
 	var links multiFlag
 	flag.Var(&links, "link", "Link directory (path or ns:path, can be repeated)")
 	launch := flag.Bool("launch", false, "Launch Dyalog automatically (alias: -l)")
@@ -266,17 +265,6 @@ func main() {
 		}
 		return
 	}
-	if *sock != "" {
-		client, err := ride.Connect(*addr)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer closeClient(client, *launch)
-		runLinks(client, links)
-		runSocket(client, *sock)
-		return
-	}
-
 	// Interactive TUI mode
 	colorProfile := colorprofile.Detect(os.Stdout, os.Environ())
 	// Trust COLORTERM over colorprofile's tmux heuristics
@@ -285,6 +273,22 @@ func main() {
 	}
 
 	p := tea.NewProgram(NewModel(*addr, logWriter, colorProfile, cfgArg, dyalogCmd, dyalogExited), tea.WithAltScreen(), tea.WithMouseCellMotion())
+
+	// -sock injection listener. Runs alongside the TUI; each connection's
+	// lines are submitted into the bubbletea program and processed
+	// sequentially when the interpreter is idle.
+	if *sock != "" {
+		network, address := parseSockAddr(*sock)
+		listener, err := startSocketListener(network, address, p)
+		if err != nil {
+			log.Fatalf("Failed to open -sock listener: %v", err)
+		}
+		defer listener.Close()
+		if network == "unix" {
+			defer os.Remove(address)
+		}
+	}
+
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
 	}
@@ -310,96 +314,6 @@ func runLink(client *ride.Client, spec string) {
 		cmd = fmt.Sprintf("]link.create %s", spec)
 	}
 	runExpr(client, cmd)
-}
-
-// runSocket starts a Unix domain socket server for APL expressions
-func runSocket(client *ride.Client, sockPath string) {
-	// Remove stale socket
-	os.Remove(sockPath)
-
-	listener, err := net.Listen("unix", sockPath)
-	if err != nil {
-		log.Fatalf("Failed to create socket: %v", err)
-	}
-	defer listener.Close()
-	defer os.Remove(sockPath)
-
-	// Handle signals for cleanup
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, termSignals()...)
-	go func() {
-		<-sigCh
-		listener.Close()
-		os.Remove(sockPath)
-		os.Exit(0)
-	}()
-
-	fmt.Printf("Listening on %s\n", sockPath)
-
-	var mu sync.Mutex
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			// Listener closed (signal handler)
-			return
-		}
-
-		go func(c net.Conn) {
-			defer c.Close()
-
-			scanner := bufio.NewScanner(c)
-			for scanner.Scan() {
-				expr := strings.TrimSpace(scanner.Text())
-				if expr == "" {
-					continue
-				}
-
-				// Serialize execution (RIDE is single-threaded)
-				mu.Lock()
-				result := execCapture(client, expr)
-				c.Write([]byte(result))
-				mu.Unlock()
-			}
-		}(conn)
-	}
-}
-
-// execCapture executes an expression and returns the result as a string
-func execCapture(client *ride.Client, expr string) string {
-	var buf strings.Builder
-
-	if err := client.Send("Execute", map[string]any{
-		"trace": 0,
-		"text":  expr + "\n",
-	}); err != nil {
-		return fmt.Sprintf("Execute failed: %v\n", err)
-	}
-
-	for {
-		msg, _, err := client.Recv()
-		if err != nil {
-			return buf.String() + fmt.Sprintf("Recv failed: %v\n", err)
-		}
-
-		switch msg.Command {
-		case "AppendSessionOutput":
-			if t, ok := msg.Args["type"].(float64); ok && t == 14 {
-				continue
-			}
-			if result, ok := msg.Args["result"].(string); ok {
-				buf.WriteString(result)
-			}
-		case "SetPromptType":
-			// Return on type > 0:
-			// - type 1: ready for input (expression complete)
-			// - type 2: quad input (⎕:)
-			// - type 3: quote-quad input (⍞)
-			// - type 0: no prompt (processing) - keep waiting
-			if t, ok := msg.Args["type"].(float64); ok && t > 0 {
-				return buf.String()
-			}
-		}
-	}
 }
 
 // runFormat formats APL files in place using FormatCode
