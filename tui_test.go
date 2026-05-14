@@ -2568,53 +2568,74 @@ func TestTUI(t *testing.T) {
 	// Verify external clients can inject expressions into the running TUI
 	// session and receive the captured output back on the same socket.
 	sockAddr := fmt.Sprintf("localhost:%d", sockPort)
+
+	// readReply reads a complete reply from a socket. The reply is sent
+	// in one Write at SetPromptType type=1, so a single Read normally
+	// suffices, but small replies can be fragmented. We loop until a
+	// short read timeout fires.
+	readReply := func(c net.Conn, t *testing.T, label string) string {
+		var got []byte
+		buf := make([]byte, 4096)
+		c.SetReadDeadline(time.Now().Add(5 * time.Second))
+		n, err := c.Read(buf)
+		if err != nil {
+			t.Fatalf("Failed to read %s: %v", label, err)
+		}
+		got = append(got, buf[:n]...)
+		// Short follow-up: drain anything else immediately available.
+		c.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+		for {
+			n, err := c.Read(buf)
+			if n > 0 {
+				got = append(got, buf[:n]...)
+			}
+			if err != nil {
+				break
+			}
+		}
+		c.SetReadDeadline(time.Time{})
+		return string(got)
+	}
+
 	conn, err := net.DialTimeout("tcp", sockAddr, 2*time.Second)
 	if err != nil {
 		t.Fatalf("Failed to dial -sock listener at %s: %v", sockAddr, err)
 	}
 	defer conn.Close()
 
-	// 1) Inject a printing expression. Output should appear in the TUI
-	//    session AND come back on the socket.
+	// 1) Inject a printing expression. Assert the reply is *exactly*
+	//    the marker + newline — nothing else should leak in. Then
+	//    assert the same string appears in the TUI session.
 	injectMarker := "sock_inject_hello_marker"
 	if _, err := conn.Write([]byte(fmt.Sprintf("⎕←'%s'\n", injectMarker))); err != nil {
 		t.Fatalf("Failed to write to -sock: %v", err)
 	}
-
-	// Read the socket reply. It's written all at once at SetPromptType
-	// type=1, but to be robust against TCP fragmentation we read with a
-	// short deadline and accumulate.
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	buf := make([]byte, 4096)
-	n, err := conn.Read(buf)
-	if err != nil {
-		t.Fatalf("Failed to read -sock reply: %v", err)
-	}
-	sockReply := string(buf[:n])
-	t.Logf("Socket reply: %q", sockReply)
-	conn.SetReadDeadline(time.Time{}) // clear
+	sockReply := readReply(conn, t, "sock-reply hello")
+	t.Logf("Socket reply (hello): %q", sockReply)
 
 	runner.WaitForIdle(3 * time.Second)
 	runner.Snapshot("After -sock injection")
 
-	runner.Test("Socket injection returns output on the socket", func() bool {
-		return strings.Contains(sockReply, injectMarker)
+	wantReply := injectMarker + "\n"
+	runner.Test("Socket reply is exactly the printed value (no stray bytes)", func() bool {
+		return sockReply == wantReply
 	})
 
 	runner.Test("Socket injection output also appears in TUI session", func() bool {
 		return runner.Contains(injectMarker)
 	})
 
-	// 2) Inject an assignment and confirm the state is shared with the
-	//    interactive session (proves we are not running in a sandbox).
+	// 2) Inject a silent assignment. Reply should be empty (assignment
+	//    produces no AppendSessionOutput before the next prompt).
 	sockVarMarker := "sock_inject_var_marker_777"
 	if _, err := conn.Write([]byte(fmt.Sprintf("sock_y ← '%s'\n", sockVarMarker))); err != nil {
 		t.Fatalf("Failed to write var assignment: %v", err)
 	}
-	// Drain whatever the reply is (may be empty for a silent assignment).
-	conn.SetReadDeadline(time.Now().Add(3 * time.Second))
-	conn.Read(buf)
-	conn.SetReadDeadline(time.Time{})
+	silentReply := readReply(conn, t, "sock-reply silent assignment")
+	t.Logf("Socket reply (silent assignment): %q", silentReply)
+	runner.Test("Silent assignment yields empty socket reply", func() bool {
+		return silentReply == ""
+	})
 
 	runner.WaitForIdle(3 * time.Second)
 	runner.SendLine("sock_y")
@@ -2623,6 +2644,53 @@ func TestTUI(t *testing.T) {
 
 	runner.Test("Socket-injected assignment persists in TUI session", func() bool {
 		return runner.Contains(sockVarMarker)
+	})
+
+	// 3) Multi-connection queueing. Open a second connection and write
+	//    on both before reading either reply. The first one in flight
+	//    becomes m.activeSocket; the second sits in m.socketQueue and
+	//    only drains after the first SetPromptType type=1. Assert
+	//    *exact* replies on both — proves the activeSocket pointer is
+	//    correctly re-targeted between requests.
+	conn2, err := net.DialTimeout("tcp", sockAddr, 2*time.Second)
+	if err != nil {
+		t.Fatalf("Failed to dial second -sock connection: %v", err)
+	}
+	defer conn2.Close()
+
+	mark1 := "sock_q_one_marker"
+	mark2 := "sock_q_two_marker"
+	if _, err := conn.Write([]byte(fmt.Sprintf("⎕←'%s'\n", mark1))); err != nil {
+		t.Fatalf("queue: write conn1: %v", err)
+	}
+	if _, err := conn2.Write([]byte(fmt.Sprintf("⎕←'%s'\n", mark2))); err != nil {
+		t.Fatalf("queue: write conn2: %v", err)
+	}
+
+	reply1 := readReply(conn, t, "queue reply 1")
+	reply2 := readReply(conn2, t, "queue reply 2")
+	t.Logf("queue reply 1: %q, queue reply 2: %q", reply1, reply2)
+
+	runner.Test("Queued conn1 receives exactly its own output", func() bool {
+		return reply1 == mark1+"\n"
+	})
+	runner.Test("Queued conn2 receives exactly its own output", func() bool {
+		return reply2 == mark2+"\n"
+	})
+
+	// Both should also be visible in the TUI session.
+	runner.Test("Both queued injections appear in TUI session", func() bool {
+		return runner.Contains(mark1) && runner.Contains(mark2)
+	})
+
+	// 4) Confirm the interpreter is still healthy for interactive use
+	//    after the socket activity — guards against the socket path
+	//    leaking state into the user input path.
+	postSockMarker := "post_sock_marker_42"
+	runner.SendLine(fmt.Sprintf("⎕←'%s'", postSockMarker))
+	runner.WaitFor(postSockMarker, 3*time.Second)
+	runner.Test("Interactive Execute still works after -sock activity", func() bool {
+		return runner.Contains(postSockMarker)
 	})
 
 	// ===== History round-trip: TUI → file → -history =====

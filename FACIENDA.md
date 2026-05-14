@@ -1,6 +1,7 @@
 # FACIENDA - Things to be done
 
 ## aplsock / Prepl
+- [ ] **prapl-style exploration UIs in gritt's TUI** — prapl (`~/dev/prapl`) is a PoC proving that text-in / 220⌶-out is a sufficient substrate for a rich data-inspection UI (Navigator with breadcrumb drill-down, Prints with tap channels, per-row "send value to navigator"). Not a thing to integrate or keep alive — it's an idea mine. The gritt-side work is to bring those exploration patterns into the TUI: data_browser already drills into compound values fed by APLAN; the prapl Navigator does the same against aplor (220⌶) responses from a prepl. Since amicable.Unmarshal returns the same Go types data_browser already navigates, an aplor-fed exploration pane is mostly plumbing — bootstrap a prepl on a side thread of gritt's own session (trivial `⎕FIX` + `Start`), route exploration-pane requests through it, hand the unmarshalled value to the existing pane code. Other patterns worth porting: tap channels for live `⎕←`-like output, per-result-row "explore this value" actions. Not urgent — list of ideas to mine, not a single shippable feature.
 - [ ] **gritt as client (phase 2)** — `-prepl addr` connects to aplsock instead of RIDE
 - [ ] **⎕← capture** — output stream (`tag: 'out'`). Solution is on the APL side.
 - [ ] **Multi-line expressions** — framing for `:Namespace`/`:EndNamespace`, nabla
