@@ -32,6 +32,7 @@
     "localise":        {},
     "autolocalise":    {},
     "close-all-windows": {},
+    "external-edit":    { "keys": ["e"], "leader": true },
     "rebind":           {},
     "step-into":       { "keys": ["i"], "context": "tracer" },
     "step-over":       { "keys": ["n"], "context": "tracer" },

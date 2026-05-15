@@ -92,8 +92,24 @@ func TestTUI(t *testing.T) {
 	// tests later in this function have something to connect to.
 	sockPort := pickPort(t)
 
-	// Create test runner with protocol logging
-	runner, err := uitest.NewRunner(t, sessionName, screenW, screenH, fmt.Sprintf("./gritt -addr localhost:%d -sock %d -log test-reports/protocol.log", dyalogPort, sockPort), "test-reports")
+	// Stub $EDITOR for the external-edit test (further down). Always present
+	// so EDITOR is well-defined for the gritt subprocess; only the
+	// external-edit test actually invokes it.
+	stubEditor := "/tmp/gritt-extedit-stub.sh"
+	stubBody := "#!/bin/sh\n" +
+		"cat > \"$1\" <<'EOF'\n" +
+		"extFn\n" +
+		" r←⎕TS\n" +
+		"EOF\n"
+	if err := os.WriteFile(stubEditor, []byte(stubBody), 0755); err != nil {
+		t.Fatalf("write stub editor: %v", err)
+	}
+	defer os.Remove(stubEditor)
+
+	// Create test runner with protocol logging.
+	// Wrap the gritt invocation in a shell so we can set $EDITOR for it —
+	// tmux runs the command via the user's default shell.
+	runner, err := uitest.NewRunner(t, sessionName, screenW, screenH, fmt.Sprintf("EDITOR=%s ./gritt -addr localhost:%d -sock %d -log test-reports/protocol.log", stubEditor, dyalogPort, sockPort), "test-reports")
 	if err != nil {
 		t.Fatalf("Failed to create runner: %v", err)
 	}
@@ -2704,6 +2720,43 @@ func TestTUI(t *testing.T) {
 	runner.WaitFor(postSockMarker, 3*time.Second)
 	runner.Test("Interactive Execute still works after -sock activity", func() bool {
 		return runner.Contains(postSockMarker)
+	})
+
+	// ===== external-edit: leader+e launches $EDITOR and round-trips =====
+	// $EDITOR is the stub script written near the top of TestTUI; it
+	// rewrites whatever file it's handed with a known body. Triggering
+	// leader+e should send SaveChanges to Dyalog so the new body is
+	// persisted in the workspace.
+	runner.SendLine(")erase extFn")
+	runner.WaitForIdle(3 * time.Second)
+	runner.SendLine(")ed extFn")
+	runner.WaitFor("╔", 3*time.Second)
+	runner.Snapshot("extFn editor open (before external edit)")
+
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys("e")
+	// ExecProcess suspends bubbletea, runs the stub (instant), then
+	// resumes — followed by reading the file and SaveChanges to Dyalog.
+	runner.WaitForIdle(5 * time.Second)
+	runner.Snapshot("After leader+e (external-edit returned)")
+
+	runner.Test("Editor pane shows externally-edited body", func() bool {
+		return runner.Contains("r←⎕TS")
+	})
+
+	// Close the editor (no further changes — already saved by external-edit).
+	runner.SendKeys("Escape")
+	runner.Sleep(500 * time.Millisecond)
+	runner.Test("extFn editor closes after Escape", func() bool {
+		return runner.WaitForNoFocusedPane(3 * time.Second)
+	})
+
+	// Verify Dyalog received the SaveChanges and the function body sticks.
+	runner.SendLine("⎕CR'extFn'")
+	runner.WaitFor("⎕TS", 3*time.Second)
+	runner.Test("extFn persisted with externally-edited body", func() bool {
+		return runner.Contains("⎕TS")
 	})
 
 	// ===== History round-trip: TUI → file → -history =====
