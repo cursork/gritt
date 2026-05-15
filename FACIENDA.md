@@ -1,6 +1,7 @@
 # FACIENDA - Things to be done
 
 ## aplsock / Prepl
+- [ ] **prapl-style exploration UIs in gritt's TUI** — prapl (`~/dev/prapl`) is a PoC proving that text-in / 220⌶-out is a sufficient substrate for a rich data-inspection UI (Navigator with breadcrumb drill-down, Prints with tap channels, per-row "send value to navigator"). Not a thing to integrate or keep alive — it's an idea mine. The gritt-side work is to bring those exploration patterns into the TUI: data_browser already drills into compound values fed by APLAN; the prapl Navigator does the same against aplor (220⌶) responses from a prepl. Since amicable.Unmarshal returns the same Go types data_browser already navigates, an aplor-fed exploration pane is mostly plumbing — bootstrap a prepl on a side thread of gritt's own session (trivial `⎕FIX` + `Start`), route exploration-pane requests through it, hand the unmarshalled value to the existing pane code. Other patterns worth porting: tap channels for live `⎕←`-like output, per-result-row "explore this value" actions. Not urgent — list of ideas to mine, not a single shippable feature.
 - [ ] **gritt as client (phase 2)** — `-prepl addr` connects to aplsock instead of RIDE
 - [ ] **⎕← capture** — output stream (`tag: 'out'`). Solution is on the APL side.
 - [ ] **Multi-line expressions** — framing for `:Namespace`/`:EndNamespace`, nabla
@@ -24,6 +25,7 @@
 - **#4 Inline tracing** — `IT` command: left/right args, current fn, axis spec, previous result
 - **#5 Proper multiline mode** — basic client-side multiline done (C-] l toggle). Still needed: interpreter-level multiline (nabla/namespace protocol with SetPromptType type=3)
 - **#6 Syntax highlighting** — `)` commands, `]` commands, `⎕` fns, `:Keywords`, glyphs
+- **#22 EWC demos don't update UI** — `gritt -l`, link EWC, run a demo in browser mode: logging works, but the UI never changes.
 
 ## Data browser
 - [ ] **Cell type collapse on edit** — APL has no "complex slot": typing `5` into a cell that was `5J3` saves and reloads as int 5, because the interpreter collapses `5J0`→`5` even when written as an APLAN literal (verified with `foo←(x:5J0)` → `⎕DR foo.x` is 83/INT). Same situation for float→int when the value is whole. The data browser presents typed cells but the wire format doesn't honor that. Possible directions (none designed yet): show cell type as a glyph or colour so the disappearance is visible feedback; warn in the status bar when an edit will narrow on save; let users explicitly "lock" a cell as complex/float (would require a Go-side wrapper that doesn't round-trip through the interpreter). Deferred — no design capacity right now.
