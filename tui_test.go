@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -100,8 +99,10 @@ func TestTUI(t *testing.T) {
 	}
 	defer runner.Close()
 
-	// Wait for gritt to render
-	runner.WaitFor("gritt", 10*time.Second)
+	// Wait for gritt to render — the framed UI (top border "╭─ gritt"),
+	// not just "gritt" which also appears in the pre-connect splash and
+	// would let the first Test() race against the still-loading screen.
+	runner.WaitFor("╭─ gritt", 10*time.Second)
 
 	// Take initial snapshot
 	runner.Snapshot("Initial state")
@@ -2569,20 +2570,22 @@ func TestTUI(t *testing.T) {
 	// session and receive the captured output back on the same socket.
 	sockAddr := fmt.Sprintf("localhost:%d", sockPort)
 
-	// readReply reads a complete reply from a socket. The reply is sent
-	// in one Write at SetPromptType type=1, so a single Read normally
-	// suffices, but small replies can be fragmented. We loop until a
-	// short read timeout fires.
-	readReply := func(c net.Conn, t *testing.T, label string) string {
+	// readReply reads whatever the server sends within `wait`. There is no
+	// frame terminator on -sock — a silent assignment produces zero bytes
+	// and is indistinguishable from "still working" without a timeout.
+	// So: wait up to `wait` for first byte; once anything arrives, drain
+	// fast-follow-up bytes with a short tail timeout.
+	readReply := func(c net.Conn, wait time.Duration) string {
 		var got []byte
 		buf := make([]byte, 4096)
-		c.SetReadDeadline(time.Now().Add(5 * time.Second))
+		c.SetReadDeadline(time.Now().Add(wait))
 		n, err := c.Read(buf)
+		c.SetReadDeadline(time.Time{})
 		if err != nil {
-			t.Fatalf("Failed to read %s: %v", label, err)
+			// timeout or EOF — caller treats empty as "no output produced"
+			return ""
 		}
 		got = append(got, buf[:n]...)
-		// Short follow-up: drain anything else immediately available.
 		c.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 		for {
 			n, err := c.Read(buf)
@@ -2610,7 +2613,7 @@ func TestTUI(t *testing.T) {
 	if _, err := conn.Write([]byte(fmt.Sprintf("⎕←'%s'\n", injectMarker))); err != nil {
 		t.Fatalf("Failed to write to -sock: %v", err)
 	}
-	sockReply := readReply(conn, t, "sock-reply hello")
+	sockReply := readReply(conn, 5*time.Second)
 	t.Logf("Socket reply (hello): %q", sockReply)
 
 	runner.WaitForIdle(3 * time.Second)
@@ -2625,13 +2628,23 @@ func TestTUI(t *testing.T) {
 		return runner.Contains(injectMarker)
 	})
 
+	// The injected expression itself is mirrored into the session above
+	// the input line — so users can see what produced the output that
+	// follows. The output lines just have the marker, so checking for
+	// the ⎕← source text is a clean signal the mirror happened.
+	runner.Test("Socket-injected expression text is mirrored into TUI session", func() bool {
+		return runner.Contains(fmt.Sprintf("⎕←'%s'", injectMarker))
+	})
+
 	// 2) Inject a silent assignment. Reply should be empty (assignment
 	//    produces no AppendSessionOutput before the next prompt).
 	sockVarMarker := "sock_inject_var_marker_777"
 	if _, err := conn.Write([]byte(fmt.Sprintf("sock_y ← '%s'\n", sockVarMarker))); err != nil {
 		t.Fatalf("Failed to write var assignment: %v", err)
 	}
-	silentReply := readReply(conn, t, "sock-reply silent assignment")
+	// Silent assignment produces no AppendSessionOutput — readReply
+	// returns "" after the short wait expires.
+	silentReply := readReply(conn, 1500*time.Millisecond)
 	t.Logf("Socket reply (silent assignment): %q", silentReply)
 	runner.Test("Silent assignment yields empty socket reply", func() bool {
 		return silentReply == ""
@@ -2667,8 +2680,8 @@ func TestTUI(t *testing.T) {
 		t.Fatalf("queue: write conn2: %v", err)
 	}
 
-	reply1 := readReply(conn, t, "queue reply 1")
-	reply2 := readReply(conn2, t, "queue reply 2")
+	reply1 := readReply(conn, 5*time.Second)
+	reply2 := readReply(conn2, 5*time.Second)
 	t.Logf("queue reply 1: %q, queue reply 2: %q", reply1, reply2)
 
 	runner.Test("Queued conn1 receives exactly its own output", func() bool {

@@ -93,6 +93,32 @@ echo "1+1" | ./gritt -l -stdin
 ./gritt -l -link /path/to/src -e "MyFn 42"
 ```
 
+### Socket injection (`-sock`)
+
+Open a socket alongside a running gritt session that lets external clients inject expressions into it. Useful when you want to drive the same Dyalog session from multiple places — a script, another terminal, an editor — without having to juggle separate `multapl`/`gritt`/`dyalog` processes.
+
+```bash
+# TCP — bare port, ":port", or "host:port"
+./gritt -l -sock :12345
+./gritt -l -sock 12345           # equivalent
+
+# Unix socket — any path with a "/"
+./gritt -l -sock /tmp/gritt.sock
+```
+
+Each connection reads newline-delimited APL expressions; gritt executes them in the same session as the TUI and writes the captured output back to the connection. Both the injected expression and its output are mirrored into the on-screen session so you can see what an external client just ran.
+
+```bash
+$ echo '1+2' | nc -N localhost 12345
+3
+$ echo 'x←⍳5 ⋄ +/x' | nc -N localhost 12345
+15
+```
+
+Multiple clients can connect simultaneously; expressions are queued and run one at a time as the interpreter goes idle, interleaved with whatever the TUI is doing.
+
+The response format is the rendered session output — same display text you'd see in the TUI. For structured (parseable) responses use `aplsock` (`grittles/aplsock/`), which speaks APLAN or `220⌶` binary instead.
+
 ### Format APL files
 
 ```bash

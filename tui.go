@@ -681,6 +681,19 @@ func (m *Model) drainSocketQueue() {
 	m.lastExecute = req.code + "\n"
 	m.ready = false
 	m.log("→ Socket Execute %q", req.code)
+
+	// Mirror the injected expression into the visible session above the
+	// current input line, so the user can see what produced any output
+	// that follows. Dyalog's type=14 echo of req.code matches lastExecute
+	// and is dropped, avoiding duplication.
+	inputIdx := len(m.lines) - 1
+	m.lines = append(m.lines, Line{})
+	copy(m.lines[inputIdx+1:], m.lines[inputIdx:])
+	m.lines[inputIdx] = Line{Text: aplIndent + req.code}
+	if m.cursorRow >= inputIdx {
+		m.cursorRow++
+	}
+
 	if err := m.send("Execute", map[string]any{"text": req.code + "\n", "trace": 0}); err != nil {
 		// send() already logged and marked disconnected. Release the
 		// waiting goroutine with whatever error context we can give.

@@ -72,6 +72,15 @@ Captured in FACIENDA under `## aplsock / Prepl` →
 
 - `socket_inject.go` — new, holds the listener + per-connection handler
 - `tui.go` — `socketLineMsg` integration, `drainSocketQueue`,
-  `activeSocket` state machine
+  `activeSocket` state machine. `drainSocketQueue` mirrors the
+  injected expression into `m.lines` above the active input line
+  before sending Execute, so the user sees the source of any output
+  that follows; the existing `lastExecute` skip eats Dyalog's
+  type=14 echo to avoid duplication.
 - `main.go` — flag parsing, `parseSockAddr`, listener startup
-- `tui_test.go` — integration tests covering the round-trip
+- `tui_test.go` — integration tests covering the round-trip,
+  including a positive assertion that the injected expression text is
+  mirrored into the session. Also tightened the startup `WaitFor`
+  from `"gritt"` to `"╭─ gritt"` — the splash satisfies the bare
+  string before the framed UI is up, which raced the first `Test()`
+  against an `IsAlive`-false screen.
