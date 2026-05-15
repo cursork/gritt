@@ -17,6 +17,7 @@ Leader key: `Ctrl+]` (keeps all keys free for APL input)
 | C-] : | Command palette |
 | C-] m | Pane move mode |
 | C-] r | Reconnect to Dyalog |
+| C-] e | Open focused editor pane in `$EDITOR` |
 | C-] ? | Show key mappings |
 | C-] q | Quit (with confirmation) |
 | Tab | Cycle pane focus |
@@ -54,7 +55,16 @@ Single-key commands in tracer mode (no leader needed):
 | Key | Action |
 |-----|--------|
 | C-] b | Toggle breakpoint on current line |
+| C-] e | Edit in `$EDITOR` (vim, emacs, code, …) and save on exit |
 | Esc | Save and close |
+
+### External editor (`C-] e`)
+
+Writes the focused pane's text to a temp file (`.aplf`/`.apln`/`.apla` per entity type), launches `$EDITOR <file>`, and on exit reads the file back. If the content changed, `SaveChanges` is sent to Dyalog so the new body is persisted. Falls back to `vi` if `$EDITOR` is unset.
+
+For VS Code, set `EDITOR="code --wait"` — without `--wait`, the `code` binary returns before you've finished editing.
+
+Refused on tracer panes (in trace mode) and read-only value windows — a red transient error in the status line tells you which key to press first (`e` to enter tracer edit mode, `Enter` to convert a read-only value to APLAN).
 
 ## Variables Pane Keys
 

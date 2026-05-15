@@ -147,6 +147,9 @@ type Model struct {
 	confirmQuit  bool
 	paneMoveMode bool // Arrow keys move/resize focused pane
 
+	// Transient red status-line error (cleared on next key press)
+	transientErr string
+
 	// Save/Load prompt state
 	savePromptActive   bool
 	savePromptFilename string
@@ -655,6 +658,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.socketQueue = append(m.socketQueue, msg.req)
 		m.drainSocketQueue()
 		return m, nil
+
+	case externalEditFinishedMsg:
+		m.handleExternalEditFinished(msg)
+		return m, nil
 	}
 	return m, nil
 }
@@ -914,8 +921,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Clear quit hint on any key
+	// Clear quit hint and transient error on any key
 	m.showQuitHint = false
+	m.transientErr = ""
 
 	// Ctrl+C shows quit hint (vim style)
 	if msg.Type == tea.KeyCtrlC {
@@ -3611,6 +3619,9 @@ func (m Model) View() string {
 	if m.confirmQuit {
 		confirmStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true)
 		helpView = confirmStyle.Render("Quit? (y/n)")
+	} else if m.transientErr != "" {
+		errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true)
+		helpView = errStyle.Render(m.transientErr)
 	} else if m.showQuitHint {
 		hintStyle := lipgloss.NewStyle().Foreground(AccentColor)
 		helpView = hintStyle.Render("Type C-] q to quit")

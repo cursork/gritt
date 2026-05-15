@@ -22,6 +22,7 @@ I use it daily, but mostly for specific tasks. I revert to Ride otherwise, since
 - Single-expression and stdin modes for scripting
 - Link integration for source-controlled APL projects
 - Tracer with stack navigation (single pane, not overlapping windows)
+- Edit a function/namespace/array in your preferred `$EDITOR` (`C-] e`) — saves back via `SaveChanges` on exit
 
 See [example-test-report.html](example-test-report.html) or [example-test-report.txt](example-test-report.txt) for a walkthrough of features (snapshots from automated tests).
 

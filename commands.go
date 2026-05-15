@@ -380,6 +380,9 @@ func buildCommands(cfg *Config) *CommandRegistry {
 		m.closeAllWindows()
 		return *m, nil
 	})
+	reg.add("external-edit", "Edit focused pane in $EDITOR", true, "", func(m *Model) (tea.Model, tea.Cmd) {
+		return *m, m.externalEditFocused()
+	})
 	reg.add("rebind", "Change key bindings", false, "", func(m *Model) (tea.Model, tea.Cmd) {
 		m.openRebindPane()
 		return *m, nil
