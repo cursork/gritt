@@ -2,7 +2,7 @@
 
 ![grhorse](logo-small.jpg)
 
-A terminal IDE for Dyalog APL.
+A RIDE protocol client for Dyalog APL — terminal IDE, scripting CLI, and Go libraries.
 
 Pronounced like "grit" (G from Go + German "Ritt" = ride).
 
@@ -14,15 +14,49 @@ I use it daily, but mostly for specific tasks. I revert to Ride otherwise, since
 
 ## Features
 
-- Full TUI with floating panes for editors, tracer, debug info
-- APL input: backtick prefix (`` `i `` → `⍳`), symbol search, APLcart integration
-- Debugging: breakpoints, stepping (into/over/out), stack trace, variables pane, edit while debugging (very much a 'maybe' - don't trust it)
-- Command palette for quick access to all commands
-- Connection resilience - stays alive on disconnect, allows reconnect
-- Single-expression and stdin modes for scripting
-- Link integration for source-controlled APL projects
-- Tracer with stack navigation (single pane, not overlapping windows)
-- Edit a function/namespace/array in your preferred `$EDITOR` (`C-] e`) — saves back via `SaveChanges` on exit
+gritt is a scripting CLI, a terminal IDE, and a small collection of reusable Go
+libraries underneath both.
+
+### Command line
+
+- `-l` launches a dyalog instance with RIDE and connects to it
+- `-e` runs a single expression and exits:
+  - `gritt -l -e "⍳5"` - launch and run expressions
+  - `gritt -e ... -e ...` - execute expressions against default 4502 port
+  - `gritt -addr localhost:9502 -e ...` - execute expressions against any running Dyalog
+- `-sock` opens a socket alongside the running session so external
+  scripts can inject expressions into the same Dyalog the TUI is using
+- `-history` dumps cross-session command history: `gritt -history | grep …`
+
+### Terminal UI
+
+- Discoverable — `Ctrl+]` `:` opens a fuzzy-searchable list of every
+  command in gritt
+- Structured data browser — drill into namespaces, matrices, vectors;
+  edit cells inline; saves back as APLAN
+- Inline search for APLcart idioms, Dyalog docs (`F1`), APL symbols, and
+  I-beam reference
+- Tracer with single-pane stack navigation, breakpoints, step
+  into/over/out, edit-while-debugging
+- Edit functions/namespaces/arrays in your `$EDITOR` — saved back to the
+  interpreter on exit
+- APL input via backtick prefix (`` `i `` → `⍳`) — no system keyboard
+  remap required
+- Auto-launch Dyalog (`-l`) — discovers installed versions
+
+### Library + grittles
+
+gritt libraries can be consumed on their own; import the packages directly to drive
+Dyalog from your own code:
+
+- `codec/` — APLAN parser/serializer
+- `amicable/` — `220⌶` binary marshal/unmarshal
+- `ride/` — RIDE protocol client
+- `prepl/` — APL 'socket server' - alternative to RIDE, runs in-interpreter. See [aplsock](https://github.com/cursork/gritt/tree/main/grittles#aplsock)
+
+Several utilities ship as standalone binaries — see
+[grittles/README.md](grittles/README.md). If your use case is narrow, one of them
+may be more appropriate for you.
 
 See [example-test-report.html](example-test-report.html) or [example-test-report.txt](example-test-report.txt) for a walkthrough of features (snapshots from automated tests).
 
@@ -163,16 +197,6 @@ gritt looks for `gritt.json` in order:
 3. Embedded default
 
 These are not merged - first found, wins. Override with `-cfg path` to load a specific file, or `-cfg ''` for embedded defaults only.
-
-The `accent` field sets the UI accent color (borders, highlights, selections). Default is Dyalog orange (`#F2A74F`). For a neutral grey:
-
-```json
-{
-  "accent": "#808080"
-}
-```
-
-Any `#RRGGBB` hex color works. Omit or leave empty for the default.
 
 Key bindings are configured via `bindings` (commands) and `navigation` (input primitives). Any command can be bound as leader-prefixed or direct:
 

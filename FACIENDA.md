@@ -23,7 +23,7 @@
 ## GitHub Issues
 - **#3 Multithreaded tracing** — switch between suspended functions in different threads
 - **#4 Inline tracing** — `IT` command: left/right args, current fn, axis spec, previous result
-- **#5 Proper multiline mode** — basic client-side multiline done (C-] l toggle). Still needed: interpreter-level multiline (nabla/namespace protocol with SetPromptType type=3)
+- **#5 Proper multiline mode (covers `-stdin` too)** — basic client-side multiline done (C-] l toggle). Still needed: interpreter-level multiline (nabla/namespace protocol with SetPromptType type=3). Known break: pasting a nabla definition into the TUI's multiline mode leaves the interpreter apparently busy (spinner never clears) — state-tracking bug around the closing `∇`. `-stdin` (main.go:254) is the same problem at a different entry point: it `bufio.Scan`s one Execute per line, so `printf "∇foo\n body\n∇" | gritt -stdin` SYNTAX-errors on the bare `∇foo`. Both paths want one shared "I'm inside a definition, buffer body lines, release ready-state on close" helper.
 - **#6 Syntax highlighting** — `)` commands, `]` commands, `⎕` fns, `:Keywords`, glyphs
 - **#22 EWC demos don't update UI** — `gritt -l`, link EWC, run a demo in browser mode: logging works, but the UI never changes.
 
