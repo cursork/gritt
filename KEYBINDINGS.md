@@ -105,6 +105,8 @@ Use `C-] :` → `symbols` to search all APL symbols by name.
 
 Press `C-] :` to open. Type to filter, Enter to select. All commands are available here.
 
+The filter matches against the command name, hidden synonyms, and the help text — in that order. Synonyms aren't shown in the list, but typing one surfaces the command: e.g. `vim` finds `external-edit`, `idiom` finds `aplcart`, `callstack` finds `stack`, `bp` finds `breakpoint`.
+
 ## Configuration
 
 Key bindings are configured in `gritt.json` using the `bindings` + `navigation` format:
