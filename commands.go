@@ -18,6 +18,7 @@ type CommandDef struct {
 	Binding key.Binding
 	Leader  bool
 	Context string // "", "tracer"
+	Synonyms []string // Hidden synonyms — palette filter matches these but doesn't show them
 	Action  func(m *Model) (tea.Model, tea.Cmd)
 }
 
@@ -47,6 +48,19 @@ func (r *CommandRegistry) add(name, help string, leader bool, context string, ac
 		Context: context,
 		Action:  action,
 	})
+}
+
+// alias attaches hidden synonyms to a previously-added command. The palette
+// filter matches against these but does not display them. Used for words the
+// user might mentally reach for that don't share a prefix with the command
+// name (e.g. "vim" → external-edit, "callstack" → stack).
+func (r *CommandRegistry) alias(name string, synonyms ...string) {
+	for i := range r.commands {
+		if r.commands[i].Name == name {
+			r.commands[i].Synonyms = append(r.commands[i].Synonyms, synonyms...)
+			return
+		}
+	}
 }
 
 // applyBindings sets key.Binding on each command from config.
@@ -225,8 +239,9 @@ func (r *CommandRegistry) PaletteCommands(m *Model) []Command {
 			}
 		}
 		cmds = append(cmds, Command{
-			Name: cmd.Name,
-			Help: help + hint,
+			Name:    cmd.Name,
+			Help:    help + hint,
+			Synonyms: cmd.Synonyms,
 		})
 	}
 	sort.SliceStable(cmds, func(i, j int) bool {
@@ -451,6 +466,55 @@ func buildCommands(cfg *Config) *CommandRegistry {
 	reg.add("delete-row", "Data browser: delete the selected row", false, "data-browser", nil)
 	reg.add("delete-column", "Data browser: delete the selected column", false, "data-browser", nil)
 	reg.add("close-discard", "Data browser: close without saving changes", false, "data-browser", nil)
+
+	// Hidden synonyms — palette filter matches these too. Heuristic: only add
+	// words that don't share their first three characters with the command
+	// name (otherwise the user can already reach it by name).
+	reg.alias("debug", "log", "logging")
+	reg.alias("stack", "callstack", "frames", "backtrace")
+	reg.alias("variables", "locals")
+	reg.alias("breakpoint", "bp", "pause")
+	reg.alias("reconnect", "connect")
+	reg.alias("command-palette", "palette", "menu")
+	reg.alias("pane-move", "resize", "layout", "move-pane")
+	reg.alias("show-keys", "bindings", "keybindings", "shortcuts", "keymap")
+	reg.alias("cycle-pane", "next-pane", "switch-pane")
+	reg.alias("quit", "exit", "leave")
+	reg.alias("doc-search", "manual", "documentation")
+	reg.alias("ibeam", "i-beam", "system-function")
+	reg.alias("focus-mode", "zen", "fullscreen", "distraction-free")
+	reg.alias("multiline", "ml", "paste")
+	reg.alias("doc-help", "help", "manual", "f1")
+	reg.alias("clear", "reset", "cls")
+	reg.alias("autocomplete", "completion", "suggest")
+	reg.alias("history-back", "previous")
+	reg.alias("history-forward", "next")
+	reg.alias("reverse-search", "history-search", "fuzzy")
+	reg.alias("symbols", "glyph", "glyphs", "character", "special", "unicode")
+	reg.alias("aplcart", "idiom", "idioms", "examples", "cheatsheet", "snippets")
+	reg.alias("cache-refresh", "reload", "update-cache", "redownload")
+	reg.alias("save", "write", "export", "dump")
+	reg.alias("load", "open", "import", "restore")
+	reg.alias("format", "pretty", "indent", "beautify", "prettify")
+	reg.alias("localise", "scope")
+	reg.alias("autolocalise", "auto-scope")
+	reg.alias("close-all-windows", "cleanup", "reset-windows")
+	reg.alias("external-edit", "vim", "nvim", "emacs", "code", "vscode", "editor")
+	reg.alias("rebind", "keybinding", "shortcut", "hotkey")
+	reg.alias("@pid", "process", "pgrep", "processes")
+	reg.alias("step-into", "dive")
+	reg.alias("step-over", "next")
+	reg.alias("step-out", "return", "up")
+	reg.alias("continue", "resume", "run", "go")
+	reg.alias("resume-all", "threads", "restart-threads")
+	reg.alias("trace-back", "backwards")
+	reg.alias("trace-forward", "skip")
+	reg.alias("edit-mode", "modify")
+	reg.alias("append-row", "add-row")
+	reg.alias("append-column", "add-column")
+	reg.alias("delete-row", "remove-row")
+	reg.alias("delete-column", "remove-column")
+	reg.alias("close-discard", "discard", "cancel", "abort")
 
 	reg.applyBindings(cfg.Bindings)
 	warnings := reg.buildIndexes()

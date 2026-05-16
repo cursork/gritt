@@ -10,8 +10,9 @@ import (
 
 // Command represents an executable command in the palette
 type Command struct {
-	Name string
-	Help string
+	Name    string
+	Help    string
+	Synonyms []string // Hidden synonyms used by filter, not rendered
 }
 
 // CommandPalette is a searchable command list
@@ -41,16 +42,14 @@ func (c *CommandPalette) filter() {
 		q := strings.ToLower(c.query)
 		c.filtered = nil
 		for _, cmd := range c.commands {
-			if strings.Contains(strings.ToLower(cmd.Name), q) ||
-				strings.Contains(strings.ToLower(cmd.Help), q) {
+			if matchRank(cmd, q) > 0 {
 				c.filtered = append(c.filtered, cmd)
 			}
 		}
-		// Name matches sort before help-only matches
+		// Rank: 3=name, 2=synonym, 1=help-only. Higher first; stable
+		// preserves original (alphabetical / @-suffix) order within a tier.
 		sort.SliceStable(c.filtered, func(i, j int) bool {
-			iName := strings.Contains(strings.ToLower(c.filtered[i].Name), q)
-			jName := strings.Contains(strings.ToLower(c.filtered[j].Name), q)
-			return iName && !jName
+			return matchRank(c.filtered[i], q) > matchRank(c.filtered[j], q)
 		})
 	}
 
@@ -148,6 +147,23 @@ func (c *CommandPalette) Render(w, h int) string {
 	}
 
 	return sb.String()
+}
+
+// matchRank returns 0 if cmd doesn't match q at all, else a higher rank for
+// stronger signals: name substring (3), synonym substring (2), help-only (1).
+func matchRank(cmd Command, q string) int {
+	if strings.Contains(strings.ToLower(cmd.Name), q) {
+		return 3
+	}
+	for _, s := range cmd.Synonyms {
+		if strings.Contains(strings.ToLower(s), q) {
+			return 2
+		}
+	}
+	if strings.Contains(strings.ToLower(cmd.Help), q) {
+		return 1
+	}
+	return 0
 }
 
 func padRight(s string, width int) string {

@@ -290,6 +290,24 @@ func TestTUI(t *testing.T) {
 		return !runner.Contains("Commands")
 	})
 
+	// Test: Synonyms — typing a hidden synonym surfaces its command.
+	// "vim" is a synonym for external-edit; the command name doesn't
+	// contain "vim", so this only passes if synonym matching works.
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys(":")
+	runner.Sleep(300 * time.Millisecond)
+	runner.SendText("vim")
+	runner.Sleep(200 * time.Millisecond)
+	runner.Snapshot("Command palette filtered to 'vim' (synonym)")
+
+	runner.Test("Synonym 'vim' surfaces external-edit", func() bool {
+		return runner.Contains("external-edit")
+	})
+
+	runner.SendKeys("Escape")
+	runner.Sleep(200 * time.Millisecond)
+
 	// Test: Save command shows filename prompt
 	runner.SendKeys("C-]")
 	runner.Sleep(100 * time.Millisecond)
@@ -2736,16 +2754,25 @@ func TestTUI(t *testing.T) {
 	runner.SendKeys("C-]")
 	runner.Sleep(100 * time.Millisecond)
 	runner.SendKeys("e")
-	// ExecProcess suspends bubbletea, runs the stub (instant), then
-	// resumes — followed by reading the file and SaveChanges to Dyalog.
-	runner.WaitForIdle(5 * time.Second)
+	// ExecProcess suspends bubbletea, runs the stub, then resumes; the
+	// externalEditFinishedMsg flows into Update which reads the file and
+	// sends SaveChanges. Wait for the new body to render in the pane —
+	// this is the signal that the whole round-trip in gritt completed.
+	// (Don't press Escape until SaveChanges is *acked* — pressing it
+	// while w.Modified is still true would send CloseWindow before the
+	// save round-trips and Dyalog would discard the changes.)
+	runner.WaitFor("r←⎕TS", 5*time.Second)
 	runner.Snapshot("After leader+e (external-edit returned)")
 
 	runner.Test("Editor pane shows externally-edited body", func() bool {
 		return runner.Contains("r←⎕TS")
 	})
 
-	// Close the editor (no further changes — already saved by external-edit).
+	// The title shows "* extFn" while Modified is true; the "*" goes
+	// away when ReplySaveChanges arrives.
+	runner.WaitForNot("* extFn", 3*time.Second)
+
+	// Close the editor (now unmodified — no second SaveChanges fires).
 	runner.SendKeys("Escape")
 	runner.Sleep(500 * time.Millisecond)
 	runner.Test("extFn editor closes after Escape", func() bool {
