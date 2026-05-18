@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cursork/gritt/docs"
 	"github.com/cursork/gritt/uitest"
 )
 
@@ -41,23 +42,38 @@ func TestTUI(t *testing.T) {
 		t.Fatalf("Failed to build gritt: %v", err)
 	}
 
-	// Setup docs database for test environment (tmux runs with HOME=/tmp)
-	// Symlink the real docs DB to the test cache dir if it exists
-	realDocsDB := cachePath("dyalog-docs.db")
-	// With HOME=/tmp, UserCacheDir returns /tmp/Library/Caches on macOS
-	testCacheDir := "/tmp/Library/Caches/gritt"
+	// Setup docs database for test environment. tmux launches gritt with
+	// HOME=/tmp, so the DB must live at whatever UserCacheDir() resolves
+	// to under that HOME — which is OS-specific (/tmp/Library/Caches on
+	// macOS, /tmp/.cache on Linux). Compute it by temporarily faking
+	// HOME=/tmp in this process.
+	origHome := os.Getenv("HOME")
+	os.Setenv("HOME", "/tmp")
+	testCacheBase, _ := os.UserCacheDir()
+	os.Setenv("HOME", origHome)
+	testCacheDir := filepath.Join(testCacheBase, "gritt")
 	testDocsDB := filepath.Join(testCacheDir, "dyalog-docs.db")
+	os.MkdirAll(testCacheDir, 0755)
 
+	// Prefer symlinking the developer's local DB (fast, no network).
+	// If unavailable (CI cold-checkout), fetch the real DB via the docs
+	// package — same path the runtime uses on first launch.
+	realDocsDB := cachePath("dyalog-docs.db")
 	if _, err := os.Stat(realDocsDB); err == nil {
-		os.MkdirAll(testCacheDir, 0755)
-		os.Remove(testDocsDB) // Remove old symlink if exists
+		os.Remove(testDocsDB)
 		if err := os.Symlink(realDocsDB, testDocsDB); err != nil {
 			t.Logf("Warning: could not symlink docs DB: %v", err)
 		} else {
-			t.Logf("Docs DB symlinked to %s", testDocsDB)
+			t.Logf("Docs DB symlinked: %s → %s", testDocsDB, realDocsDB)
 		}
-	} else {
-		t.Logf("Docs DB not found at %s - docs tests will verify no-db behavior", realDocsDB)
+	} else if _, err := os.Stat(testDocsDB); err != nil {
+		t.Logf("Docs DB not found locally; fetching to %s...", testDocsDB)
+		os.Setenv("HOME", "/tmp")
+		err := docs.RefreshCache()
+		os.Setenv("HOME", origHome)
+		if err != nil {
+			t.Logf("Warning: docs DB fetch failed: %v — doc tests will likely fail", err)
+		}
 	}
 
 	// Create test I-beams CSV (tests generate their own fixtures)

@@ -31,18 +31,24 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: dyalog/dyalog:latest
-      # Run as root so we can apt-get install the extras the test
+      # --user root: so we can apt-get install the extras the test
       # harness needs; the image's default `dyalog` user can't.
-      options: --user root
+      # --init: inject tini as PID 1 so orphaned children of test
+      # helpers get reaped. Without it, kill_wait_test.go fails
+      # because `processAlive` (= `kill(-PG, 0)`) returns true on
+      # unreaped zombies. See CLAUDE.md "Running CI locally".
+      options: --user root --init
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install tmux + zsh
+      - name: Install tmux + zsh + nodejs
         # tmux is the TUI test runner's pty host; zsh is the shebang
-        # for grittles/aplsock/test.sh.
+        # for grittles/aplsock/test.sh; nodejs is needed by JS-based
+        # actions (setup-go@v5) when running under act — real GH
+        # auto-mounts a node binary into containers, act doesn't.
         run: |
           apt-get update -q
-          apt-get install -qy tmux zsh
+          apt-get install -qy tmux zsh nodejs
 
       - uses: actions/setup-go@v5
         with:

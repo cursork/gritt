@@ -144,6 +144,30 @@ Running `go test` generates reports in `test-reports/`:
 
 Use the **text reports** for debugging test failures - they contain the same snapshots without HTML formatting.
 
+### Running CI locally (act + OrbStack)
+
+The `.github/workflows/test.yml` GitHub Actions workflow can be reproduced locally with [`act`](https://github.com/nektos/act), routed through [OrbStack](https://orbstack.dev/) so all container activity is isolated from the host Docker daemon.
+
+```bash
+brew install act
+brew install --cask orbstack
+open -a OrbStack          # starts OrbStack's Linux VM + Docker daemon
+
+act -j go                 # run the Dyalog-free 'go' job
+act -j dyalog             # run the full job inside dyalog/dyalog:latest
+```
+
+`~/Library/Application Support/act/actrc` should contain:
+
+```
+-P ubuntu-latest=catthehacker/ubuntu:act-latest
+--container-options=--init
+```
+
+**Why `--init`** — catthehacker's runner container uses bash as PID 1, which doesn't reap orphaned processes. Without `--init` (which adds tini-style init), `kill_wait_test.go` fails: the test helper's `sh -c '... while :; do sleep 1; done'` leaves a zombie `sleep` in the process group when SIGKILLed, and `processAlive(cmd)` uses `kill(-PG, 0)` which falsely reports the zombie as alive. The production code uses `dyalogStillRunning` (Wait-aware) for the same reason — see comment on `tui.go:295`.
+
+Real GH `ubuntu-latest` runners are full Ubuntu VMs with systemd, so `--init` isn't needed there. It's purely an act/container-environment concern.
+
 ## CLI Usage
 
 ```bash

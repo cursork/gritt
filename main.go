@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -193,6 +194,11 @@ func main() {
 	var logWriter *os.File
 	if *logFile != "" {
 		var err error
+		if dir := filepath.Dir(*logFile); dir != "" && dir != "." {
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				log.Fatalf("Failed to create log dir %q: %v", dir, err)
+			}
+		}
 		logWriter, err = os.OpenFile(*logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err != nil {
 			log.Fatalf("Failed to open log file: %v", err)
