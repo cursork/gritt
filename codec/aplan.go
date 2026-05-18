@@ -568,6 +568,40 @@ func cellShape(value any) []int {
 	}
 }
 
+// NestRows reshapes an *Array whose Data is row-major flat (the
+// convention amicable.Unmarshal produces for rank ≥ 2) into the
+// nested-rows convention codec.APLAN parses to (Data[i] is the i-th
+// row slice). Other values pass through unchanged.
+//
+// Use at boundaries where flat-Data input must reach a consumer that
+// expects nested rows (e.g. the data browser). Doesn't recurse —
+// nested arrays/namespaces inside Data aren't touched, so callers
+// drilling into compound members may need to NestRows again.
+//
+// Mutates and returns the input Array.
+func NestRows(v any) any {
+	arr, ok := v.(*Array)
+	if !ok || len(arr.Shape) < 2 {
+		return v
+	}
+	rows := arr.Shape[0]
+	cells := 1
+	for _, s := range arr.Shape[1:] {
+		cells *= s
+	}
+	if rows*cells != len(arr.Data) {
+		return v
+	}
+	nested := make([]any, rows)
+	for r := 0; r < rows; r++ {
+		row := make([]any, cells)
+		copy(row, arr.Data[r*cells:(r+1)*cells])
+		nested[r] = row
+	}
+	arr.Data = nested
+	return arr
+}
+
 // flattenValue recursively flattens a value to a 1D slice.
 func flattenValue(value any) []any {
 	switch v := value.(type) {

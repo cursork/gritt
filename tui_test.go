@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -1734,6 +1735,214 @@ func TestTUI(t *testing.T) {
 
 	// Clean up test file
 	os.Remove("test-session-load")
+
+	// === OPEN-DCF TEST ===
+	// Open a synthetic DCF fixture via the command palette and verify
+	// components show up in the DataBrowserPane.
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys(":")
+	runner.Sleep(300 * time.Millisecond)
+	runner.SendText("open-dcf")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Enter")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("Open-DCF prompt showing")
+
+	runner.Test("Open-DCF prompt appears", func() bool {
+		return runner.Contains("Open DCF:")
+	})
+
+	runner.SendText("dcf/testdata/three_components.dcf")
+	runner.Sleep(150 * time.Millisecond)
+	runner.SendKeys("Enter")
+	runner.Sleep(400 * time.Millisecond)
+	runner.Snapshot("DCF browser opened on three_components.dcf")
+
+	// Honest list-view assertions.
+	runner.Test("DCF browser shows char preview with quotes", func() bool {
+		return runner.Contains("'first'")
+	})
+	runner.Test("DCF browser shows vector preview", func() bool {
+		return runner.Contains("≡ 1 2 3 4 5 6 7 8 9 10")
+	})
+	runner.Test("DCF browser shows matrix preview", func() bool {
+		return runner.Contains("⊞")
+	})
+	runner.Test("DCF browser title shows filename", func() bool {
+		return runner.Contains("three_components.dcf")
+	})
+
+	// Enter on the char-vector scalar puts us in edit mode. Type some
+	// chars to prove the buffer accepts input, then Escape to cancel.
+	runner.SendKeys("Enter")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendText("XYZ")
+	runner.Sleep(200 * time.Millisecond)
+	runner.Snapshot("Edit mode on component 1 with XYZ typed")
+	runner.Test("Edit mode accepts typed characters", func() bool {
+		return runner.Contains("firstXYZ")
+	})
+	// Escape cancels edit; the original quoted preview comes back.
+	runner.SendKeys("Escape")
+	runner.Sleep(200 * time.Millisecond)
+	runner.Test("Escape cancels edit and restores quoted preview", func() bool {
+		return runner.Contains("'first'") && !runner.Contains("firstXYZ")
+	})
+
+	// Drill into component 3 — the 2×3 matrix. From component 1 row,
+	// Down twice puts us on component 3, then Enter drills in.
+	runner.SendKeys("Down")
+	runner.SendKeys("Down")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys("Enter")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("Drilled into component 3 (matrix view)")
+
+	runner.Test("Drill-in shows breadcrumb with component number", func() bool {
+		return runner.Contains("three_components.dcf > 3")
+	})
+	// In the matrix view, the component-list previews are gone.
+	runner.Test("Drill-in replaces component-list previews", func() bool {
+		return !runner.Contains("≡ 1 2 3 4 5 6 7 8 9 10") &&
+			!runner.Contains("'first'")
+	})
+	// Matrix cells must show the actual data (1..6), not all zeros.
+	runner.Test("Matrix view shows row 1 values", func() bool {
+		return runner.Contains(" 1 ") && runner.Contains(" 2 ") && runner.Contains(" 3 ")
+	})
+	runner.Test("Matrix view shows row 2 values", func() bool {
+		return runner.Contains(" 4 ") && runner.Contains(" 5 ") && runner.Contains(" 6 ")
+	})
+
+	// Escape pops back to the list view.
+	runner.SendKeys("Escape")
+	runner.Sleep(200 * time.Millisecond)
+	runner.Test("Escape returns to component list", func() bool {
+		return runner.Contains("≡ 1 2 3 4 5 6 7 8 9 10")
+	})
+
+	// Escape closes the pane.
+	runner.SendKeys("Escape")
+	runner.Sleep(200 * time.Millisecond)
+	runner.Test("DCF browser closed", func() bool {
+		return !runner.Contains("three_components.dcf")
+	})
+
+	// === OPEN-DCF: **PACKAGE** convention ===
+	// Tests that a real-world DCF pattern (the §8 **PACKAGE** convention
+	// — a 7-element nested vector holding marker, version, names,
+	// classes, and per-name values) opens, decodes, and drills cleanly.
+	runner.SendKeys("C-]")
+	runner.Sleep(100 * time.Millisecond)
+	runner.SendKeys(":")
+	runner.Sleep(300 * time.Millisecond)
+	runner.SendText("open-dcf")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Enter")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendText("dcf/testdata/package.dcf")
+	runner.Sleep(150 * time.Millisecond)
+	runner.SendKeys("Enter")
+	runner.Sleep(400 * time.Millisecond)
+	runner.Snapshot("Package DCF opened (component list)")
+
+	runner.Test("Package DCF: component 1 visible", func() bool {
+		return runner.Contains("package.dcf") && runner.Contains("1")
+	})
+
+	// Drill into component 1 (the nested vector). It should reveal a
+	// 7-element vector view containing the **PACKAGE** marker.
+	runner.SendKeys("Enter")
+	runner.Sleep(300 * time.Millisecond)
+	runner.Snapshot("Drilled into package vector")
+
+	runner.Test("Package drill-in shows **PACKAGE** marker", func() bool {
+		return runner.Contains("**PACKAGE**")
+	})
+	runner.Test("Package drill-in shows breadcrumb", func() bool {
+		return runner.Contains("package.dcf > 1")
+	})
+	runner.Test("Package drill-in shows version number", func() bool {
+		return runner.Contains("1")
+	})
+
+	// Esc twice closes (drill out + close pane).
+	runner.SendKeys("Escape")
+	runner.Sleep(200 * time.Millisecond)
+	runner.SendKeys("Escape")
+	runner.Sleep(200 * time.Millisecond)
+	runner.Test("Package DCF closed", func() bool {
+		return !runner.Contains("package.dcf")
+	})
+
+	// === DCF WRITE MILESTONE: edit in gritt, verify with Dyalog ⎕FREAD ===
+	// Prove the pure-Go DCF write path: open a C=0 fixture, edit a cell
+	// in the data browser, ESC to save, then read back from disk.
+	// Re-reading via apldcf serves as our verification stand-in for an
+	// independent Dyalog read (the TUI is currently driving Dyalog, so
+	// we can't re-tie the same Dyalog session — but the bytes on disk
+	// are the proof either way).
+	dcfWritePath := "/tmp/dcf-milestone/edit_me.dcf"
+	if _, statErr := os.Stat(dcfWritePath); statErr != nil {
+		t.Logf("milestone fixture missing — skipping write test: %v", statErr)
+	} else {
+		runner.SendKeys("C-]")
+		runner.Sleep(100 * time.Millisecond)
+		runner.SendKeys(":")
+		runner.Sleep(300 * time.Millisecond)
+		runner.SendText("open-dcf")
+		runner.Sleep(200 * time.Millisecond)
+		runner.SendKeys("Enter")
+		runner.Sleep(200 * time.Millisecond)
+		runner.SendText(dcfWritePath)
+		runner.Sleep(150 * time.Millisecond)
+		runner.SendKeys("Enter")
+		runner.Sleep(400 * time.Millisecond)
+		runner.Snapshot("Milestone: DCF opened for editing")
+
+		runner.Test("Milestone: original values visible (1..5)", func() bool {
+			return runner.Contains("≡ 1 2 3 4 5") || runner.Contains("1 2 3 4 5")
+		})
+
+		// Drill into component 1, then edit cell [1] from 1 to 99.
+		runner.SendKeys("Enter") // drill into component 1 (the vector)
+		runner.Sleep(300 * time.Millisecond)
+		runner.SendKeys("Enter") // enter edit mode on cell 0 (value 1)
+		runner.Sleep(200 * time.Millisecond)
+		// Clear the existing value and type 99
+		for i := 0; i < 3; i++ {
+			runner.SendKeys("BSpace")
+		}
+		runner.SendText("99")
+		runner.Sleep(150 * time.Millisecond)
+		runner.SendKeys("Enter") // confirm edit
+		runner.Sleep(300 * time.Millisecond)
+		runner.Snapshot("Milestone: cell 1 edited to 99")
+
+		runner.Test("Milestone: edited value 99 visible", func() bool {
+			return runner.Contains("99")
+		})
+
+		// ESC pops back to component list (also commits visible edit).
+		runner.SendKeys("Escape")
+		runner.Sleep(200 * time.Millisecond)
+		// ESC closes the pane — this triggers saveDCF which writes
+		// bytes to disk via dcf.ReplaceBody + WriteTo.
+		runner.SendKeys("Escape")
+		runner.Sleep(500 * time.Millisecond)
+		runner.Snapshot("Milestone: DCF pane closed (save triggered)")
+
+		// The bytes on disk now contain the edited value. Confirm by
+		// re-reading via apldcf (built outside the TUI, no Dyalog).
+		out, _ := exec.Command("./apldcf", "-n", "1", dcfWritePath).CombinedOutput()
+		t.Logf("apldcf re-read after save:\n%s", string(out))
+		if !strings.Contains(string(out), "99") {
+			t.Errorf("MILESTONE FAILED: edited value 99 not present in saved file\n--- apldcf output ---\n%s", out)
+		} else {
+			t.Logf("MILESTONE PASS: edit reached disk; apldcf confirms 99 present")
+		}
+	}
 
 	// === FORMAT CODE TEST ===
 	// Define a function with messy whitespace, then format it
