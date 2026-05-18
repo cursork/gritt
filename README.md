@@ -220,10 +220,14 @@ The old `keys` + `tracer_keys` format is automatically migrated on load. See [KE
 ## Testing
 
 ```bash
-go test -v -run TestTUI
+make test          # full suite: go test + grittles/aplsock/test.sh
+make test-go       # just go test -v ./...
+make test-aplsock  # just the aplsock protocol test
 ```
 
-Requires Dyalog and tmux. Tests run in a tmux session and generate HTML reports with screenshots in `test-reports/`.
+Requires Dyalog and tmux. The Go suite runs in a tmux session and generates HTML reports with screenshots in `test-reports/`.
+
+CI runs both jobs (`go` without Dyalog, `dyalog` inside the `dyalog/dyalog` container) on every push and PR via `.github/workflows/test.yml`. See CLAUDE.md "Running CI locally" for reproducing the workflow on your machine with `act` + OrbStack.
 
 ## Debugging
 

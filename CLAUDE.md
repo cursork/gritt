@@ -164,9 +164,15 @@ act -j dyalog             # run the full job inside dyalog/dyalog:latest
 --container-options=--init
 ```
 
-**Why `--init`** — catthehacker's runner container uses bash as PID 1, which doesn't reap orphaned processes. Without `--init` (which adds tini-style init), `kill_wait_test.go` fails: the test helper's `sh -c '... while :; do sleep 1; done'` leaves a zombie `sleep` in the process group when SIGKILLed, and `processAlive(cmd)` uses `kill(-PG, 0)` which falsely reports the zombie as alive. The production code uses `dyalogStillRunning` (Wait-aware) for the same reason — see comment on `tui.go:295`.
+**Why `--init`** — catthehacker's runner container (and `dyalog/dyalog`) uses bash as PID 1, which doesn't reap orphaned processes. Without `--init` (which adds tini-style init), `kill_wait_test.go` fails: the test helper's `sh -c '... while :; do sleep 1; done'` leaves a zombie `sleep` in the process group when SIGKILLed, and `processAlive(cmd)` uses `kill(-PG, 0)` which falsely reports the zombie as alive. The production code uses `dyalogStillRunning` (Wait-aware) for the same reason — see comment on `tui.go:295`.
 
-Real GH `ubuntu-latest` runners are full Ubuntu VMs with systemd, so `--init` isn't needed there. It's purely an act/container-environment concern.
+Real GH `ubuntu-latest` runners are full Ubuntu VMs with systemd, so `--init` isn't needed for the `go` job. The `dyalog` job uses `container: dyalog/dyalog:latest` and needs `--init` in its `options:` (already set in `test.yml`).
+
+**Why `nodejs` in the `dyalog` job's apt install** — JS-based actions (`actions/setup-go@v5`, `actions/checkout@v4`) need a `node` binary inside the container. Real GH auto-mounts node into any container automatically; act doesn't. The catthehacker image used by the `go` job ships node; the `dyalog/dyalog` image doesn't, so the workflow installs it explicitly.
+
+**Docs DB in CI** — TestTUI's setup symlinks the developer's local docs DB into the test cache when available; on cold checkout (CI) it calls `docs.RefreshCache()` to fetch from GitHub. The test computes the right cache path by temporarily setting `HOME=/tmp` (so `os.UserCacheDir()` resolves to `/tmp/Library/Caches` on macOS, `/tmp/.cache` on Linux — matching what tmux launches gritt with).
+
+**Known deferred failure** — in the `dyalog` job (real GH and act both), TestTUI's tracer tests fail because Dyalog inside the `dyalog/dyalog` container declines to send `OpenWindow {debugger:1}` on breakpoint hit. See FACIENDA "CI: tracer pane doesn't open in `dyalog/dyalog` container" for the diagnostic state.
 
 ## CLI Usage
 
