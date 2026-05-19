@@ -325,7 +325,9 @@ func (d *DataBrowserPane) getMatrixCell(m *codec.Array, row, col int) any {
 		}
 		return 0
 	}
-	// 2D+: Data[row] is a []any of columns
+	// 2D+: Data[row] is a []any of columns. The data browser expects
+	// the nested-row convention; callers feeding it a different layout
+	// (e.g. amicable's flat row-major) must reshape at the bridge.
 	if row < len(m.Data) {
 		if rowSlice, ok := m.Data[row].([]any); ok && col < len(rowSlice) {
 			return rowSlice[col]

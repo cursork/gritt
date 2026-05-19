@@ -371,6 +371,10 @@ func buildCommands(cfg *Config) *CommandRegistry {
 		m.loadSession()
 		return *m, nil
 	})
+	reg.add("open-dcf", "Open Dyalog component file (.dcf)", false, "", func(m *Model) (tea.Model, tea.Cmd) {
+		m.openDCF()
+		return *m, nil
+	})
 	reg.add("save-config", "Save current config to disk", false, "", func(m *Model) (tea.Model, tea.Cmd) {
 		m.saveConfig()
 		return *m, nil
@@ -495,6 +499,7 @@ func buildCommands(cfg *Config) *CommandRegistry {
 	reg.alias("cache-refresh", "reload", "update-cache", "redownload")
 	reg.alias("save", "write", "export", "dump")
 	reg.alias("load", "open", "import", "restore")
+	reg.alias("open-dcf", "dcf", "component-file", "ftie")
 	reg.alias("format", "pretty", "indent", "beautify", "prettify")
 	reg.alias("localise", "scope")
 	reg.alias("autolocalise", "auto-scope")

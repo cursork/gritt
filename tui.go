@@ -21,6 +21,7 @@ import (
 	"github.com/charmbracelet/x/cellbuf"
 	"github.com/cursork/gritt/aplcart"
 	"github.com/cursork/gritt/codec"
+	"github.com/cursork/gritt/dcf"
 	"github.com/cursork/gritt/docs"
 	"github.com/cursork/gritt/ride"
 	_ "modernc.org/sqlite"
@@ -157,6 +158,10 @@ type Model struct {
 	loadPromptFilename string
 	loadPromptDefault  string // most recent session-* file
 	loadPromptCustom   bool   // true once user starts typing
+
+	// open-dcf prompt state
+	dcfPromptActive   bool
+	dcfPromptFilename string
 
 	// Config save prompt: 'l' for local, 'g' for global
 	configSavePromptActive bool
@@ -843,6 +848,33 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Handle open-dcf prompt
+	if m.dcfPromptActive {
+		switch msg.Type {
+		case tea.KeyEscape:
+			m.dcfPromptActive = false
+			m.dcfPromptFilename = ""
+			m.log("Open DCF cancelled")
+			return m, nil
+		case tea.KeyEnter:
+			m.dcfPromptActive = false
+			path := m.dcfPromptFilename
+			m.dcfPromptFilename = ""
+			m.doOpenDCF(path)
+			return m, nil
+		case tea.KeyBackspace:
+			if len(m.dcfPromptFilename) > 0 {
+				m.dcfPromptFilename = m.dcfPromptFilename[:len(m.dcfPromptFilename)-1]
+			}
+			return m, nil
+		default:
+			if len(msg.Runes) > 0 {
+				m.dcfPromptFilename += string(msg.Runes)
+			}
+			return m, nil
+		}
+	}
+
 	// Handle config save prompt
 	if m.configSavePromptActive {
 		m.configSavePromptActive = false
@@ -958,18 +990,21 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				if m.tracerCurrent != 0 {
 					m.closeEditor(m.tracerCurrent)
 				}
-			} else if strings.HasPrefix(fp.ID, "editor:") {
-				// Data browser: handle Esc for editing, stack popping, or close
-				if db, ok := fp.Content.(*DataBrowserPane); ok {
-					if db.editing {
-						db.cancelEdit()
-						return m, nil
-					}
-					if len(db.stack) > 1 {
-						db.drillOut()
-						return m, nil
-					}
-					// At root — close the data browser
+			} else if db, ok := fp.Content.(*DataBrowserPane); ok {
+				// Data browser: handle Esc for editing, stack popping, or close.
+				// Dispatch by content type so this covers both Dyalog-editor-
+				// backed browsers (`editor:N` ID) and standalone browsers like
+				// the DCF viewer (`dcf:<path>` ID).
+				if db.editing {
+					db.cancelEdit()
+					return m, nil
+				}
+				if len(db.stack) > 1 {
+					db.drillOut()
+					return m, nil
+				}
+				// At root — close.
+				if strings.HasPrefix(fp.ID, "editor:") {
 					var token int
 					fmt.Sscanf(fp.ID, "editor:%d", &token)
 					if db.modified && !db.Discard {
@@ -984,14 +1019,24 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 						}
 						m.closeEditor(token) // save then close
 					} else {
-						// Unmodified, or close-discard requested: remove pane
-						// locally and send CloseWindow without saving.
 						m.panes.Remove(fp.ID)
 						delete(m.editors, token)
 						m.sendCloseWindow(token)
 					}
-					return m, nil
+				} else if strings.HasPrefix(fp.ID, "dcf:") {
+					// DCF browser. If the user edited values, persist via
+					// dcf.ReplaceBody before removing the pane.
+					path := strings.TrimPrefix(fp.ID, "dcf:")
+					if db.modified && !db.Discard {
+						m.saveDCF(path, db.root)
+					}
+					m.panes.Remove(fp.ID)
+				} else {
+					// Standalone browser (other) — no Dyalog window to close.
+					m.panes.Remove(fp.ID)
 				}
+				return m, nil
+			} else if strings.HasPrefix(fp.ID, "editor:") {
 				// Regular editor pane
 				var token int
 				fmt.Sscanf(fp.ID, "editor:%d", &token)
@@ -3037,6 +3082,145 @@ func (m *Model) doLoadSession() {
 	m.log("Loaded %d lines from %s", len(lines), filename)
 }
 
+func (m *Model) openDCF() {
+	m.dcfPromptFilename = ""
+	m.dcfPromptActive = true
+}
+
+func (m *Model) doOpenDCF(path string) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		m.log("Open DCF cancelled (no path)")
+		return
+	}
+	f, err := dcf.Open(path)
+	if err != nil {
+		m.transientErr = fmt.Sprintf("DCF open failed: %v", err)
+		m.log("DCF open failed: %v", err)
+		return
+	}
+	defer f.Close()
+
+	cs := f.Components()
+	if len(cs) == 0 {
+		m.transientErr = "DCF has no components"
+		m.log("DCF %s has no components", path)
+		return
+	}
+
+	// Surface partial-scan: when fewer components were found than the
+	// header advertises, the file probably uses an older on-disk
+	// layout we don't fully support. Don't fail — show what we have,
+	// but make the gap visible.
+	h := f.Header()
+	expected := int(h.NextFree) - int(h.FirstUsed)
+	if len(cs) < expected {
+		m.transientErr = fmt.Sprintf("DCF: only %d of %d components readable (older format?)", len(cs), expected)
+		m.log("DCF %s: %d of %d components readable", path, len(cs), expected)
+	}
+
+	// Synthesise a namespace so DataBrowserPane treats components as
+	// drillable keys. Keys are stringified component numbers; values
+	// are the parsed bodies.
+	ns := &codec.Namespace{
+		Keys:   make([]string, 0, len(cs)),
+		Values: make(map[string]any, len(cs)),
+	}
+	for _, c := range cs {
+		key := fmt.Sprintf("%d", c.Number)
+		v, err := f.Read(c.Number)
+		if err != nil {
+			ns.Keys = append(ns.Keys, key)
+			ns.Values[key] = codec.Raw(fmt.Sprintf("⍝ read error: %v", err))
+			continue
+		}
+		// dcf.Read returns amicable's convention (flat row-major Data
+		// for rank ≥ 2). The data browser expects codec.APLAN's nested-
+		// rows convention — convert explicitly at the bridge.
+		ns.Keys = append(ns.Keys, key)
+		ns.Values[key] = codec.NestRows(v)
+	}
+
+	name := filepath.Base(path)
+	paneID := fmt.Sprintf("dcf:%s", path)
+	browser := NewDataBrowserPane(name, ns, func() {
+		m.panes.Remove(paneID)
+	})
+
+	paneW := min(m.width-4, 60)
+	paneH := min(m.height-6, 20)
+	if paneW < 30 {
+		paneW = 30
+	}
+	if paneH < 10 {
+		paneH = 10
+	}
+	paneX := (m.width - paneW) / 2
+	paneY := (m.height - paneH) / 2
+
+	m.panes.Add(NewPane(paneID, browser, paneX, paneY, paneW, paneH))
+	m.panes.Focus(paneID)
+	m.log("Opened DCF: %s (%d components)", path, len(cs))
+}
+
+// saveDCF persists modifications made in a DCF data-browser pane back
+// to disk. Re-opens the file, marshals each component value to body
+// bytes, calls dcf.ReplaceBody, and writes the result. Surfaces any
+// per-component failure as a transient status-line error.
+//
+// Today this only handles same-type same-size replaces (the option-2
+// scope). Type or shape changes are caught by ReplaceBody's length
+// check and surfaced as an error.
+func (m *Model) saveDCF(path string, root any) {
+	ns, ok := root.(*codec.Namespace)
+	if !ok {
+		m.transientErr = "DCF save: unexpected root type"
+		return
+	}
+	f, err := dcf.Open(path)
+	if err != nil {
+		m.transientErr = fmt.Sprintf("DCF save reopen failed: %v", err)
+		return
+	}
+	defer f.Close()
+
+	var lastErr error
+	written := 0
+	for _, key := range ns.Keys {
+		var n int
+		if _, scanErr := fmt.Sscanf(key, "%d", &n); scanErr != nil {
+			continue
+		}
+		val := ns.Values[key]
+		body, err := dcf.MarshalBody(val)
+		if err != nil {
+			lastErr = fmt.Errorf("comp %d marshal: %w", n, err)
+			continue
+		}
+		if err := f.ReplaceBody(n, body); err != nil {
+			lastErr = fmt.Errorf("comp %d replace: %w", n, err)
+			continue
+		}
+		written++
+	}
+	if written == 0 {
+		if lastErr != nil {
+			m.transientErr = fmt.Sprintf("DCF save: %v", lastErr)
+		} else {
+			m.transientErr = "DCF save: nothing written"
+		}
+		return
+	}
+	if err := f.WriteTo(path); err != nil {
+		m.transientErr = fmt.Sprintf("DCF save: write failed: %v", err)
+		return
+	}
+	m.log("DCF saved: %s (%d components)", path, written)
+	if lastErr != nil {
+		m.transientErr = fmt.Sprintf("DCF saved %d (with errors: %v)", written, lastErr)
+	}
+}
+
 func (m *Model) saveConfig() {
 	localPath := "gritt.json"
 	globalPath := filepath.Join(os.Getenv("HOME"), ".config", "gritt", "gritt.json")
@@ -3644,6 +3828,9 @@ func (m Model) View() string {
 		} else {
 			helpView = promptStyle.Render("Load: ") + dimStyle.Render("no session files found")
 		}
+	} else if m.dcfPromptActive {
+		promptStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("82")).Bold(true)
+		helpView = promptStyle.Render("Open DCF: ") + m.dcfPromptFilename + cursorStyle.Render(" ")
 	} else if m.configSavePromptActive {
 		promptStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("82")).Bold(true)
 		dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
