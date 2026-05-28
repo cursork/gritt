@@ -1721,8 +1721,13 @@ func TestTUI(t *testing.T) {
 	runner.SendKeys("Enter")
 	runner.Sleep(200 * time.Millisecond)
 
-	// Type third line
+	// Type third line, then Enter to terminate it. Without this Enter the
+	// buffer treats ml3 as an incomplete in-progress line; on toggle-off
+	// only ml1 and ml2 get flushed, ml3 is dropped, and the subsequent
+	// `ml3` query VALUE-ERRORs. Locally the race is forgiving; in the
+	// container CI it bites every time.
 	runner.SendText("ml3←ml1+ml2")
+	runner.SendKeys("Enter")
 	runner.Sleep(200 * time.Millisecond)
 	runner.Snapshot("Multiline with 3 lines")
 
@@ -1741,9 +1746,13 @@ func TestTUI(t *testing.T) {
 		return !runner.Contains("[ML]")
 	})
 
-	// Verify the expressions executed — ml3 should be 30
+	// Verify the expressions executed — ml3 should be 30. Wait for the
+	// literal "30" rather than WaitForIdle so the assertion is
+	// deterministic: WaitForIdle returns at the first SetPromptType=1
+	// from the multiline drain, which may arrive before all three
+	// expressions have actually executed.
 	runner.SendLine("ml3")
-	runner.WaitForIdle(3 * time.Second)
+	runner.WaitFor("30", 5*time.Second)
 
 	runner.Test("Multiline execution produced correct result", func() bool {
 		return runner.Contains("30")
