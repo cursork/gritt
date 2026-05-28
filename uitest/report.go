@@ -20,10 +20,17 @@ type Report struct {
 	currentIdx int
 }
 
-// TestResult represents a single test result
+// TestResult represents a single test result. A test is in exactly one of
+// three states: passed, failed, or skipped. Skipped means a capability the
+// test depends on isn't available in this environment (e.g. the Dyalog
+// interpreter declines to emit OpenWindow{debugger:1}); the assertion was
+// never run, so it's neither a pass nor a fail. SkipReason names the
+// capability so a green-with-skips report is visibly different from all-green.
 type TestResult struct {
 	Name        string
 	Passed      bool
+	Skipped     bool
+	SkipReason  string
 	SnapshotIdx int // Index of related snapshot (-1 if none)
 }
 
@@ -50,6 +57,19 @@ func (r *Report) AddResult(name string, passed bool) {
 	r.Tests = append(r.Tests, TestResult{Name: name, Passed: passed, SnapshotIdx: snapIdx})
 }
 
+// AddSkip records a test that was skipped because a required capability
+// isn't available in this environment. Skipped tests count separately from
+// passes and failures.
+func (r *Report) AddSkip(name, reason string) {
+	snapIdx := len(r.Snapshots) - 1
+	if snapIdx < 0 {
+		snapIdx = -1
+	}
+	r.Tests = append(r.Tests, TestResult{
+		Name: name, Skipped: true, SkipReason: reason, SnapshotIdx: snapIdx,
+	})
+}
+
 // AddSnapshot adds a screen snapshot
 func (r *Report) AddSnapshot(label string, content string) {
 	r.Snapshots = append(r.Snapshots, Snapshot{Label: label, Content: content})
@@ -66,9 +86,34 @@ func (r *Report) Passed() int {
 	return count
 }
 
-// Failed returns count of failed tests
+// Skipped returns count of tests that were skipped due to missing capability
+func (r *Report) Skipped() int {
+	count := 0
+	for _, t := range r.Tests {
+		if t.Skipped {
+			count++
+		}
+	}
+	return count
+}
+
+// Failed returns count of failed tests (neither passed nor skipped)
 func (r *Report) Failed() int {
-	return len(r.Tests) - r.Passed()
+	return len(r.Tests) - r.Passed() - r.Skipped()
+}
+
+// SkipReasons returns unique skip reasons in the order first seen.
+// Used in the report header so a green-with-skips report announces *why*.
+func (r *Report) SkipReasons() []string {
+	seen := map[string]bool{}
+	var reasons []string
+	for _, t := range r.Tests {
+		if t.Skipped && t.SkipReason != "" && !seen[t.SkipReason] {
+			seen[t.SkipReason] = true
+			reasons = append(reasons, t.SkipReason)
+		}
+	}
+	return reasons
 }
 
 // ansiToHTML converts ANSI escape codes to HTML spans
@@ -156,15 +201,26 @@ func (r *Report) GenerateText() (string, error) {
 
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("=== gritt test report %s ===\n\n", r.Timestamp))
-	b.WriteString(fmt.Sprintf("Total: %d  Passed: %d  Failed: %d\n\n", len(r.Tests), r.Passed(), r.Failed()))
+	b.WriteString(fmt.Sprintf("Total: %d  Passed: %d  Failed: %d  Skipped: %d\n", len(r.Tests), r.Passed(), r.Failed(), r.Skipped()))
+	for _, reason := range r.SkipReasons() {
+		b.WriteString(fmt.Sprintf("  SKIP reason: %s\n", reason))
+	}
+	b.WriteString("\n")
 
 	b.WriteString("=== TESTS ===\n")
 	for _, t := range r.Tests {
 		status := "PASS"
-		if !t.Passed {
+		switch {
+		case t.Skipped:
+			status = "SKIP"
+		case !t.Passed:
 			status = "FAIL"
 		}
-		b.WriteString(fmt.Sprintf("[%s] %s\n", status, t.Name))
+		line := fmt.Sprintf("[%s] %s", status, t.Name)
+		if t.Skipped && t.SkipReason != "" {
+			line += fmt.Sprintf(" — %s", t.SkipReason)
+		}
+		b.WriteString(line + "\n")
 	}
 
 	b.WriteString("\n=== SNAPSHOTS ===\n")
@@ -194,9 +250,19 @@ func (r *Report) Generate() (string, error) {
 
 	statusClass := "pass"
 	statusText := "All tests passed"
-	if r.Failed() > 0 {
+	switch {
+	case r.Failed() > 0:
 		statusClass = "fail"
 		statusText = fmt.Sprintf("%d test(s) failed", r.Failed())
+	case r.Skipped() > 0:
+		statusClass = "skip"
+		statusText = fmt.Sprintf("All assertions passed — %d skipped (capability not available)", r.Skipped())
+	}
+
+	// Skip-reasons banner for the header
+	var skipReasonsHTML strings.Builder
+	for _, reason := range r.SkipReasons() {
+		skipReasonsHTML.WriteString(fmt.Sprintf(`<div class="skip-reason">SKIP: %s</div>`, html.EscapeString(reason)))
 	}
 
 	// Build test results list with links
@@ -204,16 +270,24 @@ func (r *Report) Generate() (string, error) {
 	for _, t := range r.Tests {
 		class := "pass"
 		symbol := "✓"
-		if !t.Passed {
+		switch {
+		case t.Skipped:
+			class = "skip"
+			symbol = "○"
+		case !t.Passed:
 			class = "fail"
 			symbol = "✗"
 		}
+		label := html.EscapeString(t.Name)
+		if t.Skipped && t.SkipReason != "" {
+			label += fmt.Sprintf(` <span class="skip-tag">(%s)</span>`, html.EscapeString(t.SkipReason))
+		}
 		if t.SnapshotIdx >= 0 {
 			testResults.WriteString(fmt.Sprintf(`<div class="result %s"><a href="#snap-%d">%s %s</a></div>
-`, class, t.SnapshotIdx, symbol, html.EscapeString(t.Name)))
+`, class, t.SnapshotIdx, symbol, label))
 		} else {
 			testResults.WriteString(fmt.Sprintf(`<div class="result %s">%s %s</div>
-`, class, symbol, html.EscapeString(t.Name)))
+`, class, symbol, label))
 		}
 	}
 
@@ -252,12 +326,15 @@ func (r *Report) Generate() (string, error) {
         }
         .summary.pass { border-left: 4px solid #00ff88; }
         .summary.fail { border-left: 4px solid #ff4444; }
+        .summary.skip { border-left: 4px solid #ffcc44; }
+        .skip-reason { color: #ffcc44; margin-top: 8px; font-size: 0.95em; }
         .stats { display: flex; gap: 30px; margin-top: 15px; }
         .stat { text-align: center; }
         .stat-value { font-size: 2em; font-weight: bold; }
         .stat-label { color: #888; font-size: 0.9em; }
         .stat-value.pass { color: #00ff88; }
         .stat-value.fail { color: #ff4444; }
+        .stat-value.skip { color: #ffcc44; }
         .result {
             padding: 8px 15px;
             margin: 5px 0;
@@ -267,6 +344,9 @@ func (r *Report) Generate() (string, error) {
         .result.pass a { color: #00ff88; text-decoration: none; }
         .result.fail { background: #3d1a1a; }
         .result.fail a { color: #ff4444; text-decoration: none; }
+        .result.skip { background: #3d3320; }
+        .result.skip a { color: #ffcc44; text-decoration: none; }
+        .skip-tag { color: #aa9933; font-size: 0.85em; }
         .result a:hover { text-decoration: underline; }
         .results-list { margin-bottom: 30px; }
         .snapshot {
@@ -299,6 +379,7 @@ func (r *Report) Generate() (string, error) {
 
     <div class="summary %s">
         <strong>%s</strong>
+        %s
         <div class="stats">
             <div class="stat">
                 <div class="stat-value">%d</div>
@@ -312,6 +393,10 @@ func (r *Report) Generate() (string, error) {
                 <div class="stat-value fail">%d</div>
                 <div class="stat-label">Failed</div>
             </div>
+            <div class="stat">
+                <div class="stat-value skip">%d</div>
+                <div class="stat-label">Skipped</div>
+            </div>
         </div>
     </div>
 
@@ -324,7 +409,7 @@ func (r *Report) Generate() (string, error) {
     %s
 </body>
 </html>
-`, r.Timestamp, r.Timestamp, statusClass, statusText, len(r.Tests), r.Passed(), r.Failed(), testResults.String(), snapshots.String())
+`, r.Timestamp, r.Timestamp, statusClass, statusText, skipReasonsHTML.String(), len(r.Tests), r.Passed(), r.Failed(), r.Skipped(), testResults.String(), snapshots.String())
 
 	if err := os.WriteFile(filename, []byte(htmlContent), 0644); err != nil {
 		return "", fmt.Errorf("failed to write report: %w", err)
