@@ -22,7 +22,13 @@ jobs:
           cache: true
       - run: go vet ./...
       - run: go build ./...
-      - run: go test -v ./...
+      - name: Install gotestsum
+        # Surfaces individual `--- FAIL: TestName` lines as GitHub
+        # annotations (::error::). Without this, a failing job shows
+        # only "Process completed with exit code 1" in the UI.
+        run: go install gotest.tools/gotestsum@latest
+      - name: go test
+        run: gotestsum --format=github-actions -- -v ./...
 
   # Full suite inside Dyalog's official image — runs TestTUI and the
   # shell-driven aplsock/test.sh. Slower (the image is ~1-2 GB) and
@@ -55,8 +61,10 @@ jobs:
           go-version: '1.25'
           cache: true
 
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@latest
       - name: go test (full suite incl. TestTUI)
-        run: go test -v ./...
+        run: gotestsum --format=github-actions -- -v ./...
 
       - name: aplsock protocol test
         run: bash grittles/aplsock/test.sh
