@@ -223,6 +223,20 @@ Go library for Dyalog's `220⌶` binary array serialization format. Named after 
 
 **Known limitations:** Multi-line dfns not yet tested. System functions beyond ⎕← and ⎕IO not mapped. Tradfn string literals not yet supported. Nested namespaces not tested. Embedded function members are extracted as opaque `Raw` bytes but can't yet be decompiled standalone — the namespace-embedded encoding differs from standalone `⎕OR` (different literal indices, tradfn-style bytecode structure). See `deliberanda/namespace-unmarshal.md`.
 
+## dcf package + apldcf grittle (new)
+
+Read-only library for Dyalog Component Files (`.dcf`), pure Go, no Dyalog dependency. Sits next to `amicable/` (220⌶) and `codec/` (APLAN).
+
+**API:** `dcf.Open(path)` returns `*File`. `File.Header()` exposes parsed metadata (version, FirstUsed/NextFree, CreatedAt). `File.Components()` returns `[]ComponentInfo` with `{Number, Offset, BlockSize, DR, Rank, Shape}` — types/shapes are peeked without full body decode. `File.Read(n)` deserialises component n's body via `amicable.Unmarshal` (envelope synthesis — the DCF on-disk array format omits the 220⌶ `DF A4` magic but is otherwise compatible, so we wrap and reuse amicable's decoder).
+
+**Format notes:** `adnotata/0013-dcf-outer-format.md`. AA 0E magic at offset 0, version byte at 2 (0x14 = v20), 64-bit pointer-size indicator at 6 (0xA4), FirstUsed u32 at 8, NextFree u32 at 0x10, creation timestamp (Unix seconds) at 0x78. Each component block has a per-file magic `A4 ?? ?? A4` at +4 (auto-detected at parse time — middle bytes vary by Dyalog version). Component scan is brute-force forward sweep + dedup by content fingerprint. v20 files clean; older v13 files have a different per-block metadata layout — degraded support, RE follow-up needed.
+
+**Grittle:** `grittles/apldcf/` — list components or dump them as APLAN. Usage: `apldcf path.dcf` (list), `apldcf -n 3 path.dcf` (dump component 3), `apldcf -all path.dcf` (dump everything).
+
+**Tests:** `dcf/testdata/` holds synthetic fixtures generated via `gritt -l -e "tie ← ⎕FCREATE 0"` etc. — `empty.dcf`, `one_char.dcf`, `one_int.dcf`, `three_components.dcf`, plus J=2/J=3 variants. Safe to commit; no private DCF content involved.
+
+**Pending:** TUI `:open-dcf` integration (sketch in FACIENDA), writes (`Append`/`Replace` — need to RE the per-component checksum and the journal-region management), proper v13 support, decoding the component directory in the file header for O(1) lookup.
+
 ## ibeam package + TUI pane (new)
 
 I-beam (⌶) lookup library at `ibeam/` with TUI pane integration. Two-tier search:
