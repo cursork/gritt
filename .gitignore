@@ -9,6 +9,10 @@ test-reports
 # Compiled grittle binaries (each shares its directory name)
 /grittles/aplanconv/aplanconv
 /grittles/aplcart/aplcart
+/grittles/apldap/apldap
+/grittles/apldap/extension/apldap
+/grittles/apldap/.dyalog.pid
+/grittles/apldap/.multapl.pid
 /grittles/apldocs/apldocs
 /grittles/aplfmt/aplfmt
 /grittles/aplmcp/aplmcp

@@ -192,6 +192,11 @@ var ErrNotLaunched = fmt.Errorf("session was not launched; cannot relaunch")
 // ErrSessionRestarted indicates the interpreter crashed and was relaunched.
 var ErrSessionRestarted = fmt.Errorf("interpreter crashed and was restarted; workspace state lost")
 
+// ErrInputRequested indicates the expression asked for session input
+// (⎕, ⍞ or multiline definition), which a non-interactive exec cannot
+// supply. Prompt types other than 1 mean "awaiting input", not "done".
+var ErrInputRequested = fmt.Errorf("expression requested session input")
+
 // Eval executes APL code and returns the output as a single string.
 // Input echo (type 14) is filtered. APL errors return *APLError.
 func (s *Session) Eval(ctx context.Context, code string) (string, error) {
@@ -527,11 +532,49 @@ func (s *Session) execCollect(ctx context.Context, code string) ([]string, error
 				}
 			}
 		case "SetPromptType":
-			if t, ok := msg.Args["type"].(float64); ok && t > 0 {
-				if len(errors) > 0 {
-					return nil, makeAPLError(errors)
+			if t, ok := msg.Args["type"].(float64); ok {
+				switch int(t) {
+				case 0:
+					// busy — keep collecting
+				case 1:
+					if len(errors) > 0 {
+						return nil, makeAPLError(errors)
+					}
+					return outputs, nil
+				default:
+					// 2 (⎕), 3 (∇ multiline) or 4 (⍞): the interpreter is
+					// awaiting input mid-expression, not done. Abort the
+					// read and drain back to a usable prompt.
+					return outputs, s.abortInputLocked(ctx, int(t))
 				}
-				return outputs, nil
+			}
+		}
+	}
+}
+
+// abortInputLocked recovers from an unexpected input prompt during
+// non-interactive execution: cancel the pending read (ExitMultilineInput
+// for ∇ mode, WeakInterrupt otherwise) and drain until the interpreter is
+// back at the six-space prompt. Caller must hold mu.
+func (s *Session) abortInputLocked(ctx context.Context, promptType int) error {
+	if promptType == 3 {
+		s.client.Send("ExitMultilineInput", map[string]any{})
+	} else {
+		s.client.Send("WeakInterrupt", map[string]any{})
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("%w (prompt type %d); interpreter did not return to ready: %v", ErrInputRequested, promptType, ctx.Err())
+		default:
+		}
+		msg, _, err := s.client.Recv()
+		if err != nil {
+			return fmt.Errorf("%w (prompt type %d); recv during recovery: %v", ErrInputRequested, promptType, err)
+		}
+		if msg != nil && msg.Command == "SetPromptType" {
+			if t, ok := msg.Args["type"].(float64); ok && int(t) == 1 {
+				return fmt.Errorf("%w (prompt type %d)", ErrInputRequested, promptType)
 			}
 		}
 	}
@@ -555,8 +598,15 @@ func (s *Session) execPrintLocked(expr string) error {
 			continue
 		}
 		if msg.Command == "SetPromptType" {
-			if t, ok := msg.Args["type"].(float64); ok && t > 0 {
-				return nil
+			if t, ok := msg.Args["type"].(float64); ok {
+				switch int(t) {
+				case 0:
+					// busy — keep waiting
+				case 1:
+					return nil
+				default:
+					return s.abortInputLocked(context.Background(), int(t))
+				}
 			}
 		}
 	}

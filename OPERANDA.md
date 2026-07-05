@@ -2,6 +2,10 @@
 
 Core TUI is functional with session, editors, tracer, variables, autocomplete, docs, command palette, focus mode, history paging, clear screen, save/load session.
 
+## apldap grittle (new)
+
+The DAP debug adapter formerly at `~/dev/apldap` now lives here: `dap/` + `dap/adapter/` + `dap/daptest/` (libraries), `grittles/apldap/` (binary + VSCode extension shim + test workspace + test-env scripts), plus `cmd/test-dap/` (manual DAP client — local only, `cmd/` is git-excluded like the other probe tools). Two bugs fixed during import: detach no longer sends RIDE `Disconnect` (it ended the interpreter session — Dyalog echoed but never evaluated again, and reconnect was impossible), and evaluate results no longer carry a trailing newline. Integration tests (`go test ./dap/adapter` with `grittles/apldap/scripts/start-test-env.sh` running) pass and are re-runnable against the same env. The old repo dir and its stray `origin` (accidentally pointing at cursork/aplsaft) can be retired once this is committed. Remaining work: FACIENDA "apldap" section.
+
 ## APL keycode support (BK/FD/SR style)
 
 APLers expect standard keycodes like BK (Back), FD (Forward), SR (Redraw Screen). The Dyalog keycode table maps actions to keystrokes (see `$DYALOG/aplkeys/xterm`). We should support these as configurable aliases.

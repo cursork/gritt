@@ -1,5 +1,15 @@
 # FACIENDA - Things to be done
 
+## apldap (DAP debug adapter)
+- [ ] **Link integration for project debugging** — `]link.create # /path/to/dir` / `]link.import` to load whole projects: namespace↔directory mapping, mixed file types (.aplf/.aplo/.aplc/.apln/.dyalog), Link's file↔function tracking for source display, a `rootDir` launch config. Currently only the active file is loaded via `2⎕FIX'file://...'`.
+- [ ] **Multi-function file breakpoints** — `.apln` files with several tradfns map breakpoints to the wrong function; need function-boundary parsing to pick function + function-relative line.
+- [ ] **Variable expansion** — nested arrays/namespaces can't be drilled into in the Variables pane; globals scope; dfn locals.
+- [ ] **Launch mode** — start Dyalog rather than only attaching.
+- [ ] **Flaky TestStepOver disconnect timeout** — seen once in ~10 suite runs against one env ("Timeout waiting for disconnect response", ~5s in). Likely the sleep-based timing in the test or the 50ms GetSIStack wait in the adapter. Suite otherwise green and re-runnable since the RIDE-Disconnect fix.
+- [ ] **SI stack timing** — stack trace uses a 50ms sleep waiting for the GetSIStack reply; should be a proper synchronous wait.
+- [ ] **Error handling / reconnect** — graceful connection failure, reconnect on drop, meaningful Debug Console errors.
+- [ ] **Extension polish** — package as .vsix, syntax highlighting, port config, connection status bar item.
+
 ## aplsock / Prepl
 - [ ] **prapl-style exploration UIs in gritt's TUI** — prapl (`~/dev/prapl`) is a PoC proving that text-in / 220⌶-out is a sufficient substrate for a rich data-inspection UI (Navigator with breadcrumb drill-down, Prints with tap channels, per-row "send value to navigator"). Not a thing to integrate or keep alive — it's an idea mine. The gritt-side work is to bring those exploration patterns into the TUI: data_browser already drills into compound values fed by APLAN; the prapl Navigator does the same against aplor (220⌶) responses from a prepl. Since amicable.Unmarshal returns the same Go types data_browser already navigates, an aplor-fed exploration pane is mostly plumbing — bootstrap a prepl on a side thread of gritt's own session (trivial `⎕FIX` + `Start`), route exploration-pane requests through it, hand the unmarshalled value to the existing pane code. Other patterns worth porting: tap channels for live `⎕←`-like output, per-result-row "explore this value" actions. Not urgent — list of ideas to mine, not a single shippable feature.
 - [ ] **gritt as client (phase 2)** — `-prepl addr` connects to aplsock instead of RIDE

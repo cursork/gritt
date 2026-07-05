@@ -1,0 +1,14 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "apl",
+      "request": "attach",
+      "name": "Attach to APL",
+      "host": "127.0.0.1",
+      "port": 9502,
+      "program": "${file}",
+      "preLaunchTask": "build apldap"
+    }
+  ]
+}

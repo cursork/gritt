@@ -203,9 +203,9 @@ Critical path (approved):
 
 **Flat project structure.** Minimize number of packages. Splitting into files is fine, but avoid deep package hierarchies. Prefer a handful of well-organized packages over many small ones.
 
-Library packages: `codec/` (APLAN parser), `amicable/` (220⌶ binary format + ⎕OR decompiler), `ibeam/` (I-beam lookup), `prepl/` (prepl client), `session/` (Dyalog launcher), `cache/` (cache utils), `aplcart/` (APLcart data), `docs/` (Dyalog docs), `mcp/` (MCP server).
+Library packages: `codec/` (APLAN parser), `amicable/` (220⌶ binary format + ⎕OR decompiler), `ibeam/` (I-beam lookup), `prepl/` (prepl client), `session/` (Dyalog launcher), `cache/` (cache utils), `aplcart/` (APLcart data), `docs/` (Dyalog docs), `mcp/` (MCP server), `dap/` (DAP protocol types; `dap/adapter/` DAP↔RIDE bridge, `dap/daptest/` DAP test client).
 
-Grittles (standalone CLIs): `grittles/aplor/` (⎕OR decompiler), `grittles/aplsock/` (prepl server), `grittles/aplanconv/`, `grittles/aplcart/`, `grittles/apldocs/`, `grittles/aplfmt/`, `grittles/aplmcp/`.
+Grittles (standalone CLIs): `grittles/aplor/` (⎕OR decompiler), `grittles/aplsock/` (prepl server), `grittles/aplanconv/`, `grittles/aplcart/`, `grittles/apldap/` (DAP debug adapter), `grittles/apldocs/`, `grittles/aplfmt/`, `grittles/aplmcp/`.
 
 ## Non-Goals
 

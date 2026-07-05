@@ -1,0 +1,91 @@
+{
+  "name": "apldap",
+  "displayName": "apldap",
+  "description": "Debug adapter for Dyalog APL (DAP over RIDE)",
+  "version": "0.1.0",
+  "publisher": "cursork",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Debuggers"
+  ],
+  "activationEvents": ["onDebugResolve:apl"],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "apl",
+        "aliases": ["APL"],
+        "extensions": [".apln", ".aplf", ".aplo", ".aplc", ".apl", ".dyalog"]
+      }
+    ],
+    "breakpoints": [
+      {
+        "language": "apl"
+      }
+    ],
+    "debuggers": [
+      {
+        "type": "apl",
+        "label": "APL Debug",
+        "program": "./apldap",
+        "languages": ["apl"],
+        "configurationAttributes": {
+          "launch": {
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "APL workspace or source file",
+                "default": ""
+              },
+              "host": {
+                "type": "string",
+                "description": "Dyalog host",
+                "default": "127.0.0.1"
+              },
+              "port": {
+                "type": "number",
+                "description": "RIDE port",
+                "default": 4502
+              },
+              "runtime": {
+                "type": "string",
+                "description": "Path to dyalog executable",
+                "default": ""
+              }
+            }
+          },
+          "attach": {
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "APL source file to load on connect",
+                "default": ""
+              },
+              "host": {
+                "type": "string",
+                "description": "Dyalog host",
+                "default": "127.0.0.1"
+              },
+              "port": {
+                "type": "number",
+                "description": "RIDE port",
+                "default": 4502
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "apl",
+            "request": "attach",
+            "name": "Attach to APL",
+            "host": "127.0.0.1",
+            "port": 9501
+          }
+        ]
+      }
+    ]
+  }
+}

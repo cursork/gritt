@@ -474,7 +474,7 @@ func runExpr(client *ride.Client, expr string) {
 		log.Fatalf("Execute failed: %v", err)
 	}
 
-	// Read until we get SetPromptType with type:1 (ready)
+	// Read until the interpreter is ready for the next input line
 	for {
 		msg, _, err := client.Recv()
 		if err != nil {
@@ -491,8 +491,17 @@ func runExpr(client *ride.Client, expr string) {
 				fmt.Print(result)
 			}
 		case "SetPromptType":
-			if t, ok := msg.Args["type"].(float64); ok && t == 1 {
-				return // Ready for next input
+			if t, ok := msg.Args["type"].(float64); ok {
+				switch int(t) {
+				case 1, 3:
+					// 1: ready; 3: ∇ multiline — next -e line feeds the definition
+					return
+				case 2, 4:
+					// ⎕/⍞ input requested: -e cannot supply it. Abort the
+					// read and keep draining until the prompt returns.
+					fmt.Fprintf(os.Stderr, "gritt: expression requested session input (prompt type %d); aborting read\n", int(t))
+					client.Send("WeakInterrupt", map[string]any{})
+				}
 			}
 		}
 	}

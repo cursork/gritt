@@ -1,0 +1,15 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build apldap",
+      "type": "shell",
+      "command": "cd ${workspaceFolder}/../../.. && go build -o grittles/apldap/apldap ./grittles/apldap && cp grittles/apldap/apldap grittles/apldap/extension/",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$go"]
+    }
+  ]
+}

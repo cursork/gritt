@@ -131,6 +131,25 @@ MCP server for LLM-driven APL interaction over stdio.
 
 Tools: `launch`, `connect`, `disconnect`, `eval`, `batch`, `link`, `names`, `get`, `fix`, `alive`.
 
+### apldap
+
+**Do not use this — use [vscode-apl](https://github.com/martanit/vscode-apl)
+instead; it is a far more well-developed project.**
+
+Debug Adapter Protocol (DAP) server for Dyalog APL. Debug APL from
+VSCode (or any DAP client) with breakpoints, stepping, stack traces,
+variable inspection, and Debug Console evaluation. Bridges DAP to the
+RIDE protocol; works direct to Dyalog or through multapl.
+
+```
+apldap              # stdio mode (how VSCode runs it)
+apldap -port 4712   # TCP server mode
+```
+
+Ships with a minimal VSCode extension shim and test workspace — see
+`grittles/apldap/README.md`. Library code is in `dap/`, `dap/adapter/`
+and `dap/daptest/`.
+
 ## Building
 
 From the gritt root:
@@ -138,6 +157,7 @@ From the gritt root:
 ```
 go build ./grittles/aplanconv
 go build ./grittles/aplcart
+go build ./grittles/apldap
 go build ./grittles/apldocs
 go build ./grittles/aplfmt
 go build ./grittles/aplmcp
