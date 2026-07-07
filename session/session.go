@@ -13,6 +13,7 @@ package session
 import (
 	"context"
 	"fmt"
+	"io"
 	"math/rand"
 	"net"
 	"os"
@@ -30,7 +31,12 @@ import (
 type Session struct {
 	client *ride.Client
 	cmd    *exec.Cmd // nil if we didn't launch the process
-	mu     sync.Mutex
+	// Held open for the lifetime of a launched interpreter: Dyalog's ⍞
+	// read NONCEs unless the process has a usable stdin, even though the
+	// input itself arrives over the RIDE connection. Ride pipes stdin for
+	// the same reason (cn.js: stdio ['pipe','ignore','ignore']).
+	stdin io.WriteCloser
+	mu    sync.Mutex
 
 	// Stored for relaunch on crash (Launch mode only).
 	launchOpts *LaunchOptions
@@ -72,24 +78,45 @@ func Launch(ctx context.Context, opts ...LaunchOptions) (*Session, error) {
 			}
 		}
 
-		client, cmd, err := launchOnce(ctx, opt)
+		client, cmd, stdin, err := launchOnce(ctx, opt)
 		if err == nil {
-			return &Session{client: client, cmd: cmd, launchOpts: &opt}, nil
+			return &Session{client: client, cmd: cmd, stdin: stdin, launchOpts: &opt}, nil
 		}
 		lastErr = err
 	}
 	return nil, lastErr
 }
 
-// launchOnce performs a single attempt to spawn Dyalog and complete the RIDE handshake.
-// Uses SERVE mode: Dyalog listens on a random port, we connect to it.
-func launchOnce(ctx context.Context, opt LaunchOptions) (*ride.Client, *exec.Cmd, error) {
+// StartOptions configures StartInterpreter.
+type StartOptions struct {
+	Version string            // "20.0", "/path/to/dyalog", or "" for highest available
+	Port    int               // RIDE port to serve on; 0 = random
+	Env     map[string]string // extra environment variables
+	Timeout time.Duration     // wait for the RIDE port to accept (default 15s)
+}
+
+// StartInterpreter spawns a Dyalog interpreter in SERVE mode and waits
+// until its RIDE port accepts connections. This is the ONLY place in
+// gritt that runs dyalog — everything else connects to one.
+//
+// The returned io.WriteCloser is the interpreter's stdin and must be held
+// open for the lifetime of the process: Dyalog's ⍞ read throws NONCE
+// ERROR unless stdin is a usable fd, even though the input itself arrives
+// over the RIDE connection. No data is ever written to it. (Ride does the
+// same: cn.js spawns with stdio ['pipe','ignore','ignore'].)
+func StartInterpreter(ctx context.Context, opt StartOptions) (*exec.Cmd, io.WriteCloser, int, error) {
 	exe, err := FindDyalog(opt.Version)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
+	}
+	if opt.Timeout == 0 {
+		opt.Timeout = 15 * time.Second
+	}
+	port := opt.Port
+	if port == 0 {
+		port = 10000 + rand.Intn(50000)
 	}
 
-	port := 10000 + rand.Intn(50000)
 	cmd := exec.Command(exe, "+s", "-q")
 	cmd.Env = append(os.Environ(), fmt.Sprintf("RIDE_INIT=SERVE:*:%d", port))
 	cmd.Env = append(cmd.Env, "RIDE_SPAWNED=1")
@@ -100,8 +127,14 @@ func launchOnce(ctx context.Context, opt LaunchOptions) (*ride.Client, *exec.Cmd
 	}
 	setProcAttr(cmd)
 
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, nil, 0, fmt.Errorf("stdin pipe: %w", err)
+	}
+
 	if err := cmd.Start(); err != nil {
-		return nil, nil, fmt.Errorf("start dyalog (%s): %w", exe, err)
+		stdin.Close()
+		return nil, nil, 0, fmt.Errorf("start dyalog (%s): %w", exe, err)
 	}
 
 	// Poll for RIDE to be ready
@@ -110,29 +143,44 @@ func launchOnce(ctx context.Context, opt LaunchOptions) (*ride.Client, *exec.Cmd
 	for {
 		select {
 		case <-ctx.Done():
+			stdin.Close()
 			kill(cmd)
-			return nil, nil, ctx.Err()
+			return nil, nil, 0, ctx.Err()
 		case <-deadline:
+			stdin.Close()
 			kill(cmd)
-			return nil, nil, fmt.Errorf("dyalog did not start on port %d within %s", port, opt.Timeout)
+			return nil, nil, 0, fmt.Errorf("dyalog did not start on port %d within %s", port, opt.Timeout)
 		default:
 		}
 
 		conn, err := net.DialTimeout("tcp", addr, 100*time.Millisecond)
 		if err == nil {
 			conn.Close()
-			break
+			return cmd, stdin, port, nil
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
+}
 
-	client, err := ride.Connect(addr)
+// launchOnce performs a single attempt to spawn Dyalog and complete the RIDE handshake.
+func launchOnce(ctx context.Context, opt LaunchOptions) (*ride.Client, *exec.Cmd, io.WriteCloser, error) {
+	cmd, stdin, port, err := StartInterpreter(ctx, StartOptions{
+		Version: opt.Version,
+		Env:     opt.Env,
+		Timeout: opt.Timeout,
+	})
 	if err != nil {
-		kill(cmd)
-		return nil, nil, fmt.Errorf("ride connect: %w", err)
+		return nil, nil, nil, err
 	}
 
-	return client, cmd, nil
+	client, err := ride.Connect(fmt.Sprintf("localhost:%d", port))
+	if err != nil {
+		stdin.Close()
+		kill(cmd)
+		return nil, nil, nil, fmt.Errorf("ride connect: %w", err)
+	}
+
+	return client, cmd, stdin, nil
 }
 
 // Connect connects to an already-running Dyalog interpreter in SERVE mode.
@@ -159,6 +207,9 @@ func (s *Session) Close() error {
 	defer s.mu.Unlock()
 
 	err := s.client.Close()
+	if s.stdin != nil {
+		s.stdin.Close()
+	}
 	if s.cmd != nil {
 		kill(s.cmd)
 	}
@@ -371,11 +422,14 @@ func (s *Session) relaunchLocked(ctx context.Context) error {
 	}
 
 	s.client.Close()
+	if s.stdin != nil {
+		s.stdin.Close()
+	}
 	if s.cmd != nil {
 		kill(s.cmd)
 	}
 
-	client, cmd, err := launchOnce(ctx, *s.launchOpts)
+	client, cmd, stdin, err := launchOnce(ctx, *s.launchOpts)
 	if err != nil {
 		for attempt := 2; attempt <= 3; attempt++ {
 			select {
@@ -383,7 +437,7 @@ func (s *Session) relaunchLocked(ctx context.Context) error {
 				return ctx.Err()
 			case <-time.After(time.Duration(attempt) * time.Second):
 			}
-			client, cmd, err = launchOnce(ctx, *s.launchOpts)
+			client, cmd, stdin, err = launchOnce(ctx, *s.launchOpts)
 			if err == nil {
 				break
 			}
@@ -395,6 +449,7 @@ func (s *Session) relaunchLocked(ctx context.Context) error {
 
 	s.client = client
 	s.cmd = cmd
+	s.stdin = stdin
 	return nil
 }
 

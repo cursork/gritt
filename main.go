@@ -2,11 +2,11 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
-	"math/rand"
-	"net"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -19,31 +19,24 @@ import (
 	"github.com/cursork/gritt/session"
 )
 
+// dyalogStdin keeps the spawned interpreter's stdin open for the life of
+// the process. Dyalog's ⍞ read NONCEs unless stdin is a usable fd, even
+// though the input itself arrives over the RIDE connection; no data is
+// ever written to this pipe. Ride does the same (cn.js: stdio
+// ['pipe','ignore','ignore']).
+var dyalogStdin io.WriteCloser
+
 // launchDyalog starts Dyalog APL with RIDE on a random port.
 // version constrains which installed version to use (empty = highest available).
+// Spawning lives in session.StartInterpreter — the one place gritt runs
+// dyalog; this wrapper just adapts it to main's log.Fatal error style.
 func launchDyalog(version string) (*exec.Cmd, int) {
-	exe := resolveDyalog(version)
-
-	port := 10000 + rand.Intn(50000)
-	cmd := exec.Command(exe, "+s", "-q")
-	cmd.Env = append(os.Environ(), fmt.Sprintf("RIDE_INIT=SERVE:*:%d", port))
-	cmd.Env = append(cmd.Env, session.DyalogEnv(exe)...)
-	setProcessGroup(cmd)
-	if err := cmd.Start(); err != nil {
-		log.Fatalf("Failed to start Dyalog (%s): %v", exe, err)
+	cmd, stdin, port, err := session.StartInterpreter(context.Background(), session.StartOptions{Version: version})
+	if err != nil {
+		log.Fatalf("Failed to start Dyalog: %v", err)
 	}
-	// Poll for RIDE to be ready
-	addr := fmt.Sprintf("localhost:%d", port)
-	for i := 0; i < 50; i++ { // 5 second timeout
-		conn, err := net.DialTimeout("tcp", addr, 100*time.Millisecond)
-		if err == nil {
-			conn.Close()
-			return cmd, port
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	log.Fatalf("Dyalog did not start on port %d", port)
-	return nil, 0
+	dyalogStdin = stdin
+	return cmd, port
 }
 
 // resolveDyalog finds the Dyalog binary to use.

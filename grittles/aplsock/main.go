@@ -14,8 +14,10 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"net"
@@ -97,35 +99,20 @@ func main() {
 	serve(pc, *sock, *mode, cleanup)
 }
 
-// launchDyalog starts Dyalog APL with RIDE on a random port.
+// dyalogStdin keeps the spawned interpreter's stdin open — see
+// session.StartInterpreter for why.
+var dyalogStdin io.WriteCloser
+
+// launchDyalog starts Dyalog APL with RIDE on a random port via
+// session.StartInterpreter, the one place gritt runs dyalog.
 func launchDyalog(version string) (*exec.Cmd, int) {
-	exe, err := session.FindDyalog(version)
+	cmd, stdin, port, err := session.StartInterpreter(context.Background(), session.StartOptions{Version: version})
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("start Dyalog: %v", err)
 	}
-
-	port := 10000 + rand.Intn(50000)
-	cmd := exec.Command(exe, "+s", "-q")
-	cmd.Env = append(os.Environ(), fmt.Sprintf("RIDE_INIT=SERVE:*:%d", port))
-	cmd.Env = append(cmd.Env, "RIDE_SPAWNED=1", "DYALOG_LINEEDITOR_MODE=1")
-	cmd.Env = append(cmd.Env, session.DyalogEnv(exe)...)
-	setProcessGroup(cmd)
-	if err := cmd.Start(); err != nil {
-		log.Fatalf("start Dyalog (%s): %v", exe, err)
-	}
-
-	rideAddr := fmt.Sprintf("localhost:%d", port)
-	for i := 0; i < 50; i++ {
-		conn, err := net.DialTimeout("tcp", rideAddr, 100*time.Millisecond)
-		if err == nil {
-			conn.Close()
-			log.Printf("Dyalog launched on RIDE port %d (pid %d)", port, cmd.Process.Pid)
-			return cmd, port
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	log.Fatalf("Dyalog did not start RIDE on port %d", port)
-	return nil, 0
+	dyalogStdin = stdin
+	log.Printf("Dyalog launched on RIDE port %d (pid %d)", port, cmd.Process.Pid)
+	return cmd, port
 }
 
 // bootstrap injects the APL prepl namespace, sets mode, and starts the server.
