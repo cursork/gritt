@@ -116,6 +116,21 @@ func (r *Runner) Test(name string, fn func() bool) bool {
 	return passed
 }
 
+// Skip records a test that wasn't run because a required capability is
+// unavailable in this environment (e.g. the Dyalog interpreter in the
+// `dyalog/dyalog` container declines to emit OpenWindow{debugger:1}, so
+// tracer-dependent tests have nothing to assert against). The test counts
+// as neither pass nor fail; the report surfaces it distinctly so a
+// green-with-skips run is visibly different from all-green.
+//
+// Capability detection MUST be runtime (probe the actual behaviour); never
+// gate by environment variable. See FACIENDA for the current sanctioned
+// skip — Dyalog tracer in the official Docker image.
+func (r *Runner) Skip(name, reason string) {
+	r.Report.AddSkip(name, reason)
+	r.T.Logf("SKIP: %s — %s", name, reason)
+}
+
 // SendKeys sends keys to the session
 func (r *Runner) SendKeys(keys ...string) {
 	if err := r.Session.SendKeys(keys...); err != nil {

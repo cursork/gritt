@@ -236,7 +236,16 @@ func RequireDyalog(port int) error {
 // presents to the runner as a fatal "connection refused" screen.
 func StartDyalog(port int) (*exec.Cmd, error) {
 	cmd := exec.Command("dyalog", "+s", "-q")
-	cmd.Env = append(cmd.Environ(), fmt.Sprintf("RIDE_INIT=SERVE:*:%d", port))
+	cmd.Env = append(cmd.Environ(),
+		fmt.Sprintf("RIDE_INIT=SERVE:*:%d", port),
+		// RIDE_SPAWNED tells Dyalog "I'm being run with a RIDE GUI
+		// client attached" — without it, breakpoints and errors get
+		// inline "Name[Line]" session output instead of OpenWindow
+		// {debugger:1}, and the tracer pane never opens. mapl sets
+		// this on the macOS app; bare `dyalog +s -q` in a container
+		// doesn't, so we set it explicitly.
+		"RIDE_SPAWNED=1",
+	)
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start Dyalog: %w", err)
 	}

@@ -1,0 +1,70 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # Fast Go-only smoke: vet, compile every package, unit tests. TestTUI
+  # and the aplsock integration test skip silently here because there's
+  # no `dyalog` on PATH — that's intentional, those run in the `dyalog`
+  # job below. This job tells you within ~30 s whether you broke the
+  # compile or any Dyalog-free unit test (codec, amicable, prepl unit,
+  # aplor, aplcart, ibeam, command/config).
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+      - run: go vet ./...
+      - run: go build ./...
+      - name: Install gotestsum
+        # Surfaces individual `--- FAIL: TestName` lines as GitHub
+        # annotations (::error::). Without this, a failing job shows
+        # only "Process completed with exit code 1" in the UI.
+        run: go install gotest.tools/gotestsum@latest
+      - name: go test
+        run: gotestsum --format=github-actions -- -v ./...
+
+  # Full suite inside Dyalog's official image — runs TestTUI and the
+  # shell-driven aplsock/test.sh. Slower (the image is ~1-2 GB) and
+  # subject to whatever Dyalog ships in the tag we pick.
+  dyalog:
+    runs-on: ubuntu-latest
+    container:
+      image: dyalog/dyalog:latest
+      # --user root: so we can apt-get install the extras the test
+      # harness needs; the image's default `dyalog` user can't.
+      # --init: inject tini as PID 1 so orphaned children of test
+      # helpers get reaped. Without it, kill_wait_test.go fails
+      # because `processAlive` (= `kill(-PG, 0)`) returns true on
+      # unreaped zombies. See CLAUDE.md "Running CI locally".
+      options: --user root --init
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tmux + zsh + nodejs
+        # tmux is the TUI test runner's pty host; zsh is the shebang
+        # for grittles/aplsock/test.sh; nodejs is needed by JS-based
+        # actions (setup-go@v5) when running under act — real GH
+        # auto-mounts a node binary into containers, act doesn't.
+        run: |
+          apt-get update -q
+          apt-get install -qy tmux zsh nodejs
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@latest
+      - name: go test (full suite incl. TestTUI)
+        run: gotestsum --format=github-actions -- -v ./...
+
+      - name: aplsock protocol test
+        run: bash grittles/aplsock/test.sh
