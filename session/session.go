@@ -149,7 +149,7 @@ func StartInterpreter(ctx context.Context, opt StartOptions) (*exec.Cmd, io.Writ
 		case <-deadline:
 			stdin.Close()
 			kill(cmd)
-			return nil, nil, 0, fmt.Errorf("dyalog did not start on port %d within %s", port, opt.Timeout)
+			return nil, nil, 0, fmt.Errorf("dyalog (%s) did not start on port %d within %s", exe, port, opt.Timeout)
 		default:
 		}
 
