@@ -116,7 +116,7 @@ func main() {
 	flag.Var(&links, "link", "Link directory (path or ns:path, can be repeated)")
 	launch := flag.Bool("launch", false, "Launch Dyalog automatically (alias: -l)")
 	flag.BoolVar(launch, "l", false, "Launch Dyalog automatically")
-	version := flag.String("version", "", "Dyalog version (e.g. 20.0) or path to binary")
+	version := flag.String("version", "", "Dyalog version (e.g. 20.0), compact edition+bits (e.g. 210U64 = 21.0 Unicode 64-bit, Windows only), or path to binary")
 	fmtMode := flag.Bool("fmt", false, "Format APL files in place")
 	historyMode := flag.Bool("history", false, "Print command history to stdout")
 	var cfgFlag string

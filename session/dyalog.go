@@ -17,14 +17,62 @@ type dyalogInstall struct {
 	version string
 	major   int
 	minor   int
+	unicode bool // true = Unicode edition, false = Classic
+	bits    int  // 64 or 32; 0 if unknown (Darwin/Linux don't distinguish)
+}
+
+// compactVersionRe matches the compact version format "210U64": two-digit
+// major, one-digit minor, edition (C=Classic, U=Unicode), bits (32 or 64).
+var compactVersionRe = regexp.MustCompile(`^(\d{2})(\d)([CU])(32|64)$`)
+
+// versionSpec is the parsed form of a -version argument.
+type versionSpec struct {
+	version string // dotted "X.Y", or "" for any/auto-discover
+	kind    string // "C", "U", or "" for unspecified (defaults to Unicode)
+	bits    int    // 32, 64, or 0 for unspecified (no filtering)
+}
+
+// parseVersionArg parses a -version argument. The compact format
+// "210U64" (version+edition+bits) is recognised; anything else is passed
+// through unchanged as a plain dotted version, matching prior behaviour.
+func parseVersionArg(s string) versionSpec {
+	if m := compactVersionRe.FindStringSubmatch(s); m != nil {
+		bits, _ := strconv.Atoi(m[4])
+		return versionSpec{version: m[1] + "." + m[2], kind: m[3], bits: bits}
+	}
+	return versionSpec{version: s}
+}
+
+// matches reports whether inst satisfies the spec's edition/bits constraints.
+// Edition defaults to Unicode when unspecified, preserving the historical
+// Unicode-only behaviour for plain "X.Y" version strings. Bits are only
+// filtered when both the spec and the install report a known value.
+func (s versionSpec) matches(inst dyalogInstall) bool {
+	wantKind := s.kind
+	if wantKind == "" {
+		wantKind = "U"
+	}
+	if wantKind == "U" && !inst.unicode {
+		return false
+	}
+	if wantKind == "C" && inst.unicode {
+		return false
+	}
+	if s.bits != 0 && inst.bits != 0 && inst.bits != s.bits {
+		return false
+	}
+	return true
 }
 
 // FindDyalog discovers installed Dyalog interpreters and returns the path
 // to the best match.
 //
 // If version contains a path separator, it is treated as a direct path to
-// the binary. If version is "X.Y", only that version is returned. If version
-// is empty, the highest installed version is returned (checking PATH first).
+// the binary. If version is "X.Y", only that (Unicode) version is returned.
+// The compact format "210U64" (version, edition C/U, bits 32/64) additionally
+// selects Classic builds and a specific bitness — see parseVersionArg. If
+// version is empty, the highest installed Unicode version is returned
+// (checking PATH first).
 func FindDyalog(version string) (string, error) {
 	return findDyalog(version, false)
 }
@@ -53,6 +101,8 @@ func findDyalog(version string, skipPath bool) (string, error) {
 			return path, nil
 		}
 	}
+
+	spec := parseVersionArg(version)
 
 	// Discovery
 	var installs []dyalogInstall
@@ -83,9 +133,9 @@ func findDyalog(version string, skipPath bool) (string, error) {
 	})
 
 	// Filter by version if requested
-	if version != "" {
+	if spec.version != "" {
 		for _, inst := range installs {
-			if inst.version == version {
+			if inst.version == spec.version && spec.matches(inst) {
 				return inst.path, nil
 			}
 		}
@@ -93,7 +143,12 @@ func findDyalog(version string, skipPath bool) (string, error) {
 			version, availableVersions(installs), SearchedPaths())
 	}
 
-	return installs[0].path, nil
+	for _, inst := range installs {
+		if spec.matches(inst) {
+			return inst.path, nil
+		}
+	}
+	return "", fmt.Errorf("Dyalog not found matching %q.\nSearched:\n  %s", version, SearchedPaths())
 }
 
 // SearchedPaths returns a human-readable list of paths that were searched,
@@ -166,6 +221,7 @@ func findDyalogDarwin() []dyalogInstall {
 			version: ver,
 			major:   major,
 			minor:   minor,
+			unicode: true, // macOS only ships Unicode builds
 		})
 	}
 
@@ -191,14 +247,17 @@ func findDyalogLinux() []dyalogInstall {
 		}
 
 		// Prefer 64-bit unicode, fall back to 32-bit unicode
-		for _, bits := range []string{"64", "32"} {
-			exe := filepath.Join("/opt/mdyalog", ver, bits, "unicode", "dyalog")
+		for _, bitsStr := range []string{"64", "32"} {
+			exe := filepath.Join("/opt/mdyalog", ver, bitsStr, "unicode", "dyalog")
 			if _, err := os.Stat(exe); err == nil {
+				bits, _ := strconv.Atoi(bitsStr)
 				installs = append(installs, dyalogInstall{
 					path:    exe,
 					version: ver,
 					major:   major,
 					minor:   minor,
+					unicode: true, // only unicode builds are discovered on Linux
+					bits:    bits,
 				})
 				break
 			}
@@ -219,7 +278,8 @@ func findDyalogWindows() []dyalogInstall {
 		searchDirs = append(searchDirs, filepath.Join(localAppData, "Programs", "Dyalog"))
 	}
 
-	re := regexp.MustCompile(`^Dyalog APL(?:-64)? (\d+\.\d+) Unicode$`)
+	// Captures: [1] "-64" or empty (bits), [2] version, [3] Classic or Unicode
+	re := regexp.MustCompile(`^Dyalog APL(-64)? (\d+\.\d+) (Classic|Unicode)$`)
 
 	for _, dir := range searchDirs {
 		entries, err := os.ReadDir(dir)
@@ -234,7 +294,7 @@ func findDyalogWindows() []dyalogInstall {
 			if m == nil {
 				continue
 			}
-			ver := m[1]
+			ver := m[2]
 			exe := filepath.Join(dir, entry.Name(), "dyalog.exe")
 			if _, err := os.Stat(exe); err != nil {
 				continue
@@ -243,11 +303,17 @@ func findDyalogWindows() []dyalogInstall {
 			if !ok {
 				continue
 			}
+			bits := 32
+			if m[1] == "-64" {
+				bits = 64
+			}
 			installs = append(installs, dyalogInstall{
 				path:    exe,
 				version: ver,
 				major:   major,
 				minor:   minor,
+				unicode: m[3] == "Unicode",
+				bits:    bits,
 			})
 		}
 	}
