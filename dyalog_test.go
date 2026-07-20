@@ -2,6 +2,7 @@ package main
 
 import (
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"testing"
 
@@ -36,14 +37,16 @@ func TestResolveDyalog(t *testing.T) {
 }
 
 func TestDyalogEnv(t *testing.T) {
-	env := session.DyalogEnv("/opt/mdyalog/20.0/64/unicode/dyalog")
+	dyalogPath := filepath.Join("opt", "mdyalog", "20.0", "64", "unicode", "dyalog")
+	want := "DYALOG=" + filepath.Dir(dyalogPath)
+	env := session.DyalogEnv(dyalogPath)
 	found := false
 	for _, e := range env {
-		if e == "DYALOG=/opt/mdyalog/20.0/64/unicode" {
+		if e == want {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("Expected DYALOG env var, got %v", env)
+		t.Errorf("Expected %q in %v", want, env)
 	}
 }
