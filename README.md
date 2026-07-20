@@ -55,7 +55,7 @@ Requires Go 1.21+:
 go build -o gritt .
 ```
 
-**Windows note:** use `go build -o gritt.exe .` so the binary gets the `.exe` extension — without it, cmd.exe/PowerShell/TCC won't find it by name. Then run it with a backslash, not the Unix `./` shown below (e.g. `.\gritt.exe -l`) — TCC in particular reads `/` as a switch character and fails with `Unbekannter Befehl "."`.
+**Windows note:** use `go build -o gritt.exe .` so the binary gets the `.exe` extension — without it, cmd.exe/PowerShell/TCC won't find it by name. Then run it with a backslash, not the Unix `./` shown below (e.g. `.\gritt.exe -l`).
 
 ## Requirements
 
