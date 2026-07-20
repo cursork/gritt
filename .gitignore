@@ -1,6 +1,7 @@
 aplcore
 .DS_Store
 gritt
+gritt.exe
 test-reports
 /session-*
 /cmd/explore*
