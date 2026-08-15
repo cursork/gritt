@@ -2,6 +2,48 @@
 
 Core TUI is functional with session, editors, tracer, variables, autocomplete, docs, command palette, focus mode, history paging, clear screen, save/load session.
 
+## 220⌶ namespace round-trip fix (IN PROGRESS — resume here)
+
+**Goal:** fix `amicable.unmarshalNamespace` — it mis-parses namespaces with
+nested/mixed members (drops or misassigns them). Neil greenlit a full rewrite.
+
+**Proven, on disk:**
+- `amicable/generative_test.go` — generative round-trip test, the unweakened
+  gate. Arrays green; namespaces **red: 22 of 40** random shapes fail on the
+  current (baseline) parser. Validated against Dyalog's own
+  `0(220⌶)1(220⌶)` oracle, so the failures are real parser bugs, not test bugs.
+  Run: `go test ./amicable -run TestGenerativeNamespaceRoundtrip` (seed fixed).
+- `cmd/nsdump` — landmark-map tool for a captured blob:
+  `go run ./cmd/nsdump <file> <CASE>`.
+- `adnotata/0015-220-namespace-layout.md` — reverse-engineered layout (nested
+  ns = compact self-contained sub-blob, no translation tail; split-around-the-
+  translation-table placement for 2nd+ class-9 members). Read this first.
+
+**Root cause:** `unmarshalNamespace` hands each nested ns *all* trailing parent
+bytes (`Raw(data[nsStart:])`) and re-runs the standalone parser; plus a coarse
+`reversed[0].class==9` binary heuristic. Both collapse once class-2/3/9 mix.
+
+**Approach that FAILED (reverted):** a big-bang recursive-descent rewrite
+(`parseNamespaceAt` w/ extents) assuming member values sit in reverse
+name-table order. That ordering does NOT hold under the mixed-class
+split-around-the-table layout — it regressed to 16/40. Reverted with
+`git checkout amicable/amicable.go`. **Do it incrementally next time, and RE the
+ordering rule before coding.**
+
+**Open unknown / next step:** determine the exact value ORDERING+placement for
+a mixed-class namespace (int + function + nested-ns). Capture + dump:
+```
+gritt -l -e "'=E=' ⋄ 1(220⌶){n←⎕NS'' ⋄ n.m0←135 ⋄ n.m1←{⍵+1} ⋄ n.m2←⎕NS'' ⋄ n.m2.m0←¯204.5 ⋄ n.m2.m1←'g' ⋄ n}⍬" > blobs.txt
+go run ./cmd/nsdump blobs.txt E
+```
+Map which member's value lands where, derive the placement rule, THEN build the
+extent-returning recursive parser in small reviewable pieces.
+
+**Dyalog PID discipline (MANDATORY):** tests/`gritt -l` launch Dyalog and do
+NOT reap it — they leak. Never `pkill dyalog` (Neil + other processes run their
+own). Snapshot before, kill only the delta after:
+`before=$(pgrep -f 'Resources/Dyalog/dyalog'|sort); <run>; kill only new PIDs`.
+
 ## apldap grittle (new)
 
 The DAP debug adapter formerly at `~/dev/apldap` now lives here: `dap/` + `dap/adapter/` + `dap/daptest/` (libraries), `grittles/apldap/` (binary + VSCode extension shim + test workspace + test-env scripts), plus `cmd/test-dap/` (manual DAP client — local only, `cmd/` is git-excluded like the other probe tools). Two bugs fixed during import: detach no longer sends RIDE `Disconnect` (it ended the interpreter session — Dyalog echoed but never evaluated again, and reconnect was impossible), and evaluate results no longer carry a trailing newline. Integration tests (`go test ./dap/adapter` with `grittles/apldap/scripts/start-test-env.sh` running) pass and are re-runnable against the same env. The old repo dir and its stray `origin` (accidentally pointing at cursork/aplsaft) can be retired once this is committed. Remaining work: FACIENDA "apldap" section.
