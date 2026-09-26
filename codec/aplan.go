@@ -533,8 +533,9 @@ func buildMatrix(rows []any) (*Array, error) {
 	data := make([]any, len(rows))
 	for i, row := range rows {
 		flat := flattenValue(row)
+		fill := prototypeOf(flat)
 		for len(flat) < cellSize {
-			flat = append(flat, 0)
+			flat = append(flat, fill)
 		}
 		if len(maxShape) <= 1 {
 			data[i] = flat
@@ -548,6 +549,25 @@ func buildMatrix(rows []any) (*Array, error) {
 	shape = append(shape, maxShape...)
 
 	return &Array{Data: data, Shape: shape}, nil
+}
+
+// prototypeOf returns the fill element for a short row, following APL's
+// prototype rule: the prototype comes from the FIRST element, so a row that
+// starts with a character pads with a space and anything else pads with 0.
+// Reversing a row therefore changes its fill:
+//
+//	[1 2 3 ⋄ 'ab']    -> 1 2 3 / 'ab '
+//	[1 2 3 ⋄ ('a' 1)] -> 1 2 3 / 'a' 1 ' '
+//	[1 2 3 ⋄ (1 'a')] -> 1 2 3 / 1 'a' 0
+//
+// Padding a character row with 0 would leave it neither character nor numeric.
+func prototypeOf(flat []any) any {
+	if len(flat) > 0 {
+		if _, ok := flat[0].(string); ok {
+			return " "
+		}
+	}
+	return 0
 }
 
 // cellShape returns the shape of a value as a matrix cell.

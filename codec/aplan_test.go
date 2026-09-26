@@ -355,6 +355,59 @@ func TestAPLANMatrixPadding(t *testing.T) {
 	}
 }
 
+// APL's prototype rule: the fill comes from the row's FIRST element, so a row
+// starting with a character pads with a space. Reversing a row flips the fill,
+// which is what distinguishes this from an "all elements are characters" rule.
+// Confirmed against the interpreter:
+//
+//	⊃0⍴('a' 1) is ' '        ⊃0⍴(1 'a') is 0
+//	[1 2 3 ⋄ 'ab']    -> [⋄1 2 3⋄'ab '⋄]
+//	[1 2 3 ⋄ ('a' 1)] -> [⋄1 2 3⋄'a' 1 ' '⋄]
+//	[1 2 3 ⋄ (1 'a')] -> [⋄1 2 3⋄1 'a' 0⋄]
+func TestAPLANMatrixFillFollowsPrototype(t *testing.T) {
+	tests := []struct {
+		input string
+		want  []any
+	}{
+		{"[1 2 3 ⋄ 'ab']", []any{"a", "b", " "}},
+		{"[1 2 3 ⋄ ('a' 1)]", []any{"a", 1, " "}},
+		{"[1 2 3 ⋄ (1 'a')]", []any{1, "a", 0}},
+	}
+	for _, tt := range tests {
+		got, err := APLAN(tt.input)
+		if err != nil {
+			t.Errorf("APLAN(%q) error: %v", tt.input, err)
+			continue
+		}
+		arr, ok := got.(*Array)
+		if !ok {
+			t.Errorf("APLAN(%q) = %v (%T), want *Array", tt.input, got, got)
+			continue
+		}
+		row1, ok := arr.Data[1].([]any)
+		if !ok {
+			t.Errorf("APLAN(%q) row 1 type: %T", tt.input, arr.Data[1])
+			continue
+		}
+		if len(row1) != len(tt.want) {
+			t.Errorf("APLAN(%q) row 1 = %v, want %v", tt.input, row1, tt.want)
+			continue
+		}
+		for i := range tt.want {
+			if row1[i] != tt.want[i] {
+				t.Errorf("APLAN(%q) row 1 = %v, want %v", tt.input, row1, tt.want)
+				break
+			}
+		}
+	}
+}
+
+// NB: this pins deliberate permissiveness, not interpreter-verified behaviour.
+// The interpreter rejects `[1 2]` as a SYNTAX ERROR — bracket array notation
+// needs a separator (`[1 2⋄]` is a matrix, `[1 2]` is an indexing bracket), the
+// same disambiguation as `(42)` grouping vs `(42⋄)` one-element vector.
+// ⎕SE.Dyalog.Array.Deserialise accepts it anyway, and matching that is cheap,
+// so we keep it. Do not "fix" this by rejecting separator-less brackets.
 func TestAPLANBracketStranding(t *testing.T) {
 	got, err := APLAN("[1 2]")
 	if err != nil {

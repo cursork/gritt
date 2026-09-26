@@ -28,15 +28,36 @@ var dyalogStdin io.WriteCloser
 
 // launchDyalog starts Dyalog APL with RIDE on a random port.
 // version constrains which installed version to use (empty = highest available).
+// env carries extra environment variables to pass through to the interpreter
+// (e.g. DYLD_INSERT_LIBRARIES); these reach the interpreter only when gritt
+// launches the real binary rather than a wrapper script (see -version).
 // Spawning lives in session.StartInterpreter — the one place gritt runs
 // dyalog; this wrapper just adapts it to main's log.Fatal error style.
-func launchDyalog(version string) (*exec.Cmd, int) {
-	cmd, stdin, port, err := session.StartInterpreter(context.Background(), session.StartOptions{Version: version})
+func launchDyalog(version string, env map[string]string) (*exec.Cmd, int) {
+	cmd, stdin, port, err := session.StartInterpreter(context.Background(), session.StartOptions{Version: version, Env: env})
 	if err != nil {
 		log.Fatalf("Failed to start Dyalog: %v", err)
 	}
 	dyalogStdin = stdin
 	return cmd, port
+}
+
+// parseEnvFlags turns repeated -env KEY=VALUE arguments into a map. A bare KEY
+// (no '=') is treated as passing that variable through from gritt's own
+// environment, which is handy for things like -env DYLD_INSERT_LIBRARIES.
+func parseEnvFlags(entries []string) map[string]string {
+	if len(entries) == 0 {
+		return nil
+	}
+	m := make(map[string]string, len(entries))
+	for _, e := range entries {
+		if i := strings.IndexByte(e, '='); i >= 0 {
+			m[e[:i]] = e[i+1:]
+		} else {
+			m[e] = os.Getenv(e)
+		}
+	}
+	return m
 }
 
 // resolveDyalog finds the Dyalog binary to use.
@@ -117,6 +138,8 @@ func main() {
 	launch := flag.Bool("launch", false, "Launch Dyalog automatically (alias: -l)")
 	flag.BoolVar(launch, "l", false, "Launch Dyalog automatically")
 	version := flag.String("version", "", "Dyalog version (e.g. 20.0) or path to binary")
+	var envVars multiFlag
+	flag.Var(&envVars, "env", "Set an env var for the launched Dyalog (KEY=VALUE, or bare KEY to pass through gritt's own; can be repeated)")
 	fmtMode := flag.Bool("fmt", false, "Format APL files in place")
 	historyMode := flag.Bool("history", false, "Print command history to stdout")
 	var cfgFlag string
@@ -145,7 +168,7 @@ func main() {
 	close(dyalogExited)
 	if *launch {
 		var port int
-		dyalogCmd, port = launchDyalog(*version)
+		dyalogCmd, port = launchDyalog(*version, parseEnvFlags(envVars))
 		*addr = fmt.Sprintf("localhost:%d", port)
 
 		// One owner of cmd.Wait() — closes the channel when the process
