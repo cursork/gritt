@@ -21,27 +21,27 @@ type EditorPane struct {
 	tracerBindings []tracerBinding
 
 	// Callbacks
-	onSave            func()
-	onClose           func()
-	onArrayNotation   func() // Convert to APLAN for editing
-	onFormat          func() // Format code via FormatCode message
-	onNewline         func() // Called after Enter in edit mode (for autolocalise)
+	onSave          func()
+	onClose         func()
+	onArrayNotation func() // Convert to APLAN for editing
+	onFormat        func() // Format code via FormatCode message
+	onNewline       func() // Called after Enter in edit mode (for autolocalise)
 
 	// Tracer control callbacks (only used when window.Debugger is true)
-	onStepInto   func()
-	onStepOver   func()
-	onStepOut    func()
-	onContinue   func()
-	onResumeAll  func()
-	onBackward   func()
-	onForward    func()
+	onStepInto  func()
+	onStepOver  func()
+	onStepOut   func()
+	onContinue  func()
+	onResumeAll func()
+	onBackward  func()
+	onForward   func()
 
 	// Styles
-	cursorStyle      lipgloss.Style
-	lineNumStyle     lipgloss.Style
-	breakpointStyle  lipgloss.Style
-	tracerLineStyle  lipgloss.Style // Bold for current line in tracer
-	highlightLine    int            // -1 = none, otherwise 0-based line for tracer highlight
+	cursorStyle     lipgloss.Style
+	lineNumStyle    lipgloss.Style
+	breakpointStyle lipgloss.Style
+	tracerLineStyle lipgloss.Style // Bold for current line in tracer
+	highlightLine   int            // -1 = none, otherwise 0-based line for tracer highlight
 }
 
 // tracerBinding pairs a key.Binding with a callback for tracer mode dispatch.
@@ -561,4 +561,3 @@ func (e *EditorPane) SetTracerCallbacks(cb TracerCallbacks) {
 	e.onBackward = cb.Backward
 	e.onForward = cb.Forward
 }
-

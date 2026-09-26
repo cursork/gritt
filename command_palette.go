@@ -10,8 +10,8 @@ import (
 
 // Command represents an executable command in the palette
 type Command struct {
-	Name    string
-	Help    string
+	Name     string
+	Help     string
 	Synonyms []string // Hidden synonyms used by filter, not rendered
 }
 

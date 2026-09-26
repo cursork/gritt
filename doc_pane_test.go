@@ -197,13 +197,13 @@ func TestSymbolAtCursorSystemFns(t *testing.T) {
 		want string
 	}{
 		// "      ⎕DL 1" — cols are 1-indexed in cursorCol semantics.
-		{"      ⎕DL 1", 7, "⎕DL"},  // on ⎕
-		{"      ⎕DL 1", 8, "⎕DL"},  // on D (mid-name)
-		{"      ⎕DL 1", 9, "⎕DL"},  // on L (end of name)
-		{"      ⎕DL 1", 10, ""},    // on space — no symbol
-		{"      ⎕IO", 7, "⎕IO"},    // ⎕IO at end of line
-		{"      ⎕IO", 9, "⎕IO"},    // cursor after the O
-		{"      ⎕", 7, "⎕"},        // bare ⎕ with nothing following
+		{"      ⎕DL 1", 7, "⎕DL"}, // on ⎕
+		{"      ⎕DL 1", 8, "⎕DL"}, // on D (mid-name)
+		{"      ⎕DL 1", 9, "⎕DL"}, // on L (end of name)
+		{"      ⎕DL 1", 10, ""},   // on space — no symbol
+		{"      ⎕IO", 7, "⎕IO"},   // ⎕IO at end of line
+		{"      ⎕IO", 9, "⎕IO"},   // cursor after the O
+		{"      ⎕", 7, "⎕"},       // bare ⎕ with nothing following
 		{"      ⎕FIX'x'", 7, "⎕FIX"},
 		{"      ⎕FIX'x'", 10, "⎕FIX"},
 	}

@@ -116,7 +116,7 @@ func TestUnmarshalNestedNamespace(t *testing.T) {
 //
 // Investigation: in this case Dyalog does NOT lay out values sequentially
 // after the name table the way it does for all-class-2 namespaces. With
-// `ns←⎕NS '' ⋄ ns.b←99`, b=99 sits at offset 0xDA (right after name table
+// `ns←⎕NS ” ⋄ ns.b←99`, b=99 sits at offset 0xDA (right after name table
 // end 0xD0). With this test's setup, b=99 sits at offset 0x8B2 — far past
 // the parent's settings/translation blocks (which start at 0x1BA, 0x2AA,
 // 0x2F2). The simple "advance pos past nested ns sub-blob" approach fails

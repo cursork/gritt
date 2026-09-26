@@ -15,12 +15,12 @@ import (
 // DocPane displays rendered markdown documentation in a floating pane.
 type DocPane struct {
 	navPath  string
-	file     string // file column from docs table (for resolving relative links)
+	file     string   // file column from docs table (for resolving relative links)
 	rawLines []string // glamour-rendered lines with «markers» intact
 	lines    []string // display lines with styled links
 	scroll   int
 	links    []docLink
-	linkIdx  int // -1 = no selection
+	linkIdx  int   // -1 = no selection
 	linkPos  []int // line index where each link marker appears
 	db       *sql.DB
 	width    int
@@ -128,7 +128,7 @@ func stripANSI(s string) string {
 }
 
 var (
-	docLinkStyle    = lipgloss.NewStyle().Underline(true)
+	docLinkStyle     = lipgloss.NewStyle().Underline(true)
 	docSelectedStyle = lipgloss.NewStyle().Underline(true).Bold(true).Reverse(true)
 )
 

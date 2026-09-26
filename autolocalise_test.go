@@ -42,10 +42,10 @@ func TestParseHeader(t *testing.T) {
 
 func TestHeaderVars(t *testing.T) {
 	tests := []struct {
-		name    string
-		sig     string
-		fnName  string
-		want    []string
+		name   string
+		sig    string
+		fnName string
+		want   []string
 	}{
 		{"niladic", "MyFn", "MyFn", nil},
 		{"monadic", "MyFn x", "MyFn", []string{"x"}},

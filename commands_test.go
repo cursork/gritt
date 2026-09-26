@@ -236,9 +236,9 @@ func testRegistry() *CommandRegistry {
 			"command-palette": {Keys: []string{":"}, Leader: true},
 			"quit":            {Keys: []string{"q"}, Leader: true},
 			"history-back":    {Keys: []string{"ctrl+shift+up"}},
-			"step-into":      {Keys: []string{"i"}, Context: "tracer"},
-			"step-over":      {Keys: []string{"n"}, Context: "tracer"},
-			"symbols":        {}, // palette only
+			"step-into":       {Keys: []string{"i"}, Context: "tracer"},
+			"step-over":       {Keys: []string{"n"}, Context: "tracer"},
+			"symbols":         {}, // palette only
 		},
 	}
 	reg := newRegistry(cfg.LeaderBinding())

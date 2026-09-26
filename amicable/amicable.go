@@ -25,8 +25,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math"
 	"github.com/cursork/gritt/codec"
+	"math"
 )
 
 // Architecture constants derived from the magic byte.
@@ -1524,4 +1524,3 @@ func homogeneousType(vals []any) (byte, bool) {
 	}
 	return baseType, true
 }
-

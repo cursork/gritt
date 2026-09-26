@@ -39,17 +39,17 @@ type NavConfig struct {
 type NavKeys struct {
 	Up, Down, Left, Right key.Binding
 	Home, End, PgUp, PgDn key.Binding
-	Backspace, Delete      key.Binding
-	Execute                key.Binding
+	Backspace, Delete     key.Binding
+	Execute               key.Binding
 }
 
 // Config holds all gritt configuration
 type Config struct {
-	Accent       string                 `json:"accent"`
-	Bindings     map[string]BindingDef  `json:"bindings"`
-	Navigation   NavConfig              `json:"navigation"`
-	Autolocalise bool                   `json:"autolocalise"`
-	KillTimeout  int                    `json:"kill_timeout"`
+	Accent       string                `json:"accent"`
+	Bindings     map[string]BindingDef `json:"bindings"`
+	Navigation   NavConfig             `json:"navigation"`
+	Autolocalise bool                  `json:"autolocalise"`
+	KillTimeout  int                   `json:"kill_timeout"`
 
 	// Legacy fields for migration
 	Keys       *legacyKeyMapConfig     `json:"keys,omitempty"`

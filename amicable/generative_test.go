@@ -34,11 +34,11 @@ import (
 type genKind int
 
 const (
-	gInt genKind = iota // class 2 variable, integer scalar
-	gFloat              // class 2 variable, float scalar
-	gStr                // class 2 variable, character vector
-	gFn                 // class 3 function (dfn) → opaque Raw on unmarshal
-	gNs                 // class 9 nested namespace → recurse
+	gInt   genKind = iota // class 2 variable, integer scalar
+	gFloat                // class 2 variable, float scalar
+	gStr                  // class 2 variable, character vector
+	gFn                   // class 3 function (dfn) → opaque Raw on unmarshal
+	gNs                   // class 9 nested namespace → recurse
 )
 
 type genMember struct {

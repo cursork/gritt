@@ -32,32 +32,32 @@ var backtickMap = map[rune]rune{
 	'P': '⍣', // star diaeresis / power operator
 
 	// Functions
-	's': '⌈', // upstile / ceiling/max
-	'd': '⌊', // downstile / floor/min
-	'f': '_', // underscore
-	'g': '∇', // del / function definition
-	'h': '∆', // delta
-	'H': '⍙', // delta underbar
-	'j': '∘', // jot / compose
-	'J': '⍤', // jot diaeresis / rank
+	's': '⌈',  // upstile / ceiling/max
+	'd': '⌊',  // downstile / floor/min
+	'f': '_',  // underscore
+	'g': '∇',  // del / function definition
+	'h': '∆',  // delta
+	'H': '⍙',  // delta underbar
+	'j': '∘',  // jot / compose
+	'J': '⍤',  // jot diaeresis / rank
 	'k': '\'', // quote
-	'l': '⎕', // quad
-	'L': '⌷', // squad / index
+	'l': '⎕',  // quad
+	'L': '⌷',  // squad / index
 
 	// More functions
 	'q': '?', // question mark / roll/deal
 	'Q': '⌹', // domino / matrix inverse/divide
 
 	// Brackets and misc
-	'[': '←', // left arrow / assignment
-	']': '→', // right arrow / branch
-	'=': '÷', // divide
-	'-': '×', // times
-	'/': '⌿', // slash bar / replicate first
-	'.': '⍀', // slope bar / expand first
-	',': '⍝', // lamp / comment
+	'[':  '←', // left arrow / assignment
+	']':  '→', // right arrow / branch
+	'=':  '÷', // divide
+	'-':  '×', // times
+	'/':  '⌿', // slash bar / replicate first
+	'.':  '⍀', // slope bar / expand first
+	',':  '⍝', // lamp / comment
 	'\'': '⍕', // thorn / format
-	';': '⍎', // hydrant / execute
+	';':  '⍎', // hydrant / execute
 
 	// Numbers row
 	'1': '¨', // diaeresis / each
@@ -82,11 +82,11 @@ var backtickMap = map[rune]rune{
 	'`': '⋄', // diamond (backtick-backtick)
 
 	// Additional useful ones
-	'n': '⊤', // down tack / encode
-	'm': '|', // stile / magnitude/residue
-	'b': '⊥', // up tack / decode
-	'K': '⌸', // quad equal / key
-	'|': '⊣', // left tack
+	'n':  '⊤', // down tack / encode
+	'm':  '|', // stile / magnitude/residue
+	'b':  '⊥', // up tack / decode
+	'K':  '⌸', // quad equal / key
+	'|':  '⊣', // left tack
 	'\\': '⊢', // right tack
 }
 

@@ -87,6 +87,12 @@ improvements.
 - [ ] **aplcart** — syntax column needs display-width-aware padding
 
 ## codec
+- [ ] **Matrix fill for a nested first element** — `prototypeOf` (`codec/aplan.go`) is
+  deliberately shallow: it only looks at whether the row's first element is a character
+  *scalar/string*, so `[1 2 3 ⋄ (('ab') 1)]` still pads with `0` where APL's prototype
+  rule would recurse into the first element and fill with a blank-shaped nested value.
+  Not yet checked against the interpreter (the probe needs a RIDE socket).
+  Verify `⊃0⍴(('ab') 1)` first, then decide whether to recurse.
 - [ ] **Structured variable viewer** — render matrices as tables, namespaces as trees
 - [ ] **Structured variable editing** — cell-level navigation/editing of matrices
 - [ ] **`-json` output for `-e`** — `gritt -l -e "⍳5" -json` for piping to jq

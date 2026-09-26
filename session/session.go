@@ -687,4 +687,3 @@ func makeAPLError(lines []string) *APLError {
 		Lines:   lines,
 	}
 }
-

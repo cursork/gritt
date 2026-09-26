@@ -70,7 +70,11 @@ Auto-launch Dyalog and connect (discovers installed versions automatically):
 ./gritt -l                          # Launch highest installed version
 ./gritt -l -version 20.0            # Launch specific version
 ./gritt -l -version /path/to/dyalog # Launch specific binary
+./gritt -l -env MAXWS=4G            # Env var for the launched interpreter
+./gritt -l -env DYLD_INSERT_LIBRARIES  # Bare KEY passes gritt's own value through
 ```
+
+`-env` is repeatable, and applies only when gritt does the launching.
 
 Or connect to an existing Dyalog instance:
 ```bash

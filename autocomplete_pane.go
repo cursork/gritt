@@ -9,11 +9,11 @@ import (
 // Autocomplete holds state for the completion popup overlay.
 // This is NOT a pane - it's rendered as an overlay while the session/editor stays focused.
 type Autocomplete struct {
-	Options  []string // Completion options from Dyalog
-	Selected int      // Currently selected index
-	Skip     int      // Characters to replace before cursor
-	Token    int      // Window token (0 for session, >0 for editor)
-	TriggerCol int    // Cursor column when autocomplete was triggered
+	Options    []string // Completion options from Dyalog
+	Selected   int      // Currently selected index
+	Skip       int      // Characters to replace before cursor
+	Token      int      // Window token (0 for session, >0 for editor)
+	TriggerCol int      // Cursor column when autocomplete was triggered
 }
 
 // NewAutocomplete creates autocomplete state

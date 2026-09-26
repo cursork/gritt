@@ -118,9 +118,13 @@ Working RIDE protocol implementation. Key files:
 
 **Main test:** `go test -v -run TestTUI` (in tui_test.go)
 
-**Always kill Dyalog before running tests** - stale state causes flaky failures:
+**Stale interpreters cause flaky failures, but NEVER `pkill dyalog`** — Neil and
+other tools run their own. Snapshot the PIDs first and kill only the delta the
+run leaked:
 ```bash
-pkill -9 dyalog; sleep 1; go test -v -run TestTUI
+before=$(pgrep -f 'Resources/Dyalog/dyalog' | sort)
+go test -v -run TestTUI
+comm -13 <(echo "$before") <(pgrep -f 'Resources/Dyalog/dyalog' | sort) | xargs -r kill
 ```
 
 For manual testing, start Dyalog in SERVE mode:
@@ -156,6 +160,15 @@ Use the **text reports** for debugging test failures - they contain the same sna
 ./gritt -l -version /path/to/dyalog # Launch specific binary
 ./gritt -l -e "⍳5"                  # Execute and exit
 
+# Environment for the launched interpreter (-l only, repeatable)
+./gritt -l -env MAXWS=4G                  # KEY=VALUE
+./gritt -l -env DYLD_INSERT_LIBRARIES     # bare KEY = pass through gritt's own env
+```
+
+`-env` vars only reach the interpreter when gritt launches the real binary —
+a wrapper script in between may drop them (see `-version` with a path).
+
+```bash
 # Execute single expression
 ./gritt -e "⍳5"
 

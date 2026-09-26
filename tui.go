@@ -34,9 +34,9 @@ func initColors(profile colorprofile.Profile, accent string) {
 	complete := lipgloss.Complete(profile)
 	if accent != "" {
 		AccentColor = complete(
-			lipgloss.Color("7"),     // ANSI: white (safe neutral fallback)
-			lipgloss.Color("245"),   // ANSI256: grey
-			lipgloss.Color(accent),  // TrueColor: user's choice
+			lipgloss.Color("7"),    // ANSI: white (safe neutral fallback)
+			lipgloss.Color("245"),  // ANSI256: grey
+			lipgloss.Color(accent), // TrueColor: user's choice
 		)
 	} else {
 		AccentColor = complete(
@@ -3815,4 +3815,3 @@ func (m Model) renderSession(w, h int) string {
 
 	return strings.Join(lines, "\n")
 }
-

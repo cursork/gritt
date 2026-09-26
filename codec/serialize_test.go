@@ -148,22 +148,26 @@ func roundTrip(t *testing.T, source string) {
 	}
 }
 
-func TestRoundTripNumber(t *testing.T)        { roundTrip(t, "42") }
-func TestRoundTripNegative(t *testing.T)      { roundTrip(t, "¯123") }
-func TestRoundTripFloat(t *testing.T)         { roundTrip(t, "3.14") }
-func TestRoundTripString(t *testing.T)        { roundTrip(t, "'hello world'") }
-func TestRoundTripStringQuote(t *testing.T)   { roundTrip(t, "'it''s'") }
-func TestRoundTripVector(t *testing.T)        { roundTrip(t, "(1 ⋄ 2 ⋄ 3)") }
-func TestRoundTripMixedVector(t *testing.T)   { roundTrip(t, "(1 ⋄ 'two' ⋄ 3)") }
-func TestRoundTripNestedVector(t *testing.T)  { roundTrip(t, "((1 ⋄ 2) ⋄ (3 ⋄ 4))") }
-func TestRoundTripSimpleMatrix(t *testing.T)  { roundTrip(t, "[1 2 ⋄ 3 4]") }
-func TestRoundTripColumnMatrix(t *testing.T)  { roundTrip(t, "[1 ⋄ 2 ⋄ 3]") }
-func TestRoundTripStringMatrix(t *testing.T)  { roundTrip(t, "['a' 'b' ⋄ 'c' 'd']") }
-func TestRoundTripZilde(t *testing.T)         { roundTrip(t, "⍬") }
-func TestRoundTripNamespace(t *testing.T)     { roundTrip(t, "(x: 1 ⋄ y: 2)") }
-func TestRoundTripNestedNS(t *testing.T)      { roundTrip(t, "(outer: (inner: 42))") }
-func TestRoundTripNSWithVector(t *testing.T)  { roundTrip(t, "(data: (1 ⋄ 2 ⋄ 3))") }
-func TestRoundTripNSWithMatrix(t *testing.T)  { roundTrip(t, "(name: 'data' ⋄ matrix: [1 2 ⋄ 3 4])") }
-func TestRoundTripComplex(t *testing.T)       { roundTrip(t, "3J4") }
-func TestRoundTripDeeplyNested(t *testing.T)  { roundTrip(t, "(((1 ⋄ 2) ⋄ (3 ⋄ 4)) ⋄ ((5 ⋄ 6) ⋄ (7 ⋄ 8)))") }
+func TestRoundTripNumber(t *testing.T)       { roundTrip(t, "42") }
+func TestRoundTripNegative(t *testing.T)     { roundTrip(t, "¯123") }
+func TestRoundTripFloat(t *testing.T)        { roundTrip(t, "3.14") }
+func TestRoundTripString(t *testing.T)       { roundTrip(t, "'hello world'") }
+func TestRoundTripStringQuote(t *testing.T)  { roundTrip(t, "'it''s'") }
+func TestRoundTripVector(t *testing.T)       { roundTrip(t, "(1 ⋄ 2 ⋄ 3)") }
+func TestRoundTripMixedVector(t *testing.T)  { roundTrip(t, "(1 ⋄ 'two' ⋄ 3)") }
+func TestRoundTripNestedVector(t *testing.T) { roundTrip(t, "((1 ⋄ 2) ⋄ (3 ⋄ 4))") }
+func TestRoundTripSimpleMatrix(t *testing.T) { roundTrip(t, "[1 2 ⋄ 3 4]") }
+func TestRoundTripColumnMatrix(t *testing.T) { roundTrip(t, "[1 ⋄ 2 ⋄ 3]") }
+func TestRoundTripStringMatrix(t *testing.T) { roundTrip(t, "['a' 'b' ⋄ 'c' 'd']") }
+func TestRoundTripZilde(t *testing.T)        { roundTrip(t, "⍬") }
+func TestRoundTripNamespace(t *testing.T)    { roundTrip(t, "(x: 1 ⋄ y: 2)") }
+func TestRoundTripNestedNS(t *testing.T)     { roundTrip(t, "(outer: (inner: 42))") }
+func TestRoundTripNSWithVector(t *testing.T) { roundTrip(t, "(data: (1 ⋄ 2 ⋄ 3))") }
+func TestRoundTripNSWithMatrix(t *testing.T) {
+	roundTrip(t, "(name: 'data' ⋄ matrix: [1 2 ⋄ 3 4])")
+}
+func TestRoundTripComplex(t *testing.T) { roundTrip(t, "3J4") }
+func TestRoundTripDeeplyNested(t *testing.T) {
+	roundTrip(t, "(((1 ⋄ 2) ⋄ (3 ⋄ 4)) ⋄ ((5 ⋄ 6) ⋄ (7 ⋄ 8)))")
+}
 func TestRoundTripVectorMatrices(t *testing.T) { roundTrip(t, "([1 2 ⋄ 3 4] ⋄ [5 6 ⋄ 7 8])") }

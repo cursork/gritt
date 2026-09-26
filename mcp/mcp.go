@@ -104,8 +104,8 @@ func (s *Server) handle(ctx context.Context, req rpcRequest) rpcResponse {
 			ID:      req.ID,
 			Result: map[string]any{
 				"protocolVersion": "2024-11-05",
-				"capabilities":   map[string]any{"tools": map[string]any{}},
-				"serverInfo":     map[string]any{"name": "aplmcp", "version": "0.1.0"},
+				"capabilities":    map[string]any{"tools": map[string]any{}},
+				"serverInfo":      map[string]any{"name": "aplmcp", "version": "0.1.0"},
 			},
 		}
 	case "ping":
@@ -420,9 +420,9 @@ func tools() []map[string]any {
 			"name":        "eval",
 			"description": "Execute a Dyalog APL expression and return the result. The interpreter persists between calls. Use ← for assignment.",
 			"inputSchema": map[string]any{
-				"type":     "object",
+				"type":       "object",
 				"properties": map[string]any{"code": map[string]any{"type": "string", "description": "APL expression to evaluate"}},
-				"required": []string{"code"},
+				"required":   []string{"code"},
 			},
 			"annotations": map[string]any{"openWorldHint": true},
 		},
@@ -430,9 +430,9 @@ func tools() []map[string]any {
 			"name":        "batch",
 			"description": "Execute multiple APL expressions sequentially. Stops on first error and returns partial results.",
 			"inputSchema": map[string]any{
-				"type":     "object",
+				"type":       "object",
 				"properties": map[string]any{"expressions": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "APL expressions to execute in order"}},
-				"required": []string{"expressions"},
+				"required":   []string{"expressions"},
 			},
 			"annotations": map[string]any{"openWorldHint": true},
 		},
@@ -440,7 +440,7 @@ func tools() []map[string]any {
 			"name":        "link",
 			"description": "Link a filesystem directory into the APL workspace. APL source files become available as functions/operators/namespaces.",
 			"inputSchema": map[string]any{
-				"type":     "object",
+				"type": "object",
 				"properties": map[string]any{
 					"directory": map[string]any{"type": "string", "description": "Absolute path to directory"},
 					"namespace": map[string]any{"type": "string", "description": "Target namespace (default: root \"#\")"},
@@ -462,9 +462,9 @@ func tools() []map[string]any {
 			"name":        "get",
 			"description": "Get the display form of a variable's value.",
 			"inputSchema": map[string]any{
-				"type":     "object",
+				"type":       "object",
 				"properties": map[string]any{"name": map[string]any{"type": "string", "description": "Variable name"}},
-				"required": []string{"name"},
+				"required":   []string{"name"},
 			},
 			"annotations": map[string]any{"readOnlyHint": true},
 		},
@@ -472,9 +472,9 @@ func tools() []map[string]any {
 			"name":        "fix",
 			"description": "Load an APL source file into the workspace via ⎕FIX.",
 			"inputSchema": map[string]any{
-				"type":     "object",
+				"type":       "object",
 				"properties": map[string]any{"path": map[string]any{"type": "string", "description": "Absolute path to APL source file"}},
-				"required": []string{"path"},
+				"required":   []string{"path"},
 			},
 			"annotations": map[string]any{"readOnlyHint": false},
 		},

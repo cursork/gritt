@@ -27,9 +27,9 @@ type VariablesPane struct {
 	vars     []LocalVar
 	selected int
 	mode     VarsMode
-	loading  bool                 // True while fetching variables
-	onOpen   func(name string)    // Called when user wants to open variable with )ed
-	onToggle func(mode VarsMode)  // Called when user toggles mode
+	loading  bool                // True while fetching variables
+	onOpen   func(name string)   // Called when user wants to open variable with )ed
+	onToggle func(mode VarsMode) // Called when user toggles mode
 
 	// Styles
 	selectedStyle lipgloss.Style // Orange for selected line

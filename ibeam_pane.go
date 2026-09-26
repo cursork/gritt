@@ -12,15 +12,15 @@ import (
 
 // IBeamSearch is a searchable I-beam (⌶) lookup pane.
 type IBeamSearch struct {
-	db           *sql.DB
-	query        string
-	results      []ibeam.Entry
-	selected     int
-	scrollOffset int
+	db            *sql.DB
+	query         string
+	results       []ibeam.Entry
+	selected      int
+	scrollOffset  int
 	SelectedEntry *ibeam.Entry // Set when Enter pressed — TUI opens doc
 
 	// Detail view for private entries (no public docs)
-	detail      *ibeam.Entry
+	detail       *ibeam.Entry
 	detailScroll int
 }
 

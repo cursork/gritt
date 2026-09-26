@@ -667,8 +667,8 @@ func TestTUI(t *testing.T) {
 
 	// Add local variable declarations to header: Z;a;b
 	// Editor starts with cursor on line [0] which shows "Z"
-	runner.SendKeys("End")           // Go to end of "Z"
-	runner.SendText(";a;b")          // Add local declarations
+	runner.SendKeys("End")            // Go to end of "Z"
+	runner.SendText(";a;b")           // Add local declarations
 	runner.SendKeys("Enter", "Enter") // Move to body
 	runner.SendText("a←42")
 	runner.SendKeys("Enter")
@@ -1898,8 +1898,8 @@ func TestTUI(t *testing.T) {
 	})
 
 	// Move cursor to line [1] where z←99 is, position on 'z'
-	runner.SendKeys("Down")   // Move to line [1]
-	runner.SendKeys("Home")   // Start of line
+	runner.SendKeys("Down") // Move to line [1]
+	runner.SendKeys("Home") // Start of line
 	runner.Sleep(200 * time.Millisecond)
 
 	// Toggle localisation via command palette

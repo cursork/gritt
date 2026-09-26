@@ -350,8 +350,8 @@ func TestIntegration(t *testing.T) {
 	})
 
 	t.Run("nested_namespace", func(t *testing.T) {
-		client.Eval("ns←⎕NS ''")    // ignore result — empty ns
-		client.Eval("ns.x←42")      // ignore shy assignment result
+		client.Eval("ns←⎕NS ''") // ignore result — empty ns
+		client.Eval("ns.x←42")   // ignore shy assignment result
 		client.Eval("ns.name←'Neil'")
 		r := eval(t, "ns")
 		ns, ok := r.Val.(*codec.Namespace)

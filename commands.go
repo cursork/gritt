@@ -13,13 +13,13 @@ import (
 
 // CommandDef defines a single command in the registry.
 type CommandDef struct {
-	Name    string
-	Help    string
-	Binding key.Binding
-	Leader  bool
-	Context string // "", "tracer"
+	Name     string
+	Help     string
+	Binding  key.Binding
+	Leader   bool
+	Context  string   // "", "tracer"
 	Synonyms []string // Hidden synonyms — palette filter matches these but doesn't show them
-	Action  func(m *Model) (tea.Model, tea.Cmd)
+	Action   func(m *Model) (tea.Model, tea.Cmd)
 }
 
 // CommandRegistry holds all commands and provides matching.
@@ -239,8 +239,8 @@ func (r *CommandRegistry) PaletteCommands(m *Model) []Command {
 			}
 		}
 		cmds = append(cmds, Command{
-			Name:    cmd.Name,
-			Help:    help + hint,
+			Name:     cmd.Name,
+			Help:     help + hint,
 			Synonyms: cmd.Synonyms,
 		})
 	}

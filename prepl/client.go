@@ -25,7 +25,7 @@ func UUIDv7() string {
 	var b [16]byte
 	ms := uint64(time.Now().UnixMilli())
 	binary.BigEndian.PutUint64(b[:8], ms<<16) // 48-bit timestamp in top bits
-	rand.Read(b[6:])                           // random fill rest
+	rand.Read(b[6:])                          // random fill rest
 	b[6] = (b[6] & 0x0F) | 0x70               // version 7
 	b[8] = (b[8] & 0x3F) | 0x80               // variant 10
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
